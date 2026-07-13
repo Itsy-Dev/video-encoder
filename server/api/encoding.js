@@ -31,7 +31,7 @@ module.exports = function encodingApi(app) {
     app.post("/api/encoding/items/:id/queue", async function (req, res) {
         const item = await encodingService.queueItem(req.params.id, {
             profileId: req.body.profileId,
-            sourceClass: req.body.sourceClass
+            inboxRelativeDir: req.body.inboxRelativeDir
         });
         res.json({ ok: true, item });
     });
@@ -337,18 +337,18 @@ function renderPendingTable(items) {
       <div class="toolbar">
         <div>
           <strong>Inbox Discovery</strong>
-          <p>Use <code>POST /api/encoding/scan</code> to validate request manifests in inbox and ingest each package into internal pending storage.</p>
+          <p>Use <code>POST /api/encoding/scan</code> to discover stable video files anywhere under <code>/inbox</code>, remember the file's relative subdirectory, and ingest it into internal pending storage.</p>
         </div>
         <a class="button" href="/encoding/setup">Open Setup</a>
       </div>
       ${renderTable(items, [
           ["State", item => pill(item.status)],
           ["File", item => escapeHtml(item.originalFilename)],
-          ["Source", item => escapeHtml(item.sourceClass)],
+          ["Inbox Dir", item => escapeHtml(item.inboxRelativeDir || "/")],
           ["Requested Profile", item => escapeHtml(item.requestedProfileId || "browser_compatibility")],
-          ["Request ID", item => escapeHtml(item.requestId)],
+          ["Item ID", item => escapeHtml(item.id)],
           ["Action", item => `<a href="/encoding/setup?id=${encodeURIComponent(item.id)}">Configure</a>`]
-      ], "No pending items yet. Scan the inbox or seed test manifests to start the flow.")}
+      ], "No pending items yet. Scan the inbox or drop test videos into inbox with or without subdirectories to start the flow.")}
     </section>`;
 }
 
@@ -364,16 +364,16 @@ function renderSetup(item, profiles) {
           <p>Choose the initial profile and confirm the destination class before the item enters the queue.</p>
         </div>
         ${renderKeyValue([
-            ["Request ID", item.requestId],
+            ["Item ID", item.id],
             ["Current State", item.status],
-            ["Source Class", item.sourceClass],
+            ["Inbox Relative Dir", item.inboxRelativeDir || "/"],
+            ["Inbox Relative Path", item.inboxRelativePath || item.originalFilename],
             ["Selected Profile", item.profileId || "not set"],
-            ["Inbox Manifest Path", item.inboxManifestAbsPath],
             ["Inbox Input Path", item.inboxInputAbsPath],
-            ["Managed Manifest Path", item.manifestAbsPath],
-            ["Managed Input Path", item.inputAbsPath]
+            ["Managed Input Path", item.inputAbsPath],
+            ["Output Folder", buildOutboxDisplayPath(item)]
         ])}
-        <div class="note">Scan ingests the request package from inbox into internal pending storage first. Queue action is available through <code>POST /api/encoding/items/${escapeHtml(item.id)}/queue</code> with <code>profileId</code> and <code>sourceClass</code>.</div>
+        <div class="note">Scan ingests the video from inbox into internal pending storage first, preserving its optional subdirectory for outbox routing. Queue action is available through <code>POST /api/encoding/items/${escapeHtml(item.id)}/queue</code> with <code>profileId</code> and optional <code>inboxRelativeDir</code>.</div>
       </div>
       <div class="panel stack">
         <strong>Available Profiles</strong>
@@ -395,7 +395,7 @@ function renderQueue(items) {
           ["State", item => pill(item.status)],
           ["File", item => escapeHtml(item.originalFilename)],
           ["Profile", item => escapeHtml(item.profileId || "—")],
-          ["Source", item => escapeHtml(item.sourceClass)],
+          ["Inbox Dir", item => escapeHtml(item.inboxRelativeDir || "/")],
           ["Updated", item => escapeHtml(item.updatedAt)],
           ["Path", item => escapeHtml(item.inputAbsPath)]
       ], "Queue state will appear here once items move beyond discovery.")}
@@ -487,4 +487,9 @@ function escapeHtml(value) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
+}
+
+function buildOutboxDisplayPath(item) {
+    const dir = String(item && item.inboxRelativeDir || "").trim();
+    return dir ? `/outbox/${dir}` : "/outbox";
 }

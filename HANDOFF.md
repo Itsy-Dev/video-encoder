@@ -6,7 +6,7 @@ Move video encoding out of `services/main` into a standalone Node.js application
 
 After the split:
 
-- `services/main` becomes the requester and handoff origin.
+- `services/main` can be one caller, but the encoder should not depend on `main`-specific metadata.
 - `services/encoder` owns the inbox, queue, worker, review flow, UI, and outbound return handoff.
 - Manual file movement remains part of the workflow between the two systems.
 
@@ -39,14 +39,6 @@ If the encoder is meant to be a real standalone service, all encoder-specific st
 
 ## System Boundary
 
-### `services/main` owns
-
-- Requesting that a video be encoded
-- Exporting the source video to a handoff location
-- Creating a request manifest for the encoder
-- Tracking the external request at a high level
-- Importing or consuming returned approved outputs later if needed
-
 ### `services/encoder` owns
 
 - Monitoring the encoder inbox
@@ -62,31 +54,31 @@ If the encoder is meant to be a real standalone service, all encoder-specific st
 
 ### Manual step between systems
 
-- A person moves source files from `main` outbound to encoder inbox
-- A person later moves approved encoded files from encoder outbox back to the calling system
+- A person drops source videos into the encoder inbox
+- A person later moves approved encoded files from encoder outbox to whatever calling system needs them
 
 ## Operating Model
 
-### 1. Request created in `main`
+### 1. File placed into encoder inbox
 
-`main` creates a new encoding request record and exports:
+A human places a source video anywhere under `inbox/`.
 
-- the source video file
-- a sidecar manifest
+Examples:
 
-`main` places these into its outbound handoff area.
+- `inbox/video.mp4`
+- `inbox/library/video.mp4`
+- `inbox/dev/client-a/video.mp4`
+- `inbox/unlisted/tmp/test/video.mov`
 
-### 2. File moved to encoder inbox
+The encoder preserves the file's relative subdirectory under `inbox/` and later reuses that same relative subdirectory under `outbox/`.
 
-A human manually moves the request package from `main` outbound into the encoder inbox.
+### 2. Encoder discovers pending files
 
-### 3. Encoder discovers pending files
-
-The encoder scans its inbox, validates the request package, and ingests it into encoder-managed pending storage.
+The encoder scans its inbox, waits for stable video files, and ingests them into encoder-managed pending storage.
 
 At this stage the file is not yet queued for work. It has been copied into encoder-managed storage and is awaiting setup.
 
-### 4. User selects settings and queues the file
+### 3. User selects settings and queues the file
 
 An encoder user chooses:
 
@@ -97,20 +89,20 @@ An encoder user chooses:
 
 The encoder creates a queued job and moves the request into managed encoder state.
 
-### 5. Worker processes the encoding
+### 4. Worker processes the encoding
 
 The encoder worker performs the job and writes encoded output into encoder-managed storage.
 
-### 6. User reviews the output
+### 5. User reviews the output
 
 The encoder UI shows source vs encoded details for approval.
 
-### 7. Confirm or reject
+### 6. Confirm or reject
 
 If confirmed:
 
 - the encoder moves or copies the approved encoded output into encoder outbox
-- the outbox path reflects the intended destination source class
+- the outbox path matches the relative subdirectory the file came from under inbox, unless a user intentionally changes it during setup
 
 If rejected:
 
@@ -125,15 +117,9 @@ Recommended layout with two separate roots:
 ```text
 encoder-handoff-root/
   inbox/
-    src/
-      library/
-      dev/
-      unlisted/
+    ...
   outbox/
-    src/
-      library/
-      dev/
-      unlisted/
+    ...
 
 encoder-internal-root/
   pending/
@@ -149,8 +135,9 @@ encoder-internal-root/
 
 ### Notes
 
-- `inbox/src/{library|dev|unlisted}` is the manual drop location.
-- `outbox/src/{library|dev|unlisted}` is the only manual export location.
+- `inbox/` is the manual drop location.
+- `outbox/` is the only manual export location.
+- any relative subdirectory under `inbox/` should be preserved under `outbox/`
 - `encoder-handoff-root/` is the only directory tree that should be touched by human import/export workflows.
 - `encoder-internal-root/` is service-owned storage and should not be used for manual movement.
 - `pending/` is encoder-managed state for discovered but not yet queued items.
@@ -181,62 +168,16 @@ They should never browse or move files from:
 
 Keeping handoff storage separate from internal storage reduces the chance of accidental imports, accidental exports, or removal of in-progress encoder artifacts.
 
-## Request Package Contract
+## Dumb Inbox Contract
 
-Each inbound request should contain:
+The encoder should assume as little as possible:
 
-- the source video file
-- a sidecar manifest file
+- a supported video file appears anywhere under `inbox/`
+- the file's relative subdirectory under `inbox/` becomes the default routing path
+- the user chooses the encode profile in the encoder UI
+- after approval, the output is written to the matching relative path under `outbox/`
 
-Recommended manifest name:
-
-- `<basename>.request.json`
-
-Recommended manifest fields:
-
-```json
-{
-  "requestId": "enc_20260713_0001",
-  "sourceSystem": "main",
-  "sourceClass": "library",
-  "requestedAt": "2026-07-13T12:00:00.000Z",
-  "requestedBy": "user-or-system",
-  "originalFilename": "example.mov",
-  "originalRelativePath": "videos/example.mov",
-  "handoffFilename": "example.mov",
-  "videoUuid": "optional-video-uuid",
-  "entityType": "video",
-  "entityId": "optional-caller-id",
-  "requestedProfileId": "browser_compatibility",
-  "allowedProfileIds": [
-    "browser_compatibility",
-    "hq_h264"
-  ],
-  "destination": {
-    "system": "main",
-    "sourceClass": "library"
-  },
-  "notes": null,
-  "checksum": {
-    "algorithm": "sha256",
-    "value": "optional"
-  }
-}
-```
-
-## Why The Manifest Matters
-
-The manifest is important because manual file movement alone is not enough to preserve intent.
-
-It carries:
-
-- who requested the encode
-- where the output is meant to go
-- whether the request came from `library`, `dev`, or `unlisted`
-- what profile was requested or allowed
-- how the encoder should correlate the result back to the requester
-
-Without this, the UI and outbox process will end up depending on fragile filename conventions.
+That keeps the encoder independent of any requester-specific protocol.
 
 ## State Model
 
@@ -274,17 +215,7 @@ Recommended encoder-side states:
 
 ## Main-Side State Model
 
-`main` should keep a smaller external state model:
-
-- `requested`
-- `exported_to_encoder`
-- `awaiting_return`
-- `returned`
-- `imported`
-- `rejected`
-- `cancelled`
-
-`main` should not attempt to replicate the encoder worker internals. It only needs enough state to understand where the request sits operationally.
+Any calling system should keep its own external state model if it needs one. The encoder itself should not require that state to operate.
 
 ## Source Class Handling
 
@@ -299,47 +230,35 @@ It should influence:
 
 ### Rule
 
-The source class from the request manifest should survive the full lifecycle unless a user intentionally changes it during setup or review.
+The relative subdirectory from the inbox path should survive the full lifecycle unless a user intentionally changes it during setup or review.
 
 ## Partial Copy Safety
 
 This is easy to miss and important for manual workflows.
 
-The encoder scanner should not process files that are still being copied. Use one of these approaches:
+The encoder scanner should not process files that are still being copied.
 
-- copy into a temporary name and rename when complete
-- require a manifest flag like `"ready": true`
-- require a separate `.ready` marker file
-- ignore files younger than a configured age threshold
+Current recommended approach:
 
-Preferred approach:
-
-- move the source video first
-- move the manifest second
-- only treat the item as discoverable when both are present
-
-After discovery, the encoder should copy the request package out of the handoff inbox into internal pending storage before queueing or processing.
+- only scan supported video files inside `inbox/`
+- ignore files newer than a configured stability window
+- recheck file size after a short delay before ingesting
+- copy the discovered file into internal pending storage before queueing or processing
 
 ## Identity And Idempotency
 
 The encoder must be able to detect duplicate imports safely.
 
-Use a stable request identity:
+Initial duplicate key options:
 
-- `requestId` from `main`
-
-Optionally strengthen with:
-
-- checksum
-- original filename
-- file size
-- requested timestamp
+- inbox-relative path
+- checksum later, if needed
 
 Rules:
 
-- importing the same `requestId` twice should not create two unrelated jobs
+- importing the same inbox-relative path twice should not create two unrelated jobs
 - the scanner should report duplicates clearly in the UI
-- the outbox should preserve enough identity for the requester to reconcile results later
+- the outbox should preserve enough identity for a human operator to reconcile results later
 
 ## Review Contract
 
@@ -362,7 +281,7 @@ Reviewer actions:
 
 If approved:
 
-- move approved file to `outbox/src/<sourceClass>/`
+- move approved file to the matching relative directory under `outbox/`
 - generate a return manifest
 
 If rejected:
@@ -372,31 +291,7 @@ If rejected:
 
 ## Return Package Contract
 
-Approved outputs should also use a sidecar manifest.
-
-Recommended fields:
-
-```json
-{
-  "requestId": "enc_20260713_0001",
-  "sourceSystem": "encoder",
-  "destinationSystem": "main",
-  "sourceClass": "library",
-  "approvedAt": "2026-07-13T14:00:00.000Z",
-  "approvedBy": "reviewer",
-  "status": "approved",
-  "profileId": "browser_compatibility",
-  "inputFilename": "example.mov",
-  "outputFilename": "example.mp4",
-  "outputContainer": "mp4",
-  "outputCodec": "h264",
-  "checksum": {
-    "algorithm": "sha256",
-    "value": "optional"
-  },
-  "reviewNotes": null
-}
-```
+Approved outputs only need to be dropped into the matching outbox source-class folder unless a future integration requires extra sidecar metadata.
 
 ## UI Scope For `services/encoder`
 
@@ -427,8 +322,6 @@ Suggested initial modules:
 - `src/modules/encoding/encoding-review.service.js`
 - `src/modules/encoding/encoding-profiles.js`
 - `src/modules/filesystem/handoff-paths.js`
-- `src/modules/filesystem/handoff-manifest.js`
-
 ## What Should Move Out Of `main`
 
 These current concerns should move into `services/encoder`:
@@ -439,14 +332,13 @@ These current concerns should move into `services/encoder`:
 - review and commit/reject logic
 - encoding admin UI
 - encoding-specific persistence
-- outbound/inbound handoff path rules that are encoder-owned
+- handoff path rules that are encoder-owned
 
 ## What Can Stay In `main`
 
-- initiating the request
-- exporting source video plus request manifest
-- shallow request tracking
-- optional page showing request status from `main`’s point of view
+- any optional export helper for dropping files into the encoder inbox
+- shallow request tracking if another system wants it
+- optional status pages from the caller's point of view
 
 ## Persistence Recommendation
 
@@ -488,7 +380,8 @@ We should define these before implementation:
 
 - Port scan, queue, worker, and review logic from `main`
 - Build encoder UI pages
-- Add request manifest and return manifest support
+- Add source-class-driven inbox and outbox handling
+  Note: this now means preserving inbox-relative subdirectories into outbox-relative subdirectories.
 
 ### Phase 3
 
@@ -506,7 +399,7 @@ We should define these before implementation:
 - Should `main` write directly into a shared handoff root, or into its own outbound that is manually moved later?
 - Should review approval move the file or copy the file into outbox?
 - Should rejected items be re-queued from the same request or create a new revision?
-- Should source-class changes be allowed during setup, or should they be locked to the request manifest?
+- Should routing-path changes be allowed during setup, or should they stay locked to the original inbox-relative directory by default?
 - Should the encoder support more than one worker concurrently?
 - Should `main` poll encoder status through an API, or remain fully manual?
 
@@ -518,7 +411,7 @@ Recommended initial build:
 - keep manual movement between systems
 - give `services/encoder` full ownership of queue and review state
 - use manifest-driven handoff
-- preserve `src/{library|dev|unlisted}` on both inbox and outbox
+- preserve inbox-relative subdirectories on outbox
 - keep `main`’s state shallow and operational
 
 This gives us a clean split now without over-coupling the two systems again.
