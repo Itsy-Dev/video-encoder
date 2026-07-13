@@ -1,6 +1,7 @@
 const fs = require("fs");
 const fsp = fs.promises;
 const path = require("path");
+const crypto = require("crypto");
 
 const profiles = require("./encoding-profiles");
 const EncodingRepository = require("./encoding.repository");
@@ -105,8 +106,8 @@ module.exports = class EncodingService {
                     continue;
                 }
 
-                const importKey = buildImportKey(inboxRelativePath);
-                const existing = await this.repository.get(importKey);
+                const itemId = buildItemId(inboxRelativePath);
+                const existing = await this.repository.get(itemId);
                 if (existing) {
                     results.duplicates += 1;
                     continue;
@@ -116,7 +117,7 @@ module.exports = class EncodingService {
                     inboxInputAbsPath,
                     inboxRelativeDir,
                     inboxRelativePath,
-                    importKey,
+                    itemId,
                     paths
                 });
                 if (item) results.discovered += 1;
@@ -181,12 +182,15 @@ module.exports = class EncodingService {
         await fsp.mkdir(outboxDirAbs, { recursive: true });
         await fsp.copyFile(item.encodedOutputAbsPath, outboxOutputAbsPath);
 
-        return this.repository.upsert({
+        const exported = await this.repository.upsert({
             ...item,
             status: "exported",
             approvedAt: new Date().toISOString(),
             outboxOutputAbsPath
         });
+
+        await this._cleanupItemFiles(exported, paths);
+        return exported;
     }
 
     async rejectItem(id, { reviewer, notes } = {}) {
@@ -472,7 +476,7 @@ module.exports = class EncodingService {
         inboxInputAbsPath,
         inboxRelativeDir,
         inboxRelativePath,
-        importKey,
+        itemId,
         paths
     }) {
         const inputStat = await fsp.stat(inboxInputAbsPath);
@@ -480,15 +484,15 @@ module.exports = class EncodingService {
             throw new Error(`Input file missing: ${inboxInputAbsPath}`);
         }
 
-        const pendingItemRoot = path.join(paths.pending, sanitizeSegment(importKey));
+        const pendingItemRoot = path.join(paths.pending, sanitizeSegment(itemId));
         const managedSourceRoot = path.join(pendingItemRoot, "source");
         const managedInputAbsPath = path.join(managedSourceRoot, path.basename(inboxInputAbsPath));
 
         await fsp.mkdir(managedSourceRoot, { recursive: true });
-        await copyFileIfMissing(inboxInputAbsPath, managedInputAbsPath);
+        await moveFileIntoPlace(inboxInputAbsPath, managedInputAbsPath);
 
         const item = this._buildDiscoveredItem({
-            id: importKey,
+            id: itemId,
             inboxRelativeDir,
             inboxRelativePath,
             inboxInputAbsPath,
@@ -501,6 +505,14 @@ module.exports = class EncodingService {
             ...item,
             sourceMetadata
         });
+    }
+
+    async _cleanupItemFiles(item, paths = getEncoderPaths()) {
+        const pendingItemRoot = getPendingItemRoot(paths, item.id);
+        const encodedItemRoot = getEncodedItemRoot(paths, item);
+
+        await removeIfExists(pendingItemRoot);
+        await removeIfExists(encodedItemRoot);
     }
 
     _buildDiscoveredItem({
@@ -614,22 +626,11 @@ async function walk(rootAbs, onFile) {
 }
 
 function buildOutputFilename(filename, profileId) {
-    const ext = path.extname(filename || "");
-    const base = ext ? filename.slice(0, -ext.length) : String(filename || "output");
-    return `${base}.${profileId}.mp4`;
+    return String(filename || "output.mp4");
 }
 
 function sanitizeSegment(value) {
     return String(value || "item").replace(/[^a-zA-Z0-9._-]/g, "_");
-}
-
-async function copyFileIfMissing(sourceAbsPath, destinationAbsPath) {
-    try {
-        await fsp.access(destinationAbsPath, fs.constants.F_OK);
-    }
-    catch (_error) {
-        await fsp.copyFile(sourceAbsPath, destinationAbsPath);
-    }
 }
 
 
@@ -650,8 +651,10 @@ function getInboxRelativeDir(fileAbsPath, inboxRootAbsPath) {
     return relativeDir === "." ? "" : relativeDir;
 }
 
-function buildImportKey(inboxRelativePath) {
-    return String(inboxRelativePath || "");
+function buildItemId(inboxRelativePath) {
+    const normalizedPath = String(inboxRelativePath || "").trim().replace(/\\/g, "/");
+    const hash = crypto.createHash("sha1").update(normalizedPath).digest("hex").slice(0, 16);
+    return `enc_${hash}`;
 }
 
 function normalizeRelativeDir(value, fallback = "") {
@@ -678,4 +681,33 @@ async function removeIfExists(targetAbsPath) {
     catch (_error) {
         return;
     }
+}
+
+async function moveFileIntoPlace(sourceAbsPath, destinationAbsPath) {
+    await removeIfExists(destinationAbsPath);
+
+    try {
+        await fsp.rename(sourceAbsPath, destinationAbsPath);
+        return;
+    }
+    catch (error) {
+        if (!error || error.code !== "EXDEV") {
+            throw error;
+        }
+    }
+
+    await fsp.copyFile(sourceAbsPath, destinationAbsPath);
+    await fsp.unlink(sourceAbsPath);
+}
+
+function getPendingItemRoot(paths, itemId) {
+    return path.join(paths.pending, sanitizeSegment(itemId));
+}
+
+function getEncodedItemRoot(paths, item) {
+    return path.join(
+        paths.encoded,
+        normalizeRelativeDir(item && item.inboxRelativeDir),
+        sanitizeSegment(item && item.id)
+    );
 }

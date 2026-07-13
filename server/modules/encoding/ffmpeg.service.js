@@ -222,7 +222,7 @@ function buildScaleFilter(targetWidth, targetHeight, scalingAlgorithm) {
 }
 
 function createEncodingHandle({ command, args, outputAbsPath, profileId }) {
-    const tempOutputAbsPath = `${outputAbsPath}.tmp`;
+    const tempOutputAbsPath = buildTempOutputAbsPath(outputAbsPath);
     fs.mkdirSync(path.dirname(outputAbsPath), { recursive: true });
     fs.rmSync(tempOutputAbsPath, { force: true, recursive: true });
 
@@ -301,6 +301,16 @@ function createEncodingHandle({ command, args, outputAbsPath, profileId }) {
     });
 
     return handle;
+}
+
+function buildTempOutputAbsPath(outputAbsPath) {
+    const ext = path.extname(outputAbsPath || "");
+    if (!ext) {
+        return `${outputAbsPath}.tmp`;
+    }
+
+    const base = outputAbsPath.slice(0, -ext.length);
+    return `${base}.tmp${ext}`;
 }
 
 function parseProgressChunk(chunk, previousProgress = {}) {
