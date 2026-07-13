@@ -120,24 +120,26 @@ If rejected:
 
 ## Directory Contract
 
-Recommended layout inside `services/encoder/data` or another configured root:
+Recommended layout with two separate roots:
 
 ```text
-encoder-root/
+encoder-handoff-root/
   inbox/
     src/
       library/
       dev/
       unlisted/
-  pending/
-  working/
-  encoded/
-  review/
   outbox/
     src/
       library/
       dev/
       unlisted/
+
+encoder-internal-root/
+  pending/
+  working/
+  encoded/
+  review/
   rejected/
   failed/
   manifests/
@@ -148,13 +150,36 @@ encoder-root/
 ### Notes
 
 - `inbox/src/{library|dev|unlisted}` is the manual drop location.
+- `outbox/src/{library|dev|unlisted}` is the only manual export location.
+- `encoder-handoff-root/` is the only directory tree that should be touched by human import/export workflows.
+- `encoder-internal-root/` is service-owned storage and should not be used for manual movement.
 - `pending/` is encoder-managed state for discovered but not yet queued items.
 - `working/` contains transient job files.
 - `encoded/` contains completed raw outputs before human review approval.
 - `review/` contains files staged for approval workflows when needed.
-- `outbox/src/{library|dev|unlisted}` contains approved outputs ready for manual return.
 - `rejected/` contains outputs that failed human review.
 - `failed/` contains failed job artifacts and diagnostic data.
+
+## Safety Rule
+
+Manual operators should only ever interact with:
+
+- encoder inbox
+- encoder outbox
+
+They should never browse or move files from:
+
+- pending
+- working
+- encoded
+- review
+- rejected
+- failed
+- manifests
+- logs
+- tmp
+
+Keeping handoff storage separate from internal storage reduces the chance of accidental imports, accidental exports, or removal of in-progress encoder artifacts.
 
 ## Request Package Contract
 
