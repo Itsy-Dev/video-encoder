@@ -1,6 +1,6 @@
 const EncodingOptions = require("./encoding-options");
 
-const profiles = Object.freeze([
+const profileList = [
     {
         id: "browser_compatibility",
         label: "Browser Compatibility",
@@ -185,13 +185,15 @@ const profiles = Object.freeze([
         subtitleMode: EncodingOptions.SubtitleMode.REMOVE,
         scaling: EncodingOptions.ScalingAlgorithm.AUTO
     }
-]);
+];
 
 function getProfileById(id) {
-    return profiles.find(profile => profile.id === id) || null;
+    return profileList.find(profile => profile.id === id) || null;
 }
 
-module.exports = Object.assign(profiles, {
+const profiles = Object.assign(profileList.slice(), {
     getProfileById,
-    all: () => profiles.slice()
+    all: () => profileList.slice()
 });
+
+module.exports = Object.freeze(profiles);
