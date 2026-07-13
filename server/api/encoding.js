@@ -3,9 +3,9 @@ const path = require("path");
 const EncodingService = require("../modules/encoding/encoding.service");
 const { getEncoderPaths } = require("../modules/filesystem/handoff-paths");
 
-const encodingService = new EncodingService();
+module.exports = function encodingApi(app, database) {
+    const encodingService = new EncodingService(database);
 
-module.exports = function encodingApi(app) {
     app.get("/", function (_req, res) {
         res.redirect("/encoding/pending");
     });
@@ -432,7 +432,7 @@ function renderHistory(items) {
           ["Profile", item => escapeHtml(item.profileId || "—")],
           ["Updated", item => escapeHtml(item.updatedAt)],
           ["Outbox", item => escapeHtml(item.outboxOutputAbsPath || "—")],
-          ["Notes", item => escapeHtml(item.reviewNotes || "—")]
+          ["Last Error", item => escapeHtml(item.lastError || "—")]
       ], "No historical items yet.")}
     </section>`;
 }

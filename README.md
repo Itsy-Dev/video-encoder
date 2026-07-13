@@ -8,6 +8,14 @@ Standalone video encoder scaffold.
 npm run start --workspace @services/encoder
 ```
 
+## Migrations
+
+```bash
+npm run migrate --workspace @services/encoder
+```
+
+The server also runs pending SQL migrations automatically at startup.
+
 ## Routes
 
 - `/encoding/pending`
@@ -27,6 +35,9 @@ npm run start --workspace @services/encoder
 ## Notes
 
 - This scaffold currently uses an in-memory repository.
+- MySQL config is loaded from `services/encoder/.env`.
+- SQL patches live under `server/modules/database/migrations/` and are auto-applied once.
+- `encoding_item` and `encoding_item_metadata` are now the intended persistence layer for the encoder workflow.
 - It is intended as the first extraction step toward a standalone encoder service.
 - The inbox scanner looks for supported video files anywhere under `inbox/`.
 - Any relative subdirectory under `inbox/` is preserved and later reused under `outbox/`.

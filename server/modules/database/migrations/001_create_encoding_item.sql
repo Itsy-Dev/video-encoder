@@ -1,0 +1,52 @@
+CREATE TABLE IF NOT EXISTS `encoding_item` (
+    `id` VARCHAR(255) NOT NULL,
+    `status` ENUM('pending','queued','encoding','paused','review','exported','rejected','failed','cancelled') NOT NULL DEFAULT 'pending',
+    `original_filename` VARCHAR(512) NOT NULL,
+    `inbox_input_abs_path` TEXT NOT NULL,
+    `input_abs_path` TEXT NOT NULL,
+    `inbox_relative_path` VARCHAR(1024) NOT NULL,
+    `inbox_relative_dir` VARCHAR(1024) NOT NULL DEFAULT '',
+    `profile_id` VARCHAR(128) DEFAULT NULL,
+    `output_filename` VARCHAR(512) DEFAULT NULL,
+    `encoded_output_abs_path` TEXT DEFAULT NULL,
+    `outbox_output_abs_path` TEXT DEFAULT NULL,
+    `last_error` TEXT DEFAULT NULL,
+    `attempt_count` INT UNSIGNED NOT NULL DEFAULT 0,
+    `requested_at` DATETIME DEFAULT NULL,
+    `queued_at` DATETIME DEFAULT NULL,
+    `encoding_started_at` DATETIME DEFAULT NULL,
+    `paused_at` DATETIME DEFAULT NULL,
+    `completed_at` DATETIME DEFAULT NULL,
+    `approved_at` DATETIME DEFAULT NULL,
+    `rejected_at` DATETIME DEFAULT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_encoding_item_status` (`status`),
+    KEY `idx_encoding_item_updated_at` (`updated_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `encoding_item_metadata` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `encoding_item_id` VARCHAR(255) NOT NULL,
+    `kind` ENUM('source','encoded') NOT NULL,
+    `abs_path` TEXT NOT NULL,
+    `file_size_bytes` BIGINT UNSIGNED DEFAULT NULL,
+    `duration_ms` BIGINT UNSIGNED DEFAULT NULL,
+    `container` VARCHAR(128) DEFAULT NULL,
+    `video_codec` VARCHAR(128) DEFAULT NULL,
+    `audio_codec` VARCHAR(128) DEFAULT NULL,
+    `width` INT UNSIGNED DEFAULT NULL,
+    `height` INT UNSIGNED DEFAULT NULL,
+    `frame_rate` DECIMAL(10,4) DEFAULT NULL,
+    `bit_rate` BIGINT UNSIGNED DEFAULT NULL,
+    `probe_json` LONGTEXT DEFAULT NULL,
+    `probed_at` DATETIME DEFAULT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_encoding_item_metadata_item_kind` (`encoding_item_id`, `kind`),
+    CONSTRAINT `fk_encoding_item_metadata_item`
+        FOREIGN KEY (`encoding_item_id`) REFERENCES `encoding_item` (`id`)
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

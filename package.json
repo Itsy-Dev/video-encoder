@@ -4,6 +4,7 @@
   "private": true,
   "main": "server/server.js",
   "scripts": {
-    "start": "node server/server.js"
+    "start": "node server/server.js",
+    "migrate": "node server/scripts/migrate.js"
   }
 }

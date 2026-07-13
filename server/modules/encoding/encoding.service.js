@@ -3,11 +3,11 @@ const fsp = fs.promises;
 const path = require("path");
 
 const profiles = require("./encoding-profiles");
-const repository = require("./encoding.repository");
+const EncodingRepository = require("./encoding.repository");
 const { getEncoderPaths } = require("../filesystem/handoff-paths");
 
-const PENDING_STATES = new Set(["discovered", "pending_setup"]);
-const REVIEW_STATES = new Set(["completed", "review"]);
+const PENDING_STATES = new Set(["pending"]);
+const REVIEW_STATES = new Set(["review"]);
 const HISTORY_STATES = new Set(["approved", "rejected", "failed", "exported", "cancelled"]);
 const VIDEO_EXTENSIONS = new Set([
     ".avi",
@@ -26,8 +26,12 @@ const STABILITY_WINDOW_MS = Number(process.env.ENCODER_INBOX_STABILITY_WINDOW_MS
 const SIZE_RECHECK_DELAY_MS = Number(process.env.ENCODER_INBOX_RECHECK_DELAY_MS || 1500);
 
 module.exports = class EncodingService {
+    constructor(database) {
+        this.repository = new EncodingRepository(database);
+    }
+
     async getDashboardState() {
-        const items = repository.list();
+        const items = await this.repository.list();
 
         return {
             items,
@@ -37,7 +41,7 @@ module.exports = class EncodingService {
             profiles,
             counts: {
                 pending: items.filter(item => PENDING_STATES.has(item.status)).length,
-                queued: items.filter(item => ["ready", "queued"].includes(item.status)).length,
+                queued: items.filter(item => ["queued"].includes(item.status)).length,
                 encoding: items.filter(item => ["encoding", "paused"].includes(item.status)).length,
                 review: items.filter(item => REVIEW_STATES.has(item.status)).length,
                 approved: items.filter(item => ["approved", "exported"].includes(item.status)).length
@@ -72,7 +76,7 @@ module.exports = class EncodingService {
                 }
 
                 const importKey = buildImportKey(inboxRelativePath);
-                const existing = repository.get(importKey);
+                const existing = await this.repository.get(importKey);
                 if (existing) {
                     results.duplicates += 1;
                     continue;
@@ -97,12 +101,12 @@ module.exports = class EncodingService {
     }
 
     async queueItem(id, { profileId, inboxRelativeDir } = {}) {
-        const item = this._requireItem(id);
+        const item = await this._requireItem(id);
         const selectedProfileId = profiles.some(profile => profile.id === profileId)
             ? profileId
             : (item.requestedProfileId || "browser_compatibility");
 
-        return repository.upsert({
+        return this.repository.upsert({
             ...item,
             profileId: selectedProfileId,
             inboxRelativeDir: normalizeRelativeDir(inboxRelativeDir, item.inboxRelativeDir),
@@ -113,7 +117,7 @@ module.exports = class EncodingService {
     }
 
     async completeItem(id, { reviewer } = {}) {
-        const item = this._requireItem(id);
+        const item = await this._requireItem(id);
         const paths = getEncoderPaths();
         await this._ensureManagedDirectories(paths);
 
@@ -125,19 +129,30 @@ module.exports = class EncodingService {
         await fsp.mkdir(encodedDirAbs, { recursive: true });
         await this._writePlaceholderEncodedFile(encodedOutputAbsPath, item, profileId);
 
-        return repository.upsert({
+        const encodedStat = await fsp.stat(encodedOutputAbsPath);
+
+        return this.repository.upsert({
             ...item,
             profileId,
             outputFilename,
             encodedOutputAbsPath,
             status: "review",
             completedAt: new Date().toISOString(),
-            reviewRequestedBy: reviewer || "operator"
+            encodedMetadata: {
+                absPath: encodedOutputAbsPath,
+                fileSizeBytes: encodedStat.size,
+                probeJson: {
+                    source: "placeholder",
+                    reviewer: reviewer || "operator",
+                    generatedBy: "completeItem"
+                },
+                probedAt: new Date().toISOString()
+            }
         });
     }
 
     async approveItem(id, { reviewer } = {}) {
-        const item = this._requireItem(id);
+        const item = await this._requireItem(id);
         const paths = getEncoderPaths();
         await this._ensureManagedDirectories(paths);
 
@@ -153,27 +168,26 @@ module.exports = class EncodingService {
         await fsp.mkdir(outboxDirAbs, { recursive: true });
         await fsp.copyFile(item.encodedOutputAbsPath, outboxOutputAbsPath);
 
-        return repository.upsert({
+        return this.repository.upsert({
             ...item,
             status: "exported",
-            reviewNotes: `Approved by ${reviewer || "operator"}`,
             approvedAt: new Date().toISOString(),
             outboxOutputAbsPath
         });
     }
 
     async rejectItem(id, { reviewer, notes } = {}) {
-        const item = this._requireItem(id);
-        return repository.upsert({
+        const item = await this._requireItem(id);
+        return this.repository.upsert({
             ...item,
             status: "rejected",
-            reviewNotes: notes || `Rejected by ${reviewer || "operator"}`,
+            lastError: notes || `Rejected by ${reviewer || "operator"}`,
             rejectedAt: new Date().toISOString()
         });
     }
 
-    _requireItem(id) {
-        const item = repository.get(id);
+    async _requireItem(id) {
+        const item = await this.repository.get(id);
         if (!item) {
             const error = new Error(`Encoding item not found: ${id}`);
             error.statusCode = 404;
@@ -201,14 +215,27 @@ module.exports = class EncodingService {
         await fsp.mkdir(managedSourceRoot, { recursive: true });
         await copyFileIfMissing(inboxInputAbsPath, managedInputAbsPath);
 
-        return repository.upsert(this._buildDiscoveredItem({
+        const item = this._buildDiscoveredItem({
             id: importKey,
             inboxRelativeDir,
             inboxRelativePath,
             inboxInputAbsPath,
             managedInputAbsPath,
             fileSizeBytes: inputStat.size
-        }));
+        });
+
+        return this.repository.upsert({
+            ...item,
+            sourceMetadata: {
+                absPath: managedInputAbsPath,
+                fileSizeBytes: inputStat.size,
+                probeJson: {
+                    source: "ingest",
+                    originalInboxPath: inboxInputAbsPath
+                },
+                probedAt: new Date().toISOString()
+            }
+        });
     }
 
     _buildDiscoveredItem({
@@ -224,7 +251,7 @@ module.exports = class EncodingService {
 
         return {
             id,
-            status: "pending_setup",
+            status: "pending",
             inboxRelativeDir,
             inboxRelativePath,
             requestedAt: now,
@@ -238,6 +265,12 @@ module.exports = class EncodingService {
             inputAbsPath: managedInputAbsPath,
             managedInputAbsPath,
             fileSizeBytes,
+            sourceMetadata: {
+                absPath: managedInputAbsPath,
+                fileSizeBytes,
+                probeJson: null,
+                probedAt: now
+            },
             createdAt: now,
             updatedAt: now
         };
