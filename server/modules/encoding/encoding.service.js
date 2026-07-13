@@ -5,7 +5,11 @@ const path = require("path");
 const profiles = require("./encoding-profiles");
 const repository = require("./encoding.repository");
 const { getEncoderPaths } = require("../filesystem/handoff-paths");
-const { loadRequestManifest, isRequestManifestFileName } = require("../filesystem/handoff-manifest");
+const {
+    loadRequestManifest,
+    isRequestManifestFileName,
+    buildRequestManifestName
+} = require("../filesystem/handoff-manifest");
 
 const PENDING_STATES = new Set(["discovered", "pending_setup"]);
 const REVIEW_STATES = new Set(["completed", "review"]);
@@ -33,16 +37,19 @@ module.exports = class EncodingService {
 
     async scanInbox() {
         const paths = getEncoderPaths();
+        await this._ensureManagedDirectories(paths);
         const manifests = await this._findManifestFiles(paths.inbox);
         const results = {
             discovered: 0,
             duplicates: 0,
             invalid: 0,
+            ingested: 0,
             manifests: manifests.length
         };
 
         for (const manifestAbsPath of manifests) {
             try {
+                this._assertWithinRoot(manifestAbsPath, paths.inbox, "Manifest must be inside the encoder inbox");
                 const manifest = await loadRequestManifest(manifestAbsPath);
                 if (!manifest.requestId) {
                     results.invalid += 1;
@@ -55,8 +62,9 @@ module.exports = class EncodingService {
                     continue;
                 }
 
-                const item = repository.upsert(this._buildDiscoveredItem(manifest, manifestAbsPath));
+                const item = await this._ingestDiscoveredItem(manifest, manifestAbsPath, paths);
                 if (item) results.discovered += 1;
+                if (item && item.managedInputAbsPath) results.ingested += 1;
             }
             catch (_error) {
                 results.invalid += 1;
@@ -112,10 +120,55 @@ module.exports = class EncodingService {
         return item;
     }
 
-    _buildDiscoveredItem(manifest, manifestAbsPath) {
+    async _ingestDiscoveredItem(manifest, manifestAbsPath, paths) {
+        const sourceClass = normalizeSourceClass(manifest.sourceClass);
+        const handoffInputAbsPath = path.join(
+            path.dirname(manifestAbsPath),
+            manifest.handoffFilename || manifest.originalFilename || "unknown"
+        );
+
+        this._assertWithinRoot(handoffInputAbsPath, paths.inbox, "Input file must be inside the encoder inbox");
+
+        const inputStat = await fsp.stat(handoffInputAbsPath);
+        if (!inputStat.isFile()) {
+            throw new Error(`Input file missing for manifest: ${manifest.requestId}`);
+        }
+
+        const pendingItemRoot = path.join(paths.pending, sanitizeSegment(manifest.requestId));
+        const managedSourceRoot = path.join(pendingItemRoot, "source");
+        const managedInputAbsPath = path.join(managedSourceRoot, path.basename(handoffInputAbsPath));
+        const managedManifestAbsPath = path.join(
+            managedSourceRoot,
+            buildRequestManifestName(path.basename(handoffInputAbsPath))
+        );
+
+        await fsp.mkdir(managedSourceRoot, { recursive: true });
+        await copyFileIfMissing(handoffInputAbsPath, managedInputAbsPath);
+        await writeJsonIfMissing(managedManifestAbsPath, {
+            ...manifest,
+            importedAt: new Date().toISOString(),
+            importedFromInboxAbsPath: manifestAbsPath
+        });
+
+        return repository.upsert(this._buildDiscoveredItem({
+            manifest,
+            manifestAbsPath,
+            handoffInputAbsPath,
+            managedInputAbsPath,
+            managedManifestAbsPath
+        }));
+    }
+
+    _buildDiscoveredItem({
+        manifest,
+        manifestAbsPath,
+        handoffInputAbsPath,
+        managedInputAbsPath,
+        managedManifestAbsPath
+    }) {
         const now = new Date().toISOString();
         const sourceClass = normalizeSourceClass(manifest.sourceClass);
-        const inputAbsPath = path.join(path.dirname(manifestAbsPath), manifest.handoffFilename || manifest.originalFilename || "unknown");
+        const inputAbsPath = handoffInputAbsPath;
 
         return {
             id: manifest.requestId,
@@ -130,8 +183,12 @@ module.exports = class EncodingService {
             videoUuid: manifest.videoUuid || null,
             entityType: manifest.entityType || "video",
             entityId: manifest.entityId || null,
-            manifestAbsPath,
-            inputAbsPath,
+            inboxManifestAbsPath: manifestAbsPath,
+            inboxInputAbsPath: inputAbsPath,
+            manifestAbsPath: managedManifestAbsPath,
+            inputAbsPath: managedInputAbsPath,
+            managedManifestAbsPath,
+            managedInputAbsPath,
             createdAt: now,
             updatedAt: now
         };
@@ -143,6 +200,33 @@ module.exports = class EncodingService {
             if (isRequestManifestFileName(fileAbs)) files.push(fileAbs);
         });
         return files;
+    }
+
+    async _ensureManagedDirectories(paths) {
+        const required = [
+            paths.pending,
+            paths.working,
+            paths.encoded,
+            paths.review,
+            paths.rejected,
+            paths.failed,
+            paths.manifests,
+            paths.logs,
+            paths.tmp
+        ];
+
+        for (const dirAbs of required) {
+            await fsp.mkdir(dirAbs, { recursive: true });
+        }
+    }
+
+    _assertWithinRoot(targetAbsPath, rootAbsPath, message) {
+        const resolvedTarget = path.resolve(targetAbsPath);
+        const resolvedRoot = path.resolve(rootAbsPath);
+        const relative = path.relative(resolvedRoot, resolvedTarget);
+        if (relative.startsWith("..") || path.isAbsolute(relative)) {
+            throw new Error(message);
+        }
     }
 };
 
@@ -174,4 +258,26 @@ function buildOutputFilename(filename, profileId) {
     const ext = path.extname(filename || "");
     const base = ext ? filename.slice(0, -ext.length) : String(filename || "output");
     return `${base}.${profileId}.mp4`;
+}
+
+function sanitizeSegment(value) {
+    return String(value || "item").replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+async function copyFileIfMissing(sourceAbsPath, destinationAbsPath) {
+    try {
+        await fsp.access(destinationAbsPath, fs.constants.F_OK);
+    }
+    catch (_error) {
+        await fsp.copyFile(sourceAbsPath, destinationAbsPath);
+    }
+}
+
+async function writeJsonIfMissing(fileAbsPath, data) {
+    try {
+        await fsp.access(fileAbsPath, fs.constants.F_OK);
+    }
+    catch (_error) {
+        await fsp.writeFile(fileAbsPath, JSON.stringify(data, null, 2), "utf8");
+    }
 }

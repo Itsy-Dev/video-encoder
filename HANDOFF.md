@@ -82,9 +82,9 @@ A human manually moves the request package from `main` outbound into the encoder
 
 ### 3. Encoder discovers pending files
 
-The encoder scans its inbox and creates pending items that are visible in the encoder UI.
+The encoder scans its inbox, validates the request package, and ingests it into encoder-managed pending storage.
 
-At this stage the file is not yet queued for work. It is only discovered and awaiting setup.
+At this stage the file is not yet queued for work. It has been copied into encoder-managed storage and is awaiting setup.
 
 ### 4. User selects settings and queues the file
 
@@ -317,6 +317,8 @@ Preferred approach:
 - move the source video first
 - move the manifest second
 - only treat the item as discoverable when both are present
+
+After discovery, the encoder should copy the request package out of the handoff inbox into internal pending storage before queueing or processing.
 
 ## Identity And Idempotency
 

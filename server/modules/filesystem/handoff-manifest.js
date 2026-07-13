@@ -15,7 +15,13 @@ function isRequestManifestFileName(fileAbsPath) {
     return String(fileAbsPath || "").endsWith(".request.json");
 }
 
+function buildRequestManifestName(filename) {
+    const base = path.basename(String(filename || ""), path.extname(String(filename || "")));
+    return `${base}.request.json`;
+}
+
 module.exports = {
     loadRequestManifest,
-    isRequestManifestFileName
+    isRequestManifestFileName,
+    buildRequestManifestName
 };

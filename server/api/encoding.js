@@ -337,7 +337,7 @@ function renderPendingTable(items) {
       <div class="toolbar">
         <div>
           <strong>Inbox Discovery</strong>
-          <p>Use <code>POST /api/encoding/scan</code> to populate this list from the inbox contract.</p>
+          <p>Use <code>POST /api/encoding/scan</code> to validate request manifests in inbox and ingest each package into internal pending storage.</p>
         </div>
         <a class="button" href="/encoding/setup">Open Setup</a>
       </div>
@@ -368,10 +368,12 @@ function renderSetup(item, profiles) {
             ["Current State", item.status],
             ["Source Class", item.sourceClass],
             ["Selected Profile", item.profileId || "not set"],
-            ["Manifest Path", item.manifestAbsPath],
-            ["Input Path", item.inputAbsPath]
+            ["Inbox Manifest Path", item.inboxManifestAbsPath],
+            ["Inbox Input Path", item.inboxInputAbsPath],
+            ["Managed Manifest Path", item.manifestAbsPath],
+            ["Managed Input Path", item.inputAbsPath]
         ])}
-        <div class="note">Queue action is available through <code>POST /api/encoding/items/${escapeHtml(item.id)}/queue</code> with <code>profileId</code> and <code>sourceClass</code>.</div>
+        <div class="note">Scan ingests the request package from inbox into internal pending storage first. Queue action is available through <code>POST /api/encoding/items/${escapeHtml(item.id)}/queue</code> with <code>profileId</code> and <code>sourceClass</code>.</div>
       </div>
       <div class="panel stack">
         <strong>Available Profiles</strong>
