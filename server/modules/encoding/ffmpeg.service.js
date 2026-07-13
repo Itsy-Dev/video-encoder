@@ -2,6 +2,7 @@ const fs = require("fs");
 const fsp = fs.promises;
 const path = require("path");
 const { spawn, spawnSync } = require("child_process");
+const encodingProfiles = require("./encoding-profiles");
 
 const FFMPEG_BIN = process.env.ENCODER_FFMPEG_BIN || "ffmpeg";
 
@@ -11,37 +12,6 @@ const FFMPEG_BIN = process.env.ENCODER_FFMPEG_BIN || "ffmpeg";
         throw new Error(`ffmpeg not found at '${FFMPEG_BIN}'. Install ffmpeg or set ENCODER_FFMPEG_BIN.`);
     }
 })();
-
-const PROFILE_ARGS = Object.freeze({
-    browser_compatibility: [
-        "-c:v", "libx264",
-        "-preset", "slow",
-        "-crf", "18",
-        "-pix_fmt", "yuv420p",
-        "-movflags", "+faststart",
-        "-c:a", "aac",
-        "-b:a", "192k"
-    ],
-    hq_h264: [
-        "-c:v", "libx264",
-        "-preset", "slow",
-        "-crf", "16",
-        "-pix_fmt", "yuv420p",
-        "-movflags", "+faststart",
-        "-c:a", "aac",
-        "-b:a", "192k"
-    ],
-    review_proxy: [
-        "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "28",
-        "-vf", "scale='min(1280,iw)':-2",
-        "-pix_fmt", "yuv420p",
-        "-movflags", "+faststart",
-        "-c:a", "aac",
-        "-b:a", "128k"
-    ]
-});
 
 module.exports = class FfmpegService {
     async encodeFile({ inputAbsPath, outputAbsPath, profileId }) {
@@ -71,15 +41,108 @@ module.exports = class FfmpegService {
     }
 
     _buildArgs(inputAbsPath, _outputAbsPath, profileId) {
-        const profileArgs = PROFILE_ARGS[profileId] || PROFILE_ARGS.browser_compatibility;
+        const profile = encodingProfiles.getProfileById(profileId) || encodingProfiles.getProfileById("browser_compatibility");
+        if (!profile) {
+            throw new Error(`Encoding profile not found: ${profileId}`);
+        }
 
         return [
             "-y",
             "-v", "error",
             "-i", inputAbsPath
-        ].concat(profileArgs);
+        ].concat(buildProfileArgs(profile));
     }
 };
+
+function buildProfileArgs(profile) {
+    const args = [];
+
+    const videoCodec = profile.videoCodec && profile.videoCodec.ffmpeg ? profile.videoCodec.ffmpeg : null;
+    const audioCodec = profile.audioCodec && profile.audioCodec.ffmpeg ? profile.audioCodec.ffmpeg : null;
+    const shouldScale = Boolean(
+        profile.resolution &&
+        profile.resolution.width &&
+        profile.resolution.height
+    );
+
+    if (videoCodec) {
+        args.push("-c:v", videoCodec);
+    }
+
+    if (profile.preset && profile.preset.id && videoCodec && videoCodec !== "copy") {
+        args.push("-preset", String(profile.preset.id));
+    }
+
+    if (profile.crf != null && videoCodec && videoCodec !== "copy") {
+        args.push("-crf", String(profile.crf));
+    }
+
+    if (profile.tune && profile.tune.id && videoCodec && videoCodec !== "copy") {
+        args.push("-tune", String(profile.tune.id));
+    }
+
+    if (profile.pixelFormat && profile.pixelFormat.id && videoCodec && videoCodec !== "copy") {
+        args.push("-pix_fmt", String(profile.pixelFormat.id));
+    }
+
+    if (profile.profile && profile.profile.id && videoCodec === "libx264") {
+        args.push("-profile:v", String(profile.profile.id));
+    }
+
+    if (profile.level && profile.level.id && videoCodec === "libx264") {
+        args.push("-level:v", String(profile.level.id));
+    }
+
+    if (shouldScale) {
+        args.push(
+            "-vf",
+            buildScaleFilter(
+                Number(profile.resolution.width),
+                Number(profile.resolution.height),
+                profile.scaling && profile.scaling.id ? profile.scaling.id : null
+            )
+        );
+    }
+
+    if (audioCodec) {
+        args.push("-c:a", audioCodec);
+    }
+
+    if (profile.audioBitrate && profile.audioBitrate.id != null && audioCodec !== "copy") {
+        args.push("-b:a", `${Math.round(Number(profile.audioBitrate.id) / 1000)}k`);
+    }
+
+    if (profile.audioChannels && profile.audioChannels.id != null && audioCodec !== "copy") {
+        args.push("-ac", String(profile.audioChannels.id));
+    }
+
+    if (profile.sampleRate && profile.sampleRate.id != null && audioCodec !== "copy") {
+        args.push("-ar", String(profile.sampleRate.id));
+    }
+
+    if (profile.fastStart && profile.fastStart.id === true) {
+        args.push("-movflags", "+faststart");
+    }
+
+    if (profile.metadata && profile.metadata.id === "strip") {
+        args.push("-map_metadata", "-1");
+    }
+
+    if (profile.chapters && profile.chapters.id === "remove") {
+        args.push("-map_chapters", "-1");
+    }
+
+    if (profile.subtitleMode && profile.subtitleMode.id === "remove") {
+        args.push("-sn");
+    }
+
+    return args;
+}
+
+function buildScaleFilter(targetWidth, targetHeight, scalingAlgorithm) {
+    const scaler = scalingAlgorithm || "lanczos";
+    return `scale=w='min(${targetWidth},iw)':h='min(${targetHeight},ih)':force_original_aspect_ratio=decrease:flags=${scaler}`;
+}
 
 function runProcess(command, args) {
     return new Promise((resolve, reject) => {
