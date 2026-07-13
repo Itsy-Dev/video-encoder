@@ -93,8 +93,6 @@ The encoder creates a queued job and moves the request into managed encoder stat
 
 The encoder worker performs the job and writes encoded output into encoder-managed storage.
 
-During the current scaffold stage, this step can be represented by a placeholder completion flow that writes a managed artifact into internal `encoded/` storage before real ffmpeg execution is wired in.
-
 ### 5. User reviews the output
 
 The encoder UI shows source vs encoded details for approval.
@@ -186,7 +184,7 @@ That keeps the encoder independent of any requester-specific protocol.
 Recommended encoder-side states:
 
 - `discovered`
-- `pending_setup`
+- `pending`
 - `ready`
 - `queued`
 - `encoding`
@@ -202,7 +200,7 @@ Recommended encoder-side states:
 ### Meaning
 
 - `discovered`: file seen in inbox but not yet normalized
-- `pending_setup`: metadata loaded, waiting for user decisions
+- `pending`: metadata loaded, waiting for user decisions
 - `ready`: valid settings chosen, ready for queue
 - `queued`: waiting for worker capacity
 - `encoding`: actively processing
@@ -384,7 +382,6 @@ We should define these before implementation:
 - Build encoder UI pages
 - Add source-class-driven inbox and outbox handling
   Note: this now means preserving inbox-relative subdirectories into outbox-relative subdirectories.
-- Replace placeholder completion/export behavior with real encoded outputs from the worker
 
 ### Phase 3
 

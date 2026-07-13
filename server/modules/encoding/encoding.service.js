@@ -4,6 +4,7 @@ const path = require("path");
 
 const profiles = require("./encoding-profiles");
 const EncodingRepository = require("./encoding.repository");
+const FfmpegService = require("./ffmpeg.service");
 const FfprobeService = require("./ffprobe.service");
 const { getEncoderPaths } = require("../filesystem/handoff-paths");
 
@@ -29,6 +30,7 @@ const SIZE_RECHECK_DELAY_MS = Number(process.env.ENCODER_INBOX_RECHECK_DELAY_MS 
 module.exports = class EncodingService {
     constructor(database) {
         this.repository = new EncodingRepository(database);
+        this.ffmpegService = new FfmpegService();
         this.ffprobeService = new FfprobeService();
     }
 
@@ -127,27 +129,56 @@ module.exports = class EncodingService {
         const outputFilename = item.outputFilename || buildOutputFilename(item.originalFilename, profileId);
         const encodedDirAbs = path.join(paths.encoded, normalizeRelativeDir(item.inboxRelativeDir), sanitizeSegment(item.id));
         const encodedOutputAbsPath = path.join(encodedDirAbs, outputFilename);
+        const encodingStartedAt = new Date().toISOString();
+        const nextAttemptCount = Number(item.attemptCount || 0) + 1;
 
         await fsp.mkdir(encodedDirAbs, { recursive: true });
-        await copyFileReplace(item.inputAbsPath, encodedOutputAbsPath);
-        const encodedStat = await fsp.stat(encodedOutputAbsPath);
-        const encodedMetadata = await this.ffprobeService.probeFile(encodedOutputAbsPath, encodedStat);
-        encodedMetadata.probeJson = {
-            ffprobe: encodedMetadata.probeJson,
-            placeholder: true,
-            reviewer: reviewer || "operator",
-            generatedBy: "completeItem-copy-source"
-        };
-
-        return this.repository.upsert({
+        await this.repository.upsert({
             ...item,
             profileId,
             outputFilename,
             encodedOutputAbsPath,
-            status: "review",
-            completedAt: new Date().toISOString(),
-            encodedMetadata
+            status: "encoding",
+            encodingStartedAt,
+            attemptCount: nextAttemptCount,
+            lastError: null
         });
+
+        try {
+            await this.ffmpegService.encodeFile({
+                inputAbsPath: item.inputAbsPath,
+                outputAbsPath: encodedOutputAbsPath,
+                profileId
+            });
+
+            const encodedStat = await fsp.stat(encodedOutputAbsPath);
+            const encodedMetadata = await this.ffprobeService.probeFile(encodedOutputAbsPath, encodedStat);
+
+            return this.repository.upsert({
+                ...item,
+                profileId,
+                outputFilename,
+                encodedOutputAbsPath,
+                status: "review",
+                encodingStartedAt,
+                completedAt: new Date().toISOString(),
+                attemptCount: nextAttemptCount,
+                encodedMetadata
+            });
+        }
+        catch (error) {
+            await this.repository.upsert({
+                ...item,
+                profileId,
+                outputFilename,
+                encodedOutputAbsPath,
+                status: "failed",
+                encodingStartedAt,
+                attemptCount: nextAttemptCount,
+                lastError: error.message
+            });
+            throw error;
+        }
     }
 
     async approveItem(id, { reviewer } = {}) {
@@ -355,9 +386,6 @@ async function copyFileIfMissing(sourceAbsPath, destinationAbsPath) {
     }
 }
 
-async function copyFileReplace(sourceAbsPath, destinationAbsPath) {
-    await fsp.copyFile(sourceAbsPath, destinationAbsPath);
-}
 
 function isSupportedVideoFile(fileAbsPath) {
     return VIDEO_EXTENSIONS.has(path.extname(String(fileAbsPath || "")).toLowerCase());
