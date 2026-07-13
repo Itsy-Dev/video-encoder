@@ -4,6 +4,7 @@ const path = require("path");
 
 const profiles = require("./encoding-profiles");
 const EncodingRepository = require("./encoding.repository");
+const FfprobeService = require("./ffprobe.service");
 const { getEncoderPaths } = require("../filesystem/handoff-paths");
 
 const PENDING_STATES = new Set(["pending"]);
@@ -28,6 +29,7 @@ const SIZE_RECHECK_DELAY_MS = Number(process.env.ENCODER_INBOX_RECHECK_DELAY_MS 
 module.exports = class EncodingService {
     constructor(database) {
         this.repository = new EncodingRepository(database);
+        this.ffprobeService = new FfprobeService();
     }
 
     async getDashboardState() {
@@ -127,9 +129,15 @@ module.exports = class EncodingService {
         const encodedOutputAbsPath = path.join(encodedDirAbs, outputFilename);
 
         await fsp.mkdir(encodedDirAbs, { recursive: true });
-        await this._writePlaceholderEncodedFile(encodedOutputAbsPath, item, profileId);
-
+        await copyFileReplace(item.inputAbsPath, encodedOutputAbsPath);
         const encodedStat = await fsp.stat(encodedOutputAbsPath);
+        const encodedMetadata = await this.ffprobeService.probeFile(encodedOutputAbsPath, encodedStat);
+        encodedMetadata.probeJson = {
+            ffprobe: encodedMetadata.probeJson,
+            placeholder: true,
+            reviewer: reviewer || "operator",
+            generatedBy: "completeItem-copy-source"
+        };
 
         return this.repository.upsert({
             ...item,
@@ -138,16 +146,7 @@ module.exports = class EncodingService {
             encodedOutputAbsPath,
             status: "review",
             completedAt: new Date().toISOString(),
-            encodedMetadata: {
-                absPath: encodedOutputAbsPath,
-                fileSizeBytes: encodedStat.size,
-                probeJson: {
-                    source: "placeholder",
-                    reviewer: reviewer || "operator",
-                    generatedBy: "completeItem"
-                },
-                probedAt: new Date().toISOString()
-            }
+            encodedMetadata
         });
     }
 
@@ -223,18 +222,11 @@ module.exports = class EncodingService {
             managedInputAbsPath,
             fileSizeBytes: inputStat.size
         });
+        const sourceMetadata = await this.ffprobeService.probeFile(managedInputAbsPath, inputStat);
 
         return this.repository.upsert({
             ...item,
-            sourceMetadata: {
-                absPath: managedInputAbsPath,
-                fileSizeBytes: inputStat.size,
-                probeJson: {
-                    source: "ingest",
-                    originalInboxPath: inboxInputAbsPath
-                },
-                probedAt: new Date().toISOString()
-            }
+            sourceMetadata
         });
     }
 
@@ -265,12 +257,6 @@ module.exports = class EncodingService {
             inputAbsPath: managedInputAbsPath,
             managedInputAbsPath,
             fileSizeBytes,
-            sourceMetadata: {
-                absPath: managedInputAbsPath,
-                fileSizeBytes,
-                probeJson: null,
-                probedAt: now
-            },
             createdAt: now,
             updatedAt: now
         };
@@ -329,17 +315,6 @@ module.exports = class EncodingService {
             && Math.floor(first.mtimeMs) === Math.floor(second.mtimeMs);
     }
 
-    async _writePlaceholderEncodedFile(fileAbsPath, item, profileId) {
-        const contents = [
-            "Placeholder encoded output",
-            `itemId=${item.id}`,
-            `source=${item.inboxRelativePath || item.originalFilename}`,
-            `profile=${profileId}`,
-            `generatedAt=${new Date().toISOString()}`
-        ].join("\n");
-
-        await fsp.writeFile(fileAbsPath, contents, "utf8");
-    }
 };
 
 async function walk(rootAbs, onFile) {
@@ -378,6 +353,10 @@ async function copyFileIfMissing(sourceAbsPath, destinationAbsPath) {
     catch (_error) {
         await fsp.copyFile(sourceAbsPath, destinationAbsPath);
     }
+}
+
+async function copyFileReplace(sourceAbsPath, destinationAbsPath) {
+    await fsp.copyFile(sourceAbsPath, destinationAbsPath);
 }
 
 function isSupportedVideoFile(fileAbsPath) {
