@@ -43,6 +43,33 @@ module.exports = function encodingApi(app, database) {
         res.json({ ok: true, item });
     });
 
+    app.post("/api/encoding/control/pause", async function (_req, res) {
+        const paused = await encodingService.pauseActive("manual");
+        res.json({
+            ok: true,
+            paused,
+            worker: encodingService.getWorkerStatus()
+        });
+    });
+
+    app.post("/api/encoding/control/resume", async function (_req, res) {
+        const resumed = await encodingService.resumeActive();
+        res.json({
+            ok: true,
+            resumed,
+            worker: encodingService.getWorkerStatus()
+        });
+    });
+
+    app.post("/api/encoding/control/stop", async function (_req, res) {
+        const stopped = await encodingService.stopActive();
+        res.json({
+            ok: true,
+            stopped,
+            worker: encodingService.getWorkerStatus()
+        });
+    });
+
     app.post("/api/encoding/items/:id/approve", async function (req, res) {
         const item = await encodingService.approveItem(req.params.id, {
             reviewer: req.body.reviewer || "operator"
@@ -63,7 +90,7 @@ module.exports = function encodingApi(app, database) {
         res.send(renderPage({
             title: "Pending",
             heading: "Pending Inbox Files",
-            description: "Discovered request packages awaiting setup and queue decisions.",
+            description: "Discovered inbox videos awaiting profile selection and queue decisions.",
             state,
             body: renderPendingTable(state.pendingItems)
         }));
@@ -76,7 +103,7 @@ module.exports = function encodingApi(app, database) {
         res.send(renderPage({
             title: "Setup",
             heading: "Encoding Setup",
-            description: "Choose a profile and destination class before queueing work.",
+            description: "Choose a profile, keep the discovered inbox subdirectory if needed, and send the item into the automated queue.",
             state,
             body: renderSetup(selected, state.profiles)
         }));
@@ -87,9 +114,9 @@ module.exports = function encodingApi(app, database) {
         res.send(renderPage({
             title: "Queue",
             heading: "Queue Status",
-            description: "Track ready, queued, encoding, and completed items.",
+            description: "Track the single active worker, automatic queue pickup, cooldowns, and rest cycles.",
             state,
-            body: renderQueue(state.items)
+            body: renderQueue(state)
         }));
     });
 
@@ -344,7 +371,7 @@ function renderPendingTable(items) {
       <div class="toolbar">
         <div>
           <strong>Inbox Discovery</strong>
-          <p>Use <code>POST /api/encoding/scan</code> to discover stable video files anywhere under <code>/inbox</code>, remember the file's relative subdirectory, and ingest it into internal pending storage.</p>
+          <p>Use <code>POST /api/encoding/scan</code> to discover stable video files anywhere under <code>/inbox</code>, remember the file's optional relative subdirectory, and ingest it into internal pending storage.</p>
         </div>
         <a class="button" href="/encoding/setup">Open Setup</a>
       </div>
@@ -368,7 +395,7 @@ function renderSetup(item, profiles) {
       <div class="panel stack">
         <div>
           <strong>${escapeHtml(item.originalFilename)}</strong>
-          <p>Choose the initial profile and confirm the destination class before the item enters the queue.</p>
+          <p>Choose the profile and confirm the preserved inbox subdirectory before the item enters the automated single-worker queue.</p>
         </div>
         ${renderKeyValue([
             ["Item ID", item.id],
@@ -381,7 +408,7 @@ function renderSetup(item, profiles) {
             ["Encoded Output Path", item.encodedOutputAbsPath || "not generated"],
             ["Output Folder", buildOutboxDisplayPath(item)]
         ])}
-        <div class="note">Scan ingests the video from inbox into internal pending storage first, preserving its optional subdirectory for outbox routing. Queue with <code>POST /api/encoding/items/${escapeHtml(item.id)}/queue</code>, then create a reviewable output with <code>POST /api/encoding/items/${escapeHtml(item.id)}/complete</code>.</div>
+        <div class="note">Scan ingests the video from inbox into internal pending storage first, preserving its optional subdirectory for outbox routing. Queue with <code>POST /api/encoding/items/${escapeHtml(item.id)}/queue</code>; the worker will pick it up automatically when it reaches the front of the queue.</div>
       </div>
       <div class="panel stack">
         <strong>Available Profiles</strong>
@@ -396,9 +423,17 @@ function renderSetup(item, profiles) {
     </section>`;
 }
 
-function renderQueue(items) {
+function renderQueue(state) {
+    const items = state.items || [];
     const rows = items.filter(item => ["ready", "queued", "encoding", "paused", "completed", "review"].includes(item.status));
     return `<section class="panel">
+      <div class="note" style="margin-bottom: 16px;">
+        <strong>Worker</strong><br />
+        Active Item: ${escapeHtml(statefulValue(state, "worker.activeItemId"))}<br />
+        Started: ${escapeHtml(statefulValue(state, "worker.activeStartedAt"))}<br />
+        Progress: ${escapeHtml(formatProgress(state && state.worker ? state.worker.activeProgress : null))}<br />
+        Controls: pause <code>POST /api/encoding/control/pause</code>, resume <code>POST /api/encoding/control/resume</code>, stop <code>POST /api/encoding/control/stop</code>
+      </div>
       ${renderTable(rows, [
           ["State", item => pill(item.status)],
           ["File", item => escapeHtml(item.originalFilename)],
@@ -507,7 +542,15 @@ function buildOutboxDisplayPath(item) {
 
 function renderQueueAction(item) {
     if (item.status === "queued") {
-        return `Complete: <code>POST /api/encoding/items/${escapeHtml(item.id)}/complete</code>`;
+        return "Waiting for worker pickup";
+    }
+
+    if (item.status === "encoding") {
+        return "Active encode";
+    }
+
+    if (item.status === "paused") {
+        return "Paused";
     }
 
     if (item.status === "review") {
@@ -515,4 +558,25 @@ function renderQueueAction(item) {
     }
 
     return "—";
+}
+
+function statefulValue(state, propertyPath) {
+    const value = String(propertyPath || "")
+        .split(".")
+        .filter(Boolean)
+        .reduce((current, key) => current && current[key], state);
+
+    return value == null || value === "" ? "—" : String(value);
+}
+
+function formatProgress(progress) {
+    if (!progress) return "—";
+
+    const parts = [];
+    if (progress.state) parts.push(`state ${progress.state}`);
+    if (progress.frame != null) parts.push(`frame ${progress.frame}`);
+    if (progress.fps != null) parts.push(`fps ${progress.fps}`);
+    if (progress.outTimeMs != null) parts.push(`time ${progress.outTimeMs}ms`);
+    if (progress.speed) parts.push(`speed ${progress.speed}`);
+    return parts.length ? parts.join(", ") : "—";
 }

@@ -31,10 +31,12 @@ The server also runs pending SQL migrations automatically at startup.
 - `/api/encoding/items/:id/complete`
 - `/api/encoding/items/:id/approve`
 - `/api/encoding/items/:id/reject`
+- `/api/encoding/control/pause`
+- `/api/encoding/control/resume`
+- `/api/encoding/control/stop`
 
 ## Notes
 
-- This scaffold currently uses an in-memory repository.
 - MySQL config is loaded from `services/encoder/.env`.
 - SQL patches live under `server/modules/database/migrations/` and are auto-applied once.
 - `encoding_item` and `encoding_item_metadata` are now the intended persistence layer for the encoder workflow.
@@ -46,7 +48,9 @@ The server also runs pending SQL migrations automatically at startup.
 - Files placed directly in `inbox/` with no subdirectory are also valid.
 - Scan ingests discovered videos into internal `pending/` storage so queueing no longer depends on the handoff inbox copy.
 - Scan skips files that still look unstable by using an inbox age window and a second size check.
-- The current vertical slice is: scan -> queue -> complete -> review -> export to outbox.
-- `complete` now performs a real ffmpeg encode into internal `encoded/` storage using the selected profile.
+- The current vertical slice is: scan -> queue -> automatic worker encode -> review -> export to outbox.
+- Queueing an item now wakes a single active worker that processes one encode at a time.
+- The worker supports a post-item cooldown, continuous-run rest cycle, manual pause, manual resume, and manual stop.
+- Encoding safety timing is configurable with `ENCODER_POST_ITEM_COOLDOWN_MS`, `ENCODER_CONTINUOUS_RUN_LIMIT_MS`, `ENCODER_PROCESS_REST_MS`, and `ENCODER_MONITOR_INTERVAL_MS`.
 - Human operators should only use the handoff root: `inbox/` for imports and `outbox/` for exports.
 - Encoder-managed storage should live under a separate internal root and stay out of manual workflows.

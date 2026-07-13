@@ -3,6 +3,72 @@ class EncodingRepository {
         this.database = database;
     }
 
+    async getNextQueued() {
+        const { results } = await this.database.query(`
+            SELECT
+                ei.*,
+                sm.abs_path AS source_abs_path,
+                sm.file_size_bytes AS source_file_size_bytes,
+                sm.duration_ms AS source_duration_ms,
+                sm.container AS source_container,
+                sm.video_codec AS source_video_codec,
+                sm.audio_codec AS source_audio_codec,
+                sm.width AS source_width,
+                sm.height AS source_height,
+                sm.frame_rate AS source_frame_rate,
+                sm.bit_rate AS source_bit_rate,
+                sm.probe_json AS source_probe_json,
+                sm.probed_at AS source_probed_at,
+                em.abs_path AS encoded_abs_path,
+                em.file_size_bytes AS encoded_file_size_bytes,
+                em.duration_ms AS encoded_duration_ms,
+                em.container AS encoded_container,
+                em.video_codec AS encoded_video_codec,
+                em.audio_codec AS encoded_audio_codec,
+                em.width AS encoded_width,
+                em.height AS encoded_height,
+                em.frame_rate AS encoded_frame_rate,
+                em.bit_rate AS encoded_bit_rate,
+                em.probe_json AS encoded_probe_json,
+                em.probed_at AS encoded_probed_at
+            FROM encoding_item ei
+            LEFT JOIN encoding_item_metadata sm
+                ON sm.encoding_item_id = ei.id AND sm.kind = 'source'
+            LEFT JOIN encoding_item_metadata em
+                ON em.encoding_item_id = ei.id AND em.kind = 'encoded'
+            WHERE ei.status = 'queued'
+            ORDER BY ei.queued_at ASC, ei.updated_at ASC
+            LIMIT 1
+        `);
+
+        return Array.isArray(results) && results.length ? mapRowToItem(results[0]) : null;
+    }
+
+    async failInterrupted(message) {
+        const interruptedStates = ["encoding", "paused"];
+        const placeholders = interruptedStates.map(() => "?").join(", ");
+        const now = new Date().toISOString();
+
+        const { results } = await this.database.query(`
+            UPDATE encoding_item
+            SET
+                status = 'failed',
+                last_error = ?,
+                updated_at = ?,
+                completed_at = COALESCE(completed_at, ?)
+            WHERE status IN (${placeholders})
+        `, [
+            message,
+            toSqlDatetime(now),
+            toSqlDatetime(now),
+            ...interruptedStates
+        ]);
+
+        return {
+            count: Number(results && typeof results.affectedRows === "number" ? results.affectedRows : 0)
+        };
+    }
+
     async list() {
         const { results } = await this.database.query(`
             SELECT

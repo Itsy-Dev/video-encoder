@@ -1,6 +1,7 @@
 const fs = require("fs");
 const fsp = fs.promises;
 const path = require("path");
+const EventEmitter = require("events");
 const { spawn, spawnSync } = require("child_process");
 const encodingProfiles = require("./encoding-profiles");
 
@@ -14,30 +15,21 @@ const FFMPEG_BIN = process.env.ENCODER_FFMPEG_BIN || "ffmpeg";
 })();
 
 module.exports = class FfmpegService {
-    async encodeFile({ inputAbsPath, outputAbsPath, profileId }) {
-        if (!inputAbsPath) throw new Error("FfmpegService.encodeFile: inputAbsPath is required");
-        if (!outputAbsPath) throw new Error("FfmpegService.encodeFile: outputAbsPath is required");
+    startEncodeFile({ inputAbsPath, outputAbsPath, profileId }) {
+        if (!inputAbsPath) throw new Error("FfmpegService.startEncodeFile: inputAbsPath is required");
+        if (!outputAbsPath) throw new Error("FfmpegService.startEncodeFile: outputAbsPath is required");
 
-        const args = this._buildArgs(inputAbsPath, outputAbsPath, profileId);
-        const tempOutputAbsPath = `${outputAbsPath}.tmp`;
-
-        await fsp.mkdir(path.dirname(outputAbsPath), { recursive: true });
-        await removeIfExists(tempOutputAbsPath);
-
-        try {
-            await runProcess(FFMPEG_BIN, args.concat(tempOutputAbsPath));
-            await removeIfExists(outputAbsPath);
-            await fsp.rename(tempOutputAbsPath, outputAbsPath);
-        }
-        catch (error) {
-            await removeIfExists(tempOutputAbsPath);
-            throw error;
-        }
-
-        return {
+        return createEncodingHandle({
+            command: FFMPEG_BIN,
+            args: this._buildArgs(inputAbsPath, outputAbsPath, profileId),
             outputAbsPath,
             profileId: profileId || "browser_compatibility"
-        };
+        });
+    }
+
+    async encodeFile({ inputAbsPath, outputAbsPath, profileId }) {
+        const handle = this.startEncodeFile({ inputAbsPath, outputAbsPath, profileId });
+        return handle.done;
     }
 
     _buildArgs(inputAbsPath, _outputAbsPath, profileId) {
@@ -53,6 +45,91 @@ module.exports = class FfmpegService {
         ].concat(buildProfileArgs(profile));
     }
 };
+
+class EncodingProcessHandle extends EventEmitter {
+    constructor({ child, done, outputAbsPath, tempOutputAbsPath, profileId }) {
+        super();
+        this.child = child;
+        this.done = done;
+        this.outputAbsPath = outputAbsPath;
+        this.tempOutputAbsPath = tempOutputAbsPath;
+        this.profileId = profileId;
+        this.state = "running";
+        this.stopRequested = false;
+        this.progress = {
+            frame: null,
+            fps: null,
+            bitrateKbps: null,
+            totalSizeBytes: null,
+            outTimeMs: null,
+            speed: null,
+            progress: "continue"
+        };
+    }
+
+    attachProgress(chunk) {
+        const nextProgress = parseProgressChunk(chunk, this.progress);
+        this.progress = nextProgress;
+        this.emit("progress", nextProgress);
+    }
+
+    getProgress() {
+        return {
+            state: this.state,
+            stopRequested: this.stopRequested,
+            ...this.progress
+        };
+    }
+
+    pause() {
+        if (!this.child || this.child.exitCode != null || this.state === "paused") {
+            return false;
+        }
+
+        process.kill(this.child.pid, "SIGSTOP");
+        this.state = "paused";
+        this.emit("state", this.state);
+        return true;
+    }
+
+    resume() {
+        if (!this.child || this.child.exitCode != null || this.state !== "paused") {
+            return false;
+        }
+
+        process.kill(this.child.pid, "SIGCONT");
+        this.state = "running";
+        this.emit("state", this.state);
+        return true;
+    }
+
+    stop() {
+        if (!this.child || this.child.exitCode != null) {
+            return false;
+        }
+
+        this.stopRequested = true;
+        if (this.state === "paused") {
+            this.resume();
+        }
+        this.state = "stopping";
+        this.emit("state", this.state);
+        this.child.kill("SIGTERM");
+        return true;
+    }
+
+    kill() {
+        if (!this.child || this.child.exitCode != null) {
+            return false;
+        }
+
+        this.stopRequested = true;
+        this.state = "killed";
+        this.emit("state", this.state);
+        this.child.kill("SIGKILL");
+        return true;
+    }
+}
 
 function buildProfileArgs(profile) {
     const args = [];
@@ -142,6 +219,128 @@ function buildProfileArgs(profile) {
 function buildScaleFilter(targetWidth, targetHeight, scalingAlgorithm) {
     const scaler = scalingAlgorithm || "lanczos";
     return `scale=w='min(${targetWidth},iw)':h='min(${targetHeight},ih)':force_original_aspect_ratio=decrease:flags=${scaler}`;
+}
+
+function createEncodingHandle({ command, args, outputAbsPath, profileId }) {
+    const tempOutputAbsPath = `${outputAbsPath}.tmp`;
+    fs.mkdirSync(path.dirname(outputAbsPath), { recursive: true });
+    fs.rmSync(tempOutputAbsPath, { force: true, recursive: true });
+
+    const child = spawn(command, args.concat([
+        "-progress", "pipe:1",
+        tempOutputAbsPath
+    ]), {
+        stdio: ["ignore", "pipe", "pipe"]
+    });
+
+    let stdout = "";
+    let stderr = "";
+    let handle = null;
+
+    const done = (async function run() {
+        try {
+            const result = await new Promise((resolve, reject) => {
+                child.stdout.on("data", chunk => {
+                    const text = chunk.toString("utf8");
+                    stdout += text;
+                    if (handle) {
+                        handle.attachProgress(text);
+                    }
+                });
+
+                child.stderr.on("data", chunk => {
+                    stderr += chunk.toString("utf8");
+                });
+
+                child.on("error", reject);
+
+                child.on("close", code => {
+                    if (code === 0) {
+                        return resolve({ stdout, stderr });
+                    }
+
+                    const stopRequested = Boolean(handle && handle.stopRequested);
+                    if (stopRequested) {
+                        const error = new Error("ffmpeg stopped before completion");
+                        error.code = "ENCODE_STOPPED";
+                        return reject(error);
+                    }
+
+                    reject(new Error(`ffmpeg failed code ${code}: ${stderr || stdout}`));
+                });
+            });
+
+            await removeIfExists(outputAbsPath);
+            await fsp.rename(tempOutputAbsPath, outputAbsPath);
+            if (handle) {
+                handle.state = "completed";
+                handle.emit("state", handle.state);
+            }
+            return {
+                ...result,
+                outputAbsPath,
+                profileId
+            };
+        }
+        catch (error) {
+            await removeIfExists(tempOutputAbsPath);
+            if (handle && handle.state !== "killed") {
+                handle.state = handle.stopRequested ? "stopped" : "failed";
+                handle.emit("state", handle.state);
+            }
+            throw error;
+        }
+    })();
+
+    handle = new EncodingProcessHandle({
+        child,
+        done,
+        outputAbsPath,
+        tempOutputAbsPath,
+        profileId
+    });
+
+    return handle;
+}
+
+function parseProgressChunk(chunk, previousProgress = {}) {
+    const next = { ...previousProgress };
+    const lines = String(chunk || "").split(/\r?\n/);
+
+    for (const line of lines) {
+        if (!line || !line.includes("=")) continue;
+        const separatorIndex = line.indexOf("=");
+        const key = line.slice(0, separatorIndex).trim();
+        const value = line.slice(separatorIndex + 1).trim();
+
+        if (key === "frame") next.frame = parseNullableNumber(value);
+        if (key === "fps") next.fps = parseNullableNumber(value);
+        if (key === "bitrate") next.bitrateKbps = parseBitrateKbps(value);
+        if (key === "total_size") next.totalSizeBytes = parseNullableNumber(value);
+        if (key === "out_time_ms") next.outTimeMs = parseOutTimeMs(value);
+        if (key === "speed") next.speed = value || null;
+        if (key === "progress") next.progress = value || null;
+    }
+
+    return next;
+}
+
+function parseNullableNumber(value) {
+    if (value == null || value === "" || value === "N/A") return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+}
+
+function parseBitrateKbps(value) {
+    if (!value || value === "N/A") return null;
+    const match = String(value).match(/^([0-9]+(?:\.[0-9]+)?)kbits\/s$/i);
+    if (!match) return null;
+    return Number(match[1]);
+}
+
+function parseOutTimeMs(value) {
+    const number = parseNullableNumber(value);
+    return number == null ? null : Math.round(number / 1000);
 }
 
 function runProcess(command, args) {

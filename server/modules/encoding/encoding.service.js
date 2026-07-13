@@ -26,15 +26,39 @@ const VIDEO_EXTENSIONS = new Set([
 ]);
 const STABILITY_WINDOW_MS = Number(process.env.ENCODER_INBOX_STABILITY_WINDOW_MS || 30000);
 const SIZE_RECHECK_DELAY_MS = Number(process.env.ENCODER_INBOX_RECHECK_DELAY_MS || 1500);
+const ENCODING_JOB_SAFETY = Object.freeze({
+    POST_ITEM_COOLDOWN_MS: Number(process.env.ENCODER_POST_ITEM_COOLDOWN_MS || 20 * 60 * 1000),
+    CONTINUOUS_RUN_LIMIT_MS: Number(process.env.ENCODER_CONTINUOUS_RUN_LIMIT_MS || 20 * 60 * 1000),
+    PROCESS_REST_MS: Number(process.env.ENCODER_PROCESS_REST_MS || 5 * 60 * 1000),
+    MONITOR_INTERVAL_MS: Number(process.env.ENCODER_MONITOR_INTERVAL_MS || 30 * 1000)
+});
 
 module.exports = class EncodingService {
     constructor(database) {
         this.repository = new EncodingRepository(database);
         this.ffmpegService = new FfmpegService();
         this.ffprobeService = new FfprobeService();
+        this.activeHandle = null;
+        this.activeItemId = null;
+        this.activeProgress = null;
+        this.activeStartedAt = null;
+        this.activeRunStartedAt = null;
+        this.workerPromise = null;
+        this.safety = {
+            cooldownUntil: null,
+            cooldownReason: null,
+            coolingDown: false,
+            restUntil: null,
+            restReason: null,
+            resting: false,
+            lastItemFinishedAt: null,
+            config: ENCODING_JOB_SAFETY
+        };
+        this.ready = this._initialize();
     }
 
     async getDashboardState() {
+        await this.ready;
         const items = await this.repository.list();
 
         return {
@@ -43,6 +67,7 @@ module.exports = class EncodingService {
             reviewItems: items.filter(item => REVIEW_STATES.has(item.status)),
             historyItems: items.filter(item => HISTORY_STATES.has(item.status)),
             profiles,
+            worker: this.getWorkerStatus(),
             counts: {
                 pending: items.filter(item => PENDING_STATES.has(item.status)).length,
                 queued: items.filter(item => ["queued"].includes(item.status)).length,
@@ -54,6 +79,7 @@ module.exports = class EncodingService {
     }
 
     async scanInbox() {
+        await this.ready;
         const paths = getEncoderPaths();
         await this._ensureManagedDirectories(paths);
         const inboxFiles = await this._findInboxVideoFiles(paths.inbox);
@@ -105,83 +131,40 @@ module.exports = class EncodingService {
     }
 
     async queueItem(id, { profileId, inboxRelativeDir } = {}) {
+        await this.ready;
         const item = await this._requireItem(id);
         const selectedProfileId = profiles.some(profile => profile.id === profileId)
             ? profileId
             : (item.requestedProfileId || "browser_compatibility");
 
-        return this.repository.upsert({
+        const queued = await this.repository.upsert({
             ...item,
             profileId: selectedProfileId,
             inboxRelativeDir: normalizeRelativeDir(inboxRelativeDir, item.inboxRelativeDir),
             status: "queued",
             queuedAt: new Date().toISOString(),
+            pausedAt: null,
             outputFilename: buildOutputFilename(item.originalFilename, selectedProfileId)
         });
+        this._ensureWorkerRunning();
+        return queued;
     }
 
     async completeItem(id, { reviewer } = {}) {
+        await this.ready;
         const item = await this._requireItem(id);
-        const paths = getEncoderPaths();
-        await this._ensureManagedDirectories(paths);
+        if (item.status === "review" || item.status === "encoding" || item.status === "paused") {
+            return item;
+        }
 
-        const profileId = item.profileId || item.requestedProfileId || "browser_compatibility";
-        const outputFilename = item.outputFilename || buildOutputFilename(item.originalFilename, profileId);
-        const encodedDirAbs = path.join(paths.encoded, normalizeRelativeDir(item.inboxRelativeDir), sanitizeSegment(item.id));
-        const encodedOutputAbsPath = path.join(encodedDirAbs, outputFilename);
-        const encodingStartedAt = new Date().toISOString();
-        const nextAttemptCount = Number(item.attemptCount || 0) + 1;
-
-        await fsp.mkdir(encodedDirAbs, { recursive: true });
-        await this.repository.upsert({
-            ...item,
-            profileId,
-            outputFilename,
-            encodedOutputAbsPath,
-            status: "encoding",
-            encodingStartedAt,
-            attemptCount: nextAttemptCount,
-            lastError: null
+        return this.queueItem(id, {
+            profileId: item.profileId || item.requestedProfileId || "browser_compatibility",
+            inboxRelativeDir: item.inboxRelativeDir
         });
-
-        try {
-            await this.ffmpegService.encodeFile({
-                inputAbsPath: item.inputAbsPath,
-                outputAbsPath: encodedOutputAbsPath,
-                profileId
-            });
-
-            const encodedStat = await fsp.stat(encodedOutputAbsPath);
-            const encodedMetadata = await this.ffprobeService.probeFile(encodedOutputAbsPath, encodedStat);
-
-            return this.repository.upsert({
-                ...item,
-                profileId,
-                outputFilename,
-                encodedOutputAbsPath,
-                status: "review",
-                encodingStartedAt,
-                completedAt: new Date().toISOString(),
-                attemptCount: nextAttemptCount,
-                encodedMetadata
-            });
-        }
-        catch (error) {
-            await this.repository.upsert({
-                ...item,
-                profileId,
-                outputFilename,
-                encodedOutputAbsPath,
-                status: "failed",
-                encodingStartedAt,
-                attemptCount: nextAttemptCount,
-                lastError: error.message
-            });
-            throw error;
-        }
     }
 
     async approveItem(id, { reviewer } = {}) {
+        await this.ready;
         const item = await this._requireItem(id);
         const paths = getEncoderPaths();
         await this._ensureManagedDirectories(paths);
@@ -207,6 +190,7 @@ module.exports = class EncodingService {
     }
 
     async rejectItem(id, { reviewer, notes } = {}) {
+        await this.ready;
         const item = await this._requireItem(id);
         return this.repository.upsert({
             ...item,
@@ -214,6 +198,262 @@ module.exports = class EncodingService {
             lastError: notes || `Rejected by ${reviewer || "operator"}`,
             rejectedAt: new Date().toISOString()
         });
+    }
+
+    getWorkerStatus() {
+        const now = Date.now();
+        return {
+            activeItemId: this.activeItemId,
+            activeStartedAt: this.activeStartedAt,
+            activeProgress: this.activeProgress,
+            isRunning: Boolean(this.workerPromise),
+            isActive: Boolean(this.activeHandle),
+            safety: {
+                ...this.safety,
+                cooldownRemainingMs: this.safety.cooldownUntil
+                    ? Math.max(0, new Date(this.safety.cooldownUntil).getTime() - now)
+                    : 0,
+                restRemainingMs: this.safety.restUntil
+                    ? Math.max(0, new Date(this.safety.restUntil).getTime() - now)
+                    : 0
+            }
+        };
+    }
+
+    async pauseActive(reason = "manual") {
+        await this.ready;
+        if (!this.activeHandle || !this.activeItemId) return false;
+
+        const paused = this.activeHandle.pause();
+        if (!paused) return false;
+
+        const item = await this._requireItem(this.activeItemId);
+        await this.repository.upsert({
+            ...item,
+            status: "paused",
+            pausedAt: new Date().toISOString()
+        });
+
+        this.safety.resting = reason !== "manual";
+        this.safety.restReason = reason;
+        return true;
+    }
+
+    async resumeActive() {
+        await this.ready;
+        if (!this.activeHandle || !this.activeItemId) return false;
+
+        const resumed = this.activeHandle.resume();
+        if (!resumed) return false;
+
+        const item = await this._requireItem(this.activeItemId);
+        await this.repository.upsert({
+            ...item,
+            status: "encoding",
+            pausedAt: null
+        });
+
+        this.activeRunStartedAt = new Date().toISOString();
+        this.safety.resting = false;
+        this.safety.restUntil = null;
+        this.safety.restReason = null;
+        return true;
+    }
+
+    async stopActive() {
+        await this.ready;
+        if (!this.activeHandle) return false;
+        return this.activeHandle.stop();
+    }
+
+    async _initialize() {
+        await this.repository.failInterrupted(
+            "Encoding interrupted because the encoder service stopped before the job completed"
+        );
+    }
+
+    _ensureWorkerRunning() {
+        if (this.workerPromise) {
+            return this.workerPromise;
+        }
+
+        this.workerPromise = (async () => {
+            try {
+                await this._workLoop();
+            }
+            finally {
+                this.workerPromise = null;
+
+                const nextQueued = await this.repository.getNextQueued();
+                if (nextQueued) {
+                    this._ensureWorkerRunning();
+                }
+            }
+        })();
+
+        return this.workerPromise;
+    }
+
+    async _workLoop() {
+        while (true) {
+            if (this.safety.cooldownUntil) {
+                const remainingMs = new Date(this.safety.cooldownUntil).getTime() - Date.now();
+                if (remainingMs > 0) {
+                    await sleep(remainingMs);
+                }
+                this.safety.coolingDown = false;
+                this.safety.cooldownUntil = null;
+                this.safety.cooldownReason = null;
+            }
+
+            const item = await this.repository.getNextQueued();
+            if (!item) {
+                return;
+            }
+
+            await this._processQueuedItem(item);
+
+            const nextQueued = await this.repository.getNextQueued();
+            if (nextQueued) {
+                await this._cooldown("post-item");
+            }
+        }
+    }
+
+    async _processQueuedItem(item) {
+        const paths = getEncoderPaths();
+        await this._ensureManagedDirectories(paths);
+
+        const profileId = item.profileId || item.requestedProfileId || "browser_compatibility";
+        const outputFilename = item.outputFilename || buildOutputFilename(item.originalFilename, profileId);
+        const encodedDirAbs = path.join(paths.encoded, normalizeRelativeDir(item.inboxRelativeDir), sanitizeSegment(item.id));
+        const encodedOutputAbsPath = path.join(encodedDirAbs, outputFilename);
+        const encodingStartedAt = new Date().toISOString();
+        const nextAttemptCount = Number(item.attemptCount || 0) + 1;
+
+        await fsp.mkdir(encodedDirAbs, { recursive: true });
+        await removeIfExists(encodedOutputAbsPath);
+
+        const encodingItem = await this.repository.upsert({
+            ...item,
+            profileId,
+            outputFilename,
+            encodedOutputAbsPath,
+            status: "encoding",
+            encodingStartedAt,
+            pausedAt: null,
+            completedAt: null,
+            attemptCount: nextAttemptCount,
+            lastError: null
+        });
+
+        this.activeItemId = encodingItem.id;
+        this.activeStartedAt = encodingStartedAt;
+        this.activeRunStartedAt = encodingStartedAt;
+        this.activeProgress = null;
+        this.activeHandle = this.ffmpegService.startEncodeFile({
+            inputAbsPath: encodingItem.inputAbsPath,
+            outputAbsPath: encodedOutputAbsPath,
+            profileId
+        });
+
+        this.activeHandle.on("progress", progress => {
+            this.activeProgress = progress;
+        });
+
+        const restLoop = this._runRestLoop(encodingItem.id, this.activeHandle).catch(error => {
+            console.error("[encoder] Rest loop failed", error);
+        });
+
+        try {
+            await this.activeHandle.done;
+            await restLoop;
+
+            const encodedStat = await fsp.stat(encodedOutputAbsPath);
+            const encodedMetadata = await this.ffprobeService.probeFile(encodedOutputAbsPath, encodedStat);
+
+            await this.repository.upsert({
+                ...encodingItem,
+                profileId,
+                outputFilename,
+                encodedOutputAbsPath,
+                status: "review",
+                encodingStartedAt,
+                pausedAt: null,
+                completedAt: new Date().toISOString(),
+                attemptCount: nextAttemptCount,
+                encodedMetadata
+            });
+
+            this.safety.lastItemFinishedAt = new Date().toISOString();
+        }
+        catch (error) {
+            const latest = await this._requireItem(encodingItem.id);
+            const stopped = error && error.code === "ENCODE_STOPPED";
+            await this.repository.upsert({
+                ...latest,
+                profileId,
+                outputFilename,
+                encodedOutputAbsPath,
+                status: stopped ? "cancelled" : "failed",
+                pausedAt: null,
+                completedAt: new Date().toISOString(),
+                attemptCount: nextAttemptCount,
+                lastError: error.message
+            });
+        }
+        finally {
+            this.activeHandle = null;
+            this.activeItemId = null;
+            this.activeProgress = null;
+            this.activeStartedAt = null;
+            this.activeRunStartedAt = null;
+            this.safety.resting = false;
+            this.safety.restUntil = null;
+            this.safety.restReason = null;
+        }
+    }
+
+    async _runRestLoop(itemId, handle) {
+        while (this.activeHandle === handle && handle.child && handle.child.exitCode == null) {
+            await sleep(ENCODING_JOB_SAFETY.MONITOR_INTERVAL_MS);
+
+            if (this.activeHandle !== handle || !this.activeRunStartedAt || handle.state !== "running") {
+                continue;
+            }
+
+            const continuousMs = Date.now() - new Date(this.activeRunStartedAt).getTime();
+            if (continuousMs < ENCODING_JOB_SAFETY.CONTINUOUS_RUN_LIMIT_MS) {
+                continue;
+            }
+
+            const paused = await this.pauseActive("rest-cycle");
+            if (!paused) {
+                continue;
+            }
+
+            this.safety.resting = true;
+            this.safety.restReason = "rest-cycle";
+            this.safety.restUntil = new Date(Date.now() + ENCODING_JOB_SAFETY.PROCESS_REST_MS).toISOString();
+
+            await sleep(ENCODING_JOB_SAFETY.PROCESS_REST_MS);
+
+            if (this.activeHandle !== handle || handle.child.exitCode != null || handle.stopRequested) {
+                return;
+            }
+
+            await this.resumeActive();
+        }
+    }
+
+    async _cooldown(reason) {
+        this.safety.coolingDown = true;
+        this.safety.cooldownReason = reason;
+        this.safety.cooldownUntil = new Date(Date.now() + ENCODING_JOB_SAFETY.POST_ITEM_COOLDOWN_MS).toISOString();
+        await sleep(ENCODING_JOB_SAFETY.POST_ITEM_COOLDOWN_MS);
+        this.safety.coolingDown = false;
+        this.safety.cooldownUntil = null;
+        this.safety.cooldownReason = null;
     }
 
     async _requireItem(id) {
@@ -423,4 +663,13 @@ function normalizeRelativeDir(value, fallback = "") {
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function removeIfExists(targetAbsPath) {
+    try {
+        await fsp.rm(targetAbsPath, { force: true, recursive: true });
+    }
+    catch (_error) {
+        return;
+    }
 }
