@@ -267,6 +267,8 @@ module.exports = class EncodingService {
     }
 
     async _initialize() {
+        const paths = getEncoderPaths();
+        await this._ensureManagedDirectories(paths);
         await this.repository.failInterrupted(
             "Encoding interrupted because the encoder service stopped before the job completed"
         );
@@ -544,6 +546,10 @@ module.exports = class EncodingService {
 
     async _ensureManagedDirectories(paths) {
         const required = [
+            paths.handoffRoot,
+            paths.inbox,
+            paths.outbox,
+            paths.internalRoot,
             paths.pending,
             paths.working,
             paths.encoded,
