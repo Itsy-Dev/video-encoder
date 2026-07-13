@@ -93,6 +93,8 @@ The encoder creates a queued job and moves the request into managed encoder stat
 
 The encoder worker performs the job and writes encoded output into encoder-managed storage.
 
+During the current scaffold stage, this step can be represented by a placeholder completion flow that writes a managed artifact into internal `encoded/` storage before real ffmpeg execution is wired in.
+
 ### 5. User reviews the output
 
 The encoder UI shows source vs encoded details for approval.
@@ -382,6 +384,7 @@ We should define these before implementation:
 - Build encoder UI pages
 - Add source-class-driven inbox and outbox handling
   Note: this now means preserving inbox-relative subdirectories into outbox-relative subdirectories.
+- Replace placeholder completion/export behavior with real encoded outputs from the worker
 
 ### Phase 3
 

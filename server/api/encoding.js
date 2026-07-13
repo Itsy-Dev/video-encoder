@@ -36,6 +36,13 @@ module.exports = function encodingApi(app) {
         res.json({ ok: true, item });
     });
 
+    app.post("/api/encoding/items/:id/complete", async function (req, res) {
+        const item = await encodingService.completeItem(req.params.id, {
+            reviewer: req.body.reviewer || "operator"
+        });
+        res.json({ ok: true, item });
+    });
+
     app.post("/api/encoding/items/:id/approve", async function (req, res) {
         const item = await encodingService.approveItem(req.params.id, {
             reviewer: req.body.reviewer || "operator"
@@ -91,7 +98,7 @@ module.exports = function encodingApi(app) {
         res.send(renderPage({
             title: "Review",
             heading: "Review Completed Encodes",
-            description: "Approve or reject encoded files before placing them into outbox.",
+            description: "Approve or reject completed outputs before placing them into outbox.",
             state,
             body: renderReview(state.reviewItems)
         }));
@@ -371,9 +378,10 @@ function renderSetup(item, profiles) {
             ["Selected Profile", item.profileId || "not set"],
             ["Inbox Input Path", item.inboxInputAbsPath],
             ["Managed Input Path", item.inputAbsPath],
+            ["Encoded Output Path", item.encodedOutputAbsPath || "not generated"],
             ["Output Folder", buildOutboxDisplayPath(item)]
         ])}
-        <div class="note">Scan ingests the video from inbox into internal pending storage first, preserving its optional subdirectory for outbox routing. Queue action is available through <code>POST /api/encoding/items/${escapeHtml(item.id)}/queue</code> with <code>profileId</code> and optional <code>inboxRelativeDir</code>.</div>
+        <div class="note">Scan ingests the video from inbox into internal pending storage first, preserving its optional subdirectory for outbox routing. Queue with <code>POST /api/encoding/items/${escapeHtml(item.id)}/queue</code>, then create a reviewable output with <code>POST /api/encoding/items/${escapeHtml(item.id)}/complete</code>.</div>
       </div>
       <div class="panel stack">
         <strong>Available Profiles</strong>
@@ -397,7 +405,8 @@ function renderQueue(items) {
           ["Profile", item => escapeHtml(item.profileId || "—")],
           ["Inbox Dir", item => escapeHtml(item.inboxRelativeDir || "/")],
           ["Updated", item => escapeHtml(item.updatedAt)],
-          ["Path", item => escapeHtml(item.inputAbsPath)]
+          ["Path", item => escapeHtml(item.inputAbsPath)],
+          ["Action", item => renderQueueAction(item)]
       ], "Queue state will appear here once items move beyond discovery.")}
     </section>`;
 }
@@ -409,6 +418,7 @@ function renderReview(items) {
           ["File", item => escapeHtml(item.originalFilename)],
           ["Profile", item => escapeHtml(item.profileId || "—")],
           ["Output", item => escapeHtml(item.outputFilename || "pending output name")],
+          ["Outbox", item => escapeHtml(buildOutboxDisplayPath(item))],
           ["Review", item => `Approve: <code>POST /api/encoding/items/${escapeHtml(item.id)}/approve</code><br />Reject: <code>POST /api/encoding/items/${escapeHtml(item.id)}/reject</code>`]
       ], "Nothing is ready for review yet.")}
     </section>`;
@@ -421,6 +431,7 @@ function renderHistory(items) {
           ["File", item => escapeHtml(item.originalFilename)],
           ["Profile", item => escapeHtml(item.profileId || "—")],
           ["Updated", item => escapeHtml(item.updatedAt)],
+          ["Outbox", item => escapeHtml(item.outboxOutputAbsPath || "—")],
           ["Notes", item => escapeHtml(item.reviewNotes || "—")]
       ], "No historical items yet.")}
     </section>`;
@@ -492,4 +503,16 @@ function escapeHtml(value) {
 function buildOutboxDisplayPath(item) {
     const dir = String(item && item.inboxRelativeDir || "").trim();
     return dir ? `/outbox/${dir}` : "/outbox";
+}
+
+function renderQueueAction(item) {
+    if (item.status === "queued") {
+        return `Complete: <code>POST /api/encoding/items/${escapeHtml(item.id)}/complete</code>`;
+    }
+
+    if (item.status === "review") {
+        return `Open <a href="/encoding/review">review</a>`;
+    }
+
+    return "—";
 }

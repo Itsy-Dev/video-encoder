@@ -112,13 +112,53 @@ module.exports = class EncodingService {
         });
     }
 
-    async approveItem(id, { reviewer } = {}) {
+    async completeItem(id, { reviewer } = {}) {
         const item = this._requireItem(id);
+        const paths = getEncoderPaths();
+        await this._ensureManagedDirectories(paths);
+
+        const profileId = item.profileId || item.requestedProfileId || "browser_compatibility";
+        const outputFilename = item.outputFilename || buildOutputFilename(item.originalFilename, profileId);
+        const encodedDirAbs = path.join(paths.encoded, normalizeRelativeDir(item.inboxRelativeDir), sanitizeSegment(item.id));
+        const encodedOutputAbsPath = path.join(encodedDirAbs, outputFilename);
+
+        await fsp.mkdir(encodedDirAbs, { recursive: true });
+        await this._writePlaceholderEncodedFile(encodedOutputAbsPath, item, profileId);
+
         return repository.upsert({
             ...item,
-            status: "approved",
+            profileId,
+            outputFilename,
+            encodedOutputAbsPath,
+            status: "review",
+            completedAt: new Date().toISOString(),
+            reviewRequestedBy: reviewer || "operator"
+        });
+    }
+
+    async approveItem(id, { reviewer } = {}) {
+        const item = this._requireItem(id);
+        const paths = getEncoderPaths();
+        await this._ensureManagedDirectories(paths);
+
+        if (!item.encodedOutputAbsPath) {
+            const error = new Error("No encoded output is available to export.");
+            error.statusCode = 400;
+            throw error;
+        }
+
+        const outboxDirAbs = path.join(paths.outbox, normalizeRelativeDir(item.inboxRelativeDir));
+        const outboxOutputAbsPath = path.join(outboxDirAbs, item.outputFilename || path.basename(item.encodedOutputAbsPath));
+
+        await fsp.mkdir(outboxDirAbs, { recursive: true });
+        await fsp.copyFile(item.encodedOutputAbsPath, outboxOutputAbsPath);
+
+        return repository.upsert({
+            ...item,
+            status: "exported",
             reviewNotes: `Approved by ${reviewer || "operator"}`,
-            approvedAt: new Date().toISOString()
+            approvedAt: new Date().toISOString(),
+            outboxOutputAbsPath
         });
     }
 
@@ -255,6 +295,18 @@ module.exports = class EncodingService {
             && first.size === second.size
             && Math.floor(first.mtimeMs) === Math.floor(second.mtimeMs);
     }
+
+    async _writePlaceholderEncodedFile(fileAbsPath, item, profileId) {
+        const contents = [
+            "Placeholder encoded output",
+            `itemId=${item.id}`,
+            `source=${item.inboxRelativePath || item.originalFilename}`,
+            `profile=${profileId}`,
+            `generatedAt=${new Date().toISOString()}`
+        ].join("\n");
+
+        await fsp.writeFile(fileAbsPath, contents, "utf8");
+    }
 };
 
 async function walk(rootAbs, onFile) {
@@ -319,7 +371,14 @@ function buildImportKey(inboxRelativePath) {
 function normalizeRelativeDir(value, fallback = "") {
     const next = String(value == null ? fallback : value).trim().replace(/\\/g, "/");
     if (!next || next === ".") return "";
-    return next.replace(/^\/+|\/+$/g, "");
+
+    const cleaned = next.replace(/^\/+|\/+$/g, "");
+    const parts = cleaned.split("/").filter(Boolean);
+    if (parts.some(part => part === "." || part === "..")) {
+        return normalizeRelativeDir(fallback, "");
+    }
+
+    return parts.join("/");
 }
 
 function sleep(ms) {

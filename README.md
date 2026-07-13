@@ -19,6 +19,10 @@ npm run start --workspace @services/encoder
 - `/api/health`
 - `/api/encoding/summary`
 - `/api/encoding/scan`
+- `/api/encoding/items/:id/queue`
+- `/api/encoding/items/:id/complete`
+- `/api/encoding/items/:id/approve`
+- `/api/encoding/items/:id/reject`
 
 ## Notes
 
@@ -29,5 +33,7 @@ npm run start --workspace @services/encoder
 - Files placed directly in `inbox/` with no subdirectory are also valid.
 - Scan ingests discovered videos into internal `pending/` storage so queueing no longer depends on the handoff inbox copy.
 - Scan skips files that still look unstable by using an inbox age window and a second size check.
+- The current vertical slice is: scan -> queue -> complete -> review -> export to outbox.
+- `complete` currently creates a placeholder encoded artifact in internal `encoded/` storage until the real worker is wired in.
 - Human operators should only use the handoff root: `inbox/` for imports and `outbox/` for exports.
 - Encoder-managed storage should live under a separate internal root and stay out of manual workflows.
