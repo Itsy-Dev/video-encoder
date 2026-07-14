@@ -31,7 +31,9 @@ async function start() {
     await runMigrations(database);
 
     app.locals.database = database;
-    require("./app-delegate")(app, database);
+
+    require("./api/health")(app, database);
+    require("./api/encoding")(app, database);
 
     const port = Number(process.env.ENCODER_PORT || 4300);
     const server = app.listen(port, function () {
