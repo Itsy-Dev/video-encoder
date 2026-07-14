@@ -18,7 +18,6 @@ module.exports = function renderPending(items) {
         </div>
       </div>
       ${renderTable(items, [
-        ["Source", item => escapeHtml(item.inboxRelativeDir || "--"), { width: "two" }],
         ["Actions", item => `
           <div class="ui mini icon buttons">
             <a class="ui compact basic icon button" href="/encoding/setup?id=${encodeURIComponent(item.id)}" title="Open setup" aria-label="Open setup">
@@ -27,7 +26,7 @@ module.exports = function renderPending(items) {
             ${renderDiscardButton(item, { basic: true, compact: true, iconOnly: true })}
           </div>
         `, { width: "one", align: "center" }],
-        ["State", item => pill(item.status), { width: "one" }],
+        ["Source", item => escapeHtml(item.inboxRelativeDir || "--"), { width: "one" }],
         ["File", item => escapeHtml(item.originalFilename)],
         ["Size", item => escapeHtml(formatBytes(item && item.sourceMetadata ? item.sourceMetadata.fileSizeBytes : null)), { width: "one", align: "right" }],
       ], "No pending items yet. Scan the inbox or drop test videos into inbox with or without subdirectories to start the flow.")}

@@ -8,7 +8,7 @@ function renderTable(items, columns, emptyMessage) {
         </div>`;
     }
 
-    return `<table class="ui celled striped inverted small compact table">
+    return `<table class="ui selectable celled striped inverted small compact table">
       <thead>
         <tr>${columns.map(column => {
             const [label, , options = {}] = column;
