@@ -6,7 +6,9 @@ module.exports = function renderQueue(state) {
     const items = Array.isArray(state && state.items) ? state.items : [];
     const worker = state && state.worker ? state.worker : {};
     const queueRows = buildQueueRows(items, worker.activeItemId);
-    const activeItem = queueRows.find(item => item.id === worker.activeItemId) || null;
+    const activeItem = items.find(item => item && item.id === worker.activeItemId)
+        || queueRows.find(item => item && item.id === worker.activeItemId)
+        || null;
     const hasQueuedWork = items.some(item => String(item && item.status || "").toLowerCase() === "queued");
     const showForceWakeButton = !activeItem && (hasQueuedWork || isCoolingDown(worker) || isResting(worker));
 

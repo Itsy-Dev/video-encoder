@@ -436,8 +436,26 @@ function buildMetadata(row, prefix) {
 
 function toIsoOrNull(value) {
     if (!value) return null;
-    const date = new Date(value);
+    const normalized = normalizeSqlDatetime(value);
+    const date = new Date(normalized);
     return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function normalizeSqlDatetime(value) {
+    if (value instanceof Date) {
+        return value.toISOString();
+    }
+
+    const text = String(value).trim();
+    if (!text) {
+        return text;
+    }
+
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text)) {
+        return `${text.replace(" ", "T")}Z`;
+    }
+
+    return text;
 }
 
 function toSqlDatetime(value) {
