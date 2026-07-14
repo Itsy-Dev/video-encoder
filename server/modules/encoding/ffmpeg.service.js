@@ -6,6 +6,11 @@ const { spawn, spawnSync } = require("child_process");
 const encodingProfiles = require("./encoding-profiles");
 
 const FFMPEG_BIN = process.env.ENCODER_FFMPEG_BIN || "ffmpeg";
+const ENCODER_FFMPEG_SAFETY = Object.freeze({
+    PROCESS_PRIORITY: parseOptionalNumber(process.env.ENCODER_CPU_NICE, 15),
+    THREADS: parseOptionalNumber(process.env.ENCODER_THREADS, 1),
+    FILTER_THREADS: parseOptionalNumber(process.env.ENCODER_FILTER_THREADS, 2)
+});
 
 (function ensureFfmpeg() {
     const result = spawnSync(FFMPEG_BIN, ["-version"], { stdio: "ignore" });
@@ -23,7 +28,8 @@ module.exports = class FfmpegService {
             command: FFMPEG_BIN,
             args: this._buildArgs(inputAbsPath, outputAbsPath, profileId),
             outputAbsPath,
-            profileId: profileId || "browser_compatibility"
+            profileId: profileId || "browser_compatibility",
+            processPriority: ENCODER_FFMPEG_SAFETY.PROCESS_PRIORITY
         });
     }
 
@@ -39,8 +45,12 @@ module.exports = class FfmpegService {
         }
 
         return [
+            "-hide_banner",
             "-y",
             "-v", "error",
+            "-nostats",
+            "-filter_threads", String(ENCODER_FFMPEG_SAFETY.FILTER_THREADS),
+            "-filter_complex_threads", String(ENCODER_FFMPEG_SAFETY.FILTER_THREADS),
             "-i", inputAbsPath
         ].concat(buildProfileArgs(profile));
     }
@@ -146,6 +156,10 @@ function buildProfileArgs(profile) {
         args.push("-c:v", videoCodec);
     }
 
+    if (videoCodec && videoCodec !== "copy") {
+        args.push("-threads", String(ENCODER_FFMPEG_SAFETY.THREADS));
+    }
+
     if (profile.preset && profile.preset.id && videoCodec && videoCodec !== "copy") {
         args.push("-preset", String(profile.preset.id));
     }
@@ -221,15 +235,17 @@ function buildScaleFilter(targetWidth, targetHeight, scalingAlgorithm) {
     return `scale=w='min(${targetWidth},iw)':h='min(${targetHeight},ih)':force_original_aspect_ratio=decrease:flags=${scaler}`;
 }
 
-function createEncodingHandle({ command, args, outputAbsPath, profileId }) {
+function createEncodingHandle({ command, args, outputAbsPath, profileId, processPriority = null }) {
     const tempOutputAbsPath = buildTempOutputAbsPath(outputAbsPath);
     fs.mkdirSync(path.dirname(outputAbsPath), { recursive: true });
     fs.rmSync(tempOutputAbsPath, { force: true, recursive: true });
 
-    const child = spawn(command, args.concat([
-        "-progress", "pipe:1",
-        tempOutputAbsPath
-    ]), {
+    const spawnCommand = processPriority != null ? "nice" : command;
+    const spawnArgs = processPriority != null
+        ? ["-n", String(processPriority), command].concat(args, ["-progress", "pipe:1", tempOutputAbsPath])
+        : args.concat(["-progress", "pipe:1", tempOutputAbsPath]);
+
+    const child = spawn(spawnCommand, spawnArgs, {
         stdio: ["ignore", "pipe", "pipe"]
     });
 
@@ -301,6 +317,15 @@ function createEncodingHandle({ command, args, outputAbsPath, profileId }) {
     });
 
     return handle;
+}
+
+function parseOptionalNumber(value, fallback) {
+    if (value == null || value === "") {
+        return fallback;
+    }
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function buildTempOutputAbsPath(outputAbsPath) {
