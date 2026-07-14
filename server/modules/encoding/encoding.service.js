@@ -291,6 +291,7 @@ module.exports = class EncodingService {
     async _initialize() {
         const paths = getEncoderPaths();
         await this._ensureManagedDirectories(paths);
+        await this._cleanupEmptyWorkingDirectories(paths);
         await this.repository.failInterrupted(
             "Encoding interrupted because the encoder service stopped before the job completed"
         );
@@ -549,10 +550,9 @@ module.exports = class EncodingService {
         }
 
         const pendingItemRoot = path.join(paths.pending, sanitizeSegment(itemId));
-        const managedSourceRoot = path.join(pendingItemRoot, "source");
-        const managedInputAbsPath = path.join(managedSourceRoot, path.basename(inboxInputAbsPath));
+        const managedInputAbsPath = path.join(pendingItemRoot, path.basename(inboxInputAbsPath));
 
-        await fsp.mkdir(managedSourceRoot, { recursive: true });
+        await fsp.mkdir(pendingItemRoot, { recursive: true });
         await moveFileIntoPlace(inboxInputAbsPath, managedInputAbsPath);
 
         const item = this._buildDiscoveredItem({
@@ -639,17 +639,18 @@ module.exports = class EncodingService {
             paths.pending,
             paths.working,
             paths.encoded,
-            paths.review,
-            paths.rejected,
-            paths.failed,
-            paths.manifests,
-            paths.logs,
-            paths.tmp
+            paths.logs
         ];
 
         for (const dirAbs of required) {
             await fsp.mkdir(dirAbs, { recursive: true });
         }
+    }
+
+    async _cleanupEmptyWorkingDirectories(paths = getEncoderPaths()) {
+        await pruneEmptyDirectories(paths.pending);
+        await pruneEmptyDirectories(paths.working);
+        await pruneEmptyDirectories(paths.encoded);
     }
 
     _assertWithinRoot(targetAbsPath, rootAbsPath, message) {
@@ -784,4 +785,42 @@ function getEncodedItemRoot(paths, item) {
 
 function getWorkingItemRoot(paths, itemId) {
     return path.join(paths.working, sanitizeSegment(itemId));
+}
+
+async function pruneEmptyDirectories(rootAbsPath) {
+    let entries = [];
+    try {
+        entries = await fsp.readdir(rootAbsPath, { withFileTypes: true });
+    }
+    catch (_error) {
+        return false;
+    }
+
+    let hasContents = false;
+
+    for (const entry of entries) {
+        const entryAbsPath = path.join(rootAbsPath, entry.name);
+
+        if (entry.isDirectory()) {
+            const childHasContents = await pruneEmptyDirectories(entryAbsPath);
+            if (childHasContents) {
+                hasContents = true;
+            }
+            continue;
+        }
+
+        hasContents = true;
+    }
+
+    if (!hasContents) {
+        try {
+            await fsp.rmdir(rootAbsPath);
+        }
+        catch (_error) {
+            return false;
+        }
+        return false;
+    }
+
+    return true;
 }

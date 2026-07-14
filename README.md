@@ -47,6 +47,7 @@ The server also runs pending SQL migrations automatically at startup.
 - `ffprobe` is used to capture real source and encoded metadata. Set `ENCODER_FFPROBE_BIN` if it is not on the default PATH.
 - Files placed directly in `inbox/` with no subdirectory are also valid.
 - Scan ingests discovered videos into internal `pending/` storage so queueing no longer depends on the handoff inbox copy.
+- Internal storage currently in use is `pending/`, `working/`, `encoded/`, and `logs/`.
 - Scan skips files that still look unstable by using an inbox age window and a second size check.
 - The current vertical slice is: scan -> queue -> automatic worker encode -> review -> export to outbox.
 - Queueing an item now wakes a single active worker that processes one encode at a time.

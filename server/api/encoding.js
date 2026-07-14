@@ -630,9 +630,7 @@ function renderSettings(paths, profiles) {
             ["Pending", paths.pending],
             ["Working", paths.working],
             ["Encoded", paths.encoded],
-            ["Review", paths.review],
-            ["Rejected", paths.rejected],
-            ["Failed", paths.failed]
+            ["Logs", paths.logs]
         ])}
       </div>
       <div class="panel stack">

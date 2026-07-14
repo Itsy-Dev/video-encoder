@@ -23,12 +23,7 @@ function getEncoderPaths() {
         pending: path.join(internalRoot, "pending"),
         working: path.join(internalRoot, "working"),
         encoded: path.join(internalRoot, "encoded"),
-        review: path.join(internalRoot, "review"),
-        rejected: path.join(internalRoot, "rejected"),
-        failed: path.join(internalRoot, "failed"),
-        manifests: path.join(internalRoot, "manifests"),
-        logs: path.join(internalRoot, "logs"),
-        tmp: path.join(internalRoot, "tmp")
+        logs: path.join(internalRoot, "logs")
     };
 }
 
