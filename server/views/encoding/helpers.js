@@ -27,12 +27,12 @@ function renderTable(items, columns, emptyMessage) {
 }
 
 function renderKeyValue(entries) {
-    return `<div class="ui relaxed divided list">
+    return `<div class="ui inverted relaxed divided list">
       ${entries.map(([key, value]) => `
         <div class="item">
           <div class="content">
             <div class="header">${escapeHtml(key)}</div>
-            <div class="description"><code>${escapeHtml(String(value || "—"))}</code></div>
+            <div class="description">${escapeHtml(String(value || "—"))}</div>
           </div>
         </div>
       `).join("")}
