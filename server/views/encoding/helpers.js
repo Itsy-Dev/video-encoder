@@ -40,7 +40,9 @@ function renderKeyValue(entries) {
 }
 
 function pill(value) {
-    return `<span class="ui tiny label">${escapeHtml(String(value || "unknown"))}</span>`;
+    const text = String(value || "unknown");
+    const color = statusPillColor(text);
+    return `<span class="ui tiny ${escapeHtml(color)} label">${escapeHtml(text)}</span>`;
 }
 
 function escapeHtml(value) {
@@ -227,6 +229,27 @@ function buildColumnClassName(options = {}) {
     }
 
     return classes.join(" ").trim();
+}
+
+function statusPillColor(value) {
+    const status = String(value || "").toLowerCase().trim().split(/\s+/)[0];
+
+    return {
+        pending: "grey",
+        queued: "blue",
+        encoding: "green",
+        paused: "yellow",
+        review: "violet",
+        approved: "teal",
+        exported: "teal",
+        rejected: "red",
+        failed: "red",
+        cancelled: "grey",
+        discarded: "black",
+        cooldown: "brown",
+        resting: "orange",
+        idle: "grey"
+    }[status] || "grey";
 }
 
 module.exports = {
