@@ -22,7 +22,7 @@ module.exports = function renderQueue(state) {
           <form method="post" action="/api/encoding/control/resume" data-api-form>
             <button type="submit" class="ui button">Resume</button>
           </form>
-          <form method="post" action="/api/encoding/control/stop" data-api-form>
+          <form method="post" action="/api/encoding/control/stop" data-api-form data-confirm="Stop the active encode? The current encoded output will be discarded and the source item will need to be queued again.">
             <button type="submit" class="ui red button">Stop</button>
           </form>
         </div>

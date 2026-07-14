@@ -79,11 +79,11 @@ function renderQueueAction(item) {
 
 function renderReviewActions(item) {
     return `<div class="form-stack">
-      <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/approve" data-api-form>
+      <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/approve" data-api-form data-confirm="Approve this encode and move it to outbox? This removes the encoder's internal working copy.">
         <input type="hidden" name="reviewer" value="operator" />
         <button type="submit" class="ui green button">Approve To Outbox</button>
       </form>
-      <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/reject" data-api-form>
+      <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/reject" data-api-form data-confirm="Reject this encode? The encoded output will be removed and the source will stay available for requeue.">
         <input type="hidden" name="reviewer" value="operator" />
         <button type="submit" class="ui red button">Reject</button>
       </form>

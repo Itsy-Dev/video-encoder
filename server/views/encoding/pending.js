@@ -24,7 +24,7 @@ module.exports = function renderPending(items) {
             <a class="ui compact orange button" href="/encoding/setup?id=${encodeURIComponent(item.id)}" title="Open setup" aria-label="Open setup">
               <i class="cog icon"></i>
             </a>
-            <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/discard" data-api-form>
+            <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/discard" data-api-form data-confirm="Discard this source file? It will be moved to outbox/_sources/discarded and removed from the active encoder flow.">
               <button type="submit" class="ui compact red button" title="Discard source" aria-label="Discard source">
                 <i class="trash alternate outline icon"></i>
               </button>

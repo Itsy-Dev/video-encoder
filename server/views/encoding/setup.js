@@ -39,7 +39,7 @@ module.exports = function renderSetup(item, profiles) {
             <a class="ui button button-inline" href="/encoding/pending">Back to Pending</a>
           </div>
         </form>
-        <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/discard" data-api-form>
+        <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/discard" data-api-form data-confirm="Discard this source file? It will be moved to outbox/_sources/discarded and removed from the active encoder flow.">
           <div class="actions">
             <button type="submit" class="ui red basic button">Discard Source</button>
           </div>

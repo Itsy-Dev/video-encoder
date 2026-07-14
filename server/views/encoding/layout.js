@@ -83,6 +83,12 @@ module.exports = function renderPage({ title, heading, description, state, body,
       if (!(form instanceof HTMLFormElement)) return;
       if (!form.hasAttribute("data-api-form")) return;
 
+      const confirmMessage = form.getAttribute("data-confirm");
+      if (confirmMessage && !window.confirm(confirmMessage)) {
+        event.preventDefault();
+        return;
+      }
+
       event.preventDefault();
 
       const submitter = event.submitter instanceof HTMLElement ? event.submitter : null;
