@@ -28,17 +28,25 @@ module.exports = function renderPage({ title, heading, description, state, body,
   <link rel="stylesheet" type="text/css" href="/shared/semantic/semantic.min.css" />
   <style>
     :root {
-      --encoder-accent: #2f6f60;
-      --encoder-bg: #112924;
+      --main-bg-color: #112924;
+      --secondary-bg-color: #2f6f60;
     }
+
     body {
-      background:
-        linear-gradient(180deg, var(--encoder-accent) 0%, var(--encoder-bg) 65%);
-      color: #243238;
+        background-color: var(--main-bg-color);
+    }
+
+    #main {
+        position: relative;
+        min-height: 100%;
+        background-image: linear-gradient(160deg, var(--secondary-bg-color), var(--main-bg-color));
+        padding-bottom: 44px;
+        padding-top: 52px;
     }
   </style>
 </head>
 <body>
+<div id="main">
   <div class="ui inverted segments container">
     <section class="ui segment">
       <h1 class="ui header">
@@ -132,6 +140,7 @@ module.exports = function renderPage({ title, heading, description, state, body,
       }
     });
   </script>
+</div>
 </body>
 </html>`;
 };
