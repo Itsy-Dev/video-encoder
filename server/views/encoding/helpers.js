@@ -57,6 +57,63 @@ function buildOutboxDisplayPath(item) {
     return dir ? `/outbox/${dir}` : "/outbox";
 }
 
+function canDiscardItem(item) {
+    const status = String(item && item.status || "");
+    return ["pending", "queued", "rejected", "failed", "cancelled"].includes(status);
+}
+
+function getDiscardBlockedReason(item) {
+    const status = String(item && item.status || "");
+
+    if (status === "encoding") {
+        return "Cannot discard while encoding.";
+    }
+
+    if (status === "paused") {
+        return "Cannot discard while paused.";
+    }
+
+    if (status === "review") {
+        return "Review items must be approved or rejected.";
+    }
+
+    if (status === "approved" || status === "exported") {
+        return "Already approved/exported.";
+    }
+
+    if (status === "discarded") {
+        return "Already discarded.";
+    }
+
+    return "Discard is not available for this item state.";
+}
+
+function renderDiscardButton(item, { basic = false, compact = false, iconOnly = false } = {}) {
+    const allowed = canDiscardItem(item);
+    const buttonClasses = [
+        "ui",
+        compact ? "compact" : "",
+        basic ? "basic" : "",
+        "red",
+        iconOnly ? "icon" : "",
+        "button"
+    ].filter(Boolean).join(" ");
+    const title = allowed
+        ? "Discard source"
+        : getDiscardBlockedReason(item);
+    const label = iconOnly
+        ? `<i class="trash alternate outline icon"></i>`
+        : "Discard Source";
+
+    if (!allowed) {
+        return `<button type="button" class="${escapeHtml(buttonClasses)} disabled" disabled title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">${label}</button>`;
+    }
+
+    return `<form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/discard" data-api-form data-confirm="Discard this source file? It will be moved to outbox/_sources/discarded and removed from the active encoder flow.">
+      <button type="submit" class="${escapeHtml(buttonClasses)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">${label}</button>
+    </form>`;
+}
+
 function renderQueueAction(item) {
     if (item.status === "queued") {
         return `<div class="ui tiny grey text">Waiting for worker pickup</div>`;
@@ -148,10 +205,13 @@ function buildColumnClassName(options = {}) {
 
 module.exports = {
     buildOutboxDisplayPath,
+    canDiscardItem,
     escapeHtml,
     formatBytes,
     formatProgress,
+    getDiscardBlockedReason,
     pill,
+    renderDiscardButton,
     renderKeyValue,
     renderQueueAction,
     renderReviewActions,

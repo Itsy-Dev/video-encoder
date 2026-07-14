@@ -13,6 +13,7 @@ const PENDING_STATES = new Set(["pending"]);
 const ACTIONABLE_STATES = new Set(["pending", "rejected", "failed", "cancelled"]);
 const REVIEW_STATES = new Set(["review"]);
 const HISTORY_STATES = new Set(["approved", "rejected", "failed", "exported", "cancelled", "discarded"]);
+const DISCARDABLE_STATES = new Set(["pending", "queued", "rejected", "failed", "cancelled"]);
 const VIDEO_EXTENSIONS = new Set([
     ".avi",
     ".flv",
@@ -233,6 +234,12 @@ module.exports = class EncodingService {
         const item = await this._requireItem(id);
         const paths = getEncoderPaths();
         await this._ensureManagedDirectories(paths);
+
+        if (!DISCARDABLE_STATES.has(item.status)) {
+            const error = new Error(getDiscardBlockedMessage(item.status));
+            error.statusCode = 409;
+            throw error;
+        }
 
         const discardedDirAbs = path.join(
             paths.outbox,
@@ -866,6 +873,30 @@ function getDiscardedSourceRoot(paths, item) {
         "discarded",
         normalizeRelativeDir(item && item.inboxRelativeDir)
     );
+}
+
+function getDiscardBlockedMessage(status) {
+    if (status === "encoding") {
+        return "Item cannot be discarded while encoding.";
+    }
+
+    if (status === "paused") {
+        return "Item cannot be discarded while paused. Resume or stop it first.";
+    }
+
+    if (status === "review") {
+        return "Item in review must be approved or rejected instead of discarded.";
+    }
+
+    if (status === "approved" || status === "exported") {
+        return "Item has already been approved/exported and can no longer be discarded.";
+    }
+
+    if (status === "discarded") {
+        return "Item has already been discarded.";
+    }
+
+    return `Item with status "${status}" cannot be discarded.`;
 }
 
 async function pruneEmptyDirectories(rootAbsPath) {
