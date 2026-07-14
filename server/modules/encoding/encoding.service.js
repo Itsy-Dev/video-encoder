@@ -291,6 +291,7 @@ module.exports = class EncodingService {
     async _initialize() {
         const paths = getEncoderPaths();
         await this._ensureManagedDirectories(paths);
+        await this._cleanupTemporaryArtifacts(paths);
         await this._cleanupEmptyWorkingDirectories(paths);
         await this.repository.failInterrupted(
             "Encoding interrupted because the encoder service stopped before the job completed"
@@ -576,6 +577,7 @@ module.exports = class EncodingService {
         const encodedItemRoot = getEncodedItemRoot(paths, item);
         const workingItemRoot = getWorkingItemRoot(paths, item.id);
 
+        await this._cleanupTemporaryArtifacts(paths);
         await removeIfExists(pendingItemRoot);
         await removeIfExists(encodedItemRoot);
         await removeIfExists(workingItemRoot);
@@ -585,8 +587,14 @@ module.exports = class EncodingService {
         const encodedItemRoot = getEncodedItemRoot(paths, item);
         const workingItemRoot = getWorkingItemRoot(paths, item.id);
 
+        await this._cleanupTemporaryArtifacts(paths);
         await removeIfExists(encodedItemRoot);
         await removeIfExists(workingItemRoot);
+    }
+
+    async _cleanupTemporaryArtifacts(paths = getEncoderPaths()) {
+        await removeTempArtifacts(paths.working);
+        await removeTempArtifacts(paths.encoded);
     }
 
     _buildDiscoveredItem({
@@ -823,4 +831,31 @@ async function pruneEmptyDirectories(rootAbsPath) {
     }
 
     return true;
+}
+
+async function removeTempArtifacts(rootAbsPath) {
+    let entries = [];
+    try {
+        entries = await fsp.readdir(rootAbsPath, { withFileTypes: true });
+    }
+    catch (_error) {
+        return;
+    }
+
+    for (const entry of entries) {
+        const entryAbsPath = path.join(rootAbsPath, entry.name);
+
+        if (entry.isDirectory()) {
+            await removeTempArtifacts(entryAbsPath);
+            continue;
+        }
+
+        if (entry.isFile() && isTemporaryArtifact(entry.name)) {
+            await removeIfExists(entryAbsPath);
+        }
+    }
+}
+
+function isTemporaryArtifact(filename) {
+    return /\.tmp(\.[^./]+)?$/i.test(String(filename || ""));
 }
