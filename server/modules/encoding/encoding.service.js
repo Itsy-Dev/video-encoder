@@ -10,6 +10,7 @@ const FfprobeService = require("./ffprobe.service");
 const { getEncoderPaths } = require("../filesystem/handoff-paths");
 
 const PENDING_STATES = new Set(["pending"]);
+const ACTIONABLE_STATES = new Set(["pending", "rejected", "failed", "cancelled"]);
 const REVIEW_STATES = new Set(["review"]);
 const HISTORY_STATES = new Set(["approved", "rejected", "failed", "exported", "cancelled"]);
 const VIDEO_EXTENSIONS = new Set([
@@ -65,6 +66,7 @@ module.exports = class EncodingService {
         return {
             items,
             pendingItems: items.filter(item => PENDING_STATES.has(item.status)),
+            actionableItems: items.filter(item => ACTIONABLE_STATES.has(item.status)),
             reviewItems: items.filter(item => REVIEW_STATES.has(item.status)),
             historyItems: items.filter(item => HISTORY_STATES.has(item.status)),
             profiles,
@@ -145,6 +147,11 @@ module.exports = class EncodingService {
             status: "queued",
             queuedAt: new Date().toISOString(),
             pausedAt: null,
+            completedAt: null,
+            approvedAt: null,
+            rejectedAt: null,
+            outboxOutputAbsPath: null,
+            lastError: null,
             outputFilename: buildOutputFilename(item.originalFilename, selectedProfileId)
         });
         this._ensureWorkerRunning();
@@ -180,7 +187,7 @@ module.exports = class EncodingService {
         const outboxOutputAbsPath = path.join(outboxDirAbs, item.outputFilename || path.basename(item.encodedOutputAbsPath));
 
         await fsp.mkdir(outboxDirAbs, { recursive: true });
-        await fsp.copyFile(item.encodedOutputAbsPath, outboxOutputAbsPath);
+        await moveFileIntoPlace(item.encodedOutputAbsPath, outboxOutputAbsPath);
 
         const exported = await this.repository.upsert({
             ...item,
@@ -196,9 +203,13 @@ module.exports = class EncodingService {
     async rejectItem(id, { reviewer, notes } = {}) {
         await this.ready;
         const item = await this._requireItem(id);
+        await this._cleanupEncodedFiles(item);
+
         return this.repository.upsert({
             ...item,
             status: "rejected",
+            encodedOutputAbsPath: null,
+            completedAt: null,
             lastError: notes || `Rejected by ${reviewer || "operator"}`,
             rejectedAt: new Date().toISOString()
         });
@@ -332,12 +343,16 @@ module.exports = class EncodingService {
 
         const profileId = item.profileId || item.requestedProfileId || "browser_compatibility";
         const outputFilename = item.outputFilename || buildOutputFilename(item.originalFilename, profileId);
-        const encodedDirAbs = path.join(paths.encoded, normalizeRelativeDir(item.inboxRelativeDir), sanitizeSegment(item.id));
+        const workingDirAbs = getWorkingItemRoot(paths, item.id);
+        const workingOutputAbsPath = path.join(workingDirAbs, outputFilename);
+        const encodedDirAbs = getEncodedItemRoot(paths, item);
         const encodedOutputAbsPath = path.join(encodedDirAbs, outputFilename);
         const encodingStartedAt = new Date().toISOString();
         const nextAttemptCount = Number(item.attemptCount || 0) + 1;
 
+        await removeIfExists(workingDirAbs);
         await fsp.mkdir(encodedDirAbs, { recursive: true });
+        await fsp.mkdir(workingDirAbs, { recursive: true });
         await removeIfExists(encodedOutputAbsPath);
 
         const encodingItem = await this.repository.upsert({
@@ -359,7 +374,7 @@ module.exports = class EncodingService {
         this.activeProgress = null;
         this.activeHandle = this.ffmpegService.startEncodeFile({
             inputAbsPath: encodingItem.inputAbsPath,
-            outputAbsPath: encodedOutputAbsPath,
+            outputAbsPath: workingOutputAbsPath,
             profileId
         });
 
@@ -374,6 +389,7 @@ module.exports = class EncodingService {
         try {
             await this.activeHandle.done;
             await restLoop;
+            await moveFileIntoPlace(workingOutputAbsPath, encodedOutputAbsPath);
 
             const encodedStat = await fsp.stat(encodedOutputAbsPath);
             const encodedMetadata = await this.ffprobeService.probeFile(encodedOutputAbsPath, encodedStat);
@@ -396,14 +412,15 @@ module.exports = class EncodingService {
         catch (error) {
             const latest = await this._requireItem(encodingItem.id);
             const stopped = error && error.code === "ENCODE_STOPPED";
+            await this._cleanupEncodedFiles(latest);
             await this.repository.upsert({
                 ...latest,
                 profileId,
                 outputFilename,
-                encodedOutputAbsPath,
+                encodedOutputAbsPath: null,
                 status: stopped ? "cancelled" : "failed",
                 pausedAt: null,
-                completedAt: new Date().toISOString(),
+                completedAt: null,
                 attemptCount: nextAttemptCount,
                 lastError: error.message
             });
@@ -417,6 +434,7 @@ module.exports = class EncodingService {
             this.safety.resting = false;
             this.safety.restUntil = null;
             this.safety.restReason = null;
+            await removeIfExists(workingDirAbs);
         }
     }
 
@@ -510,9 +528,19 @@ module.exports = class EncodingService {
     async _cleanupItemFiles(item, paths = getEncoderPaths()) {
         const pendingItemRoot = getPendingItemRoot(paths, item.id);
         const encodedItemRoot = getEncodedItemRoot(paths, item);
+        const workingItemRoot = getWorkingItemRoot(paths, item.id);
 
         await removeIfExists(pendingItemRoot);
         await removeIfExists(encodedItemRoot);
+        await removeIfExists(workingItemRoot);
+    }
+
+    async _cleanupEncodedFiles(item, paths = getEncoderPaths()) {
+        const encodedItemRoot = getEncodedItemRoot(paths, item);
+        const workingItemRoot = getWorkingItemRoot(paths, item.id);
+
+        await removeIfExists(encodedItemRoot);
+        await removeIfExists(workingItemRoot);
     }
 
     _buildDiscoveredItem({
@@ -705,9 +733,9 @@ function getPendingItemRoot(paths, itemId) {
 }
 
 function getEncodedItemRoot(paths, item) {
-    return path.join(
-        paths.encoded,
-        normalizeRelativeDir(item && item.inboxRelativeDir),
-        sanitizeSegment(item && item.id)
-    );
+    return path.join(paths.encoded, sanitizeSegment(item && item.id));
+}
+
+function getWorkingItemRoot(paths, itemId) {
+    return path.join(paths.working, sanitizeSegment(itemId));
 }

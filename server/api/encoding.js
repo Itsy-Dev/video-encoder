@@ -89,17 +89,17 @@ module.exports = function encodingApi(app, database) {
         const state = await encodingService.getDashboardState();
         res.send(renderPage({
             title: "Pending",
-            heading: "Pending Inbox Files",
-            description: "Discovered inbox videos awaiting profile selection and queue decisions.",
+            heading: "Actionable Items",
+            description: "Discovered, stopped, failed, and rejected items awaiting profile selection and queue decisions.",
             state,
-            body: renderPendingTable(state.pendingItems)
+            body: renderPendingTable(state.actionableItems)
         }));
     });
 
     app.get("/encoding/setup", async function (req, res) {
         const state = await encodingService.getDashboardState();
         const selectedId = String(req.query.id || "");
-        const selected = state.items.find(item => item.id === selectedId) || state.pendingItems[0] || null;
+        const selected = state.items.find(item => item.id === selectedId) || state.actionableItems[0] || null;
         res.send(renderPage({
             title: "Setup",
             heading: "Encoding Setup",
@@ -116,7 +116,8 @@ module.exports = function encodingApi(app, database) {
             heading: "Queue Status",
             description: "Track the single active worker, automatic queue pickup, cooldowns, and rest cycles.",
             state,
-            body: renderQueue(state)
+            body: renderQueue(state),
+            autoRefreshMs: 5000
         }));
     });
 
@@ -155,7 +156,7 @@ module.exports = function encodingApi(app, database) {
     });
 };
 
-function renderPage({ title, heading, description, state, body }) {
+function renderPage({ title, heading, description, state, body, autoRefreshMs = 0 }) {
     const nav = [
         ["Pending", "/encoding/pending"],
         ["Setup", "/encoding/setup"],
@@ -272,6 +273,51 @@ function renderPage({ title, heading, description, state, body }) {
     }
     .button-secondary { background: #6f7d7a; }
     .button-bad { background: var(--bad); }
+    .button-warn { background: var(--warn); }
+    .button-inline {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+    }
+    .form-stack {
+      display: grid;
+      gap: 12px;
+    }
+    .form-inline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+      font: inherit;
+    }
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .hint {
+      font-size: 12px;
+      color: var(--muted);
+    }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -362,6 +408,62 @@ function renderPage({ title, heading, description, state, body }) {
     </section>
     ${body}
   </div>
+  <script>
+    const AUTO_REFRESH_MS = ${Number(autoRefreshMs || 0)};
+    if (AUTO_REFRESH_MS > 0) {
+      window.setTimeout(function () {
+        window.location.reload();
+      }, AUTO_REFRESH_MS);
+    }
+
+    document.addEventListener("submit", async function (event) {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement)) return;
+      if (!form.hasAttribute("data-api-form")) return;
+
+      event.preventDefault();
+
+      const submitter = event.submitter instanceof HTMLElement ? event.submitter : null;
+      const submitText = submitter ? submitter.textContent : "";
+      if (submitter) {
+        submitter.disabled = true;
+        submitter.textContent = "Working...";
+      }
+
+      try {
+        const payload = {};
+        const formData = new FormData(form);
+        for (const [key, value] of formData.entries()) {
+          payload[key] = value;
+        }
+
+        const response = await fetch(form.action, {
+          method: form.method || "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(message || ("Request failed with status " + response.status));
+        }
+
+        window.location.reload();
+      }
+      catch (error) {
+        window.alert(error && error.message ? error.message : "Request failed");
+      }
+      finally {
+        if (submitter) {
+          submitter.disabled = false;
+          submitter.textContent = submitText;
+        }
+      }
+    });
+  </script>
 </body>
 </html>`;
 }
@@ -371,17 +473,23 @@ function renderPendingTable(items) {
       <div class="toolbar">
         <div>
           <strong>Inbox Discovery</strong>
-          <p>Use <code>POST /api/encoding/scan</code> to discover stable video files anywhere under <code>/inbox</code>, remember the file's optional relative subdirectory, and ingest it into internal pending storage.</p>
+          <p>Scan discovers stable video files anywhere under <code>/inbox</code>, remembers the file's optional relative subdirectory, and ingests it into internal pending storage.</p>
         </div>
-        <a class="button" href="/encoding/setup">Open Setup</a>
+        <div class="actions">
+          <form method="post" action="/api/encoding/scan" data-api-form>
+            <button type="submit">Scan Inbox</button>
+          </form>
+          <a class="button button-inline" href="/encoding/setup">Open Setup</a>
+        </div>
       </div>
       ${renderTable(items, [
           ["State", item => pill(item.status)],
           ["File", item => escapeHtml(item.originalFilename)],
+          ["Reason", item => escapeHtml(item.lastError || "Ready to configure")],
           ["Inbox Dir", item => escapeHtml(item.inboxRelativeDir || "/")],
           ["Requested Profile", item => escapeHtml(item.requestedProfileId || "browser_compatibility")],
           ["Item ID", item => escapeHtml(item.id)],
-          ["Action", item => `<a href="/encoding/setup?id=${encodeURIComponent(item.id)}">Configure</a>`]
+          ["Action", item => `<div class="actions"><a class="button button-inline" href="/encoding/setup?id=${encodeURIComponent(item.id)}">Configure</a></div>`]
       ], "No pending items yet. Scan the inbox or drop test videos into inbox with or without subdirectories to start the flow.")}
     </section>`;
 }
@@ -408,7 +516,24 @@ function renderSetup(item, profiles) {
             ["Encoded Output Path", item.encodedOutputAbsPath || "not generated"],
             ["Output Folder", buildOutboxDisplayPath(item)]
         ])}
-        <div class="note">Scan ingests the video from inbox into internal pending storage first, preserving its optional subdirectory for outbox routing. Queue with <code>POST /api/encoding/items/${escapeHtml(item.id)}/queue</code>; the worker will pick it up automatically when it reaches the front of the queue.</div>
+        <form class="form-stack" method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/queue" data-api-form>
+          <label>
+            Profile
+            <select name="profileId">
+              ${profiles.map(profile => `<option value="${escapeHtml(profile.id)}"${profile.id === (item.profileId || item.requestedProfileId || "browser_compatibility") ? " selected" : ""}>${escapeHtml(profile.label)} (${escapeHtml(profile.id)})</option>`).join("")}
+            </select>
+          </label>
+          <label>
+            Inbox Relative Dir
+            <input value="${escapeHtml(item.inboxRelativeDir || "")}" disabled />
+          </label>
+          <input type="hidden" name="inboxRelativeDir" value="${escapeHtml(item.inboxRelativeDir || "")}" />
+          <div class="actions">
+            <button type="submit">Queue Item</button>
+            <a class="button button-secondary button-inline" href="/encoding/pending">Back to Pending</a>
+          </div>
+        </form>
+        <div class="note">Scan ingests the video from inbox into internal pending storage first, preserving its optional subdirectory for outbox routing. Once queued, the worker picks it up automatically when it reaches the front.</div>
       </div>
       <div class="panel stack">
         <strong>Available Profiles</strong>
@@ -432,7 +557,17 @@ function renderQueue(state) {
         Active Item: ${escapeHtml(statefulValue(state, "worker.activeItemId"))}<br />
         Started: ${escapeHtml(statefulValue(state, "worker.activeStartedAt"))}<br />
         Progress: ${escapeHtml(formatProgress(state && state.worker ? state.worker.activeProgress : null))}<br />
-        Controls: pause <code>POST /api/encoding/control/pause</code>, resume <code>POST /api/encoding/control/resume</code>, stop <code>POST /api/encoding/control/stop</code>
+        <div class="actions" style="margin-top: 12px;">
+          <form method="post" action="/api/encoding/control/pause" data-api-form>
+            <button type="submit" class="button-warn">Pause</button>
+          </form>
+          <form method="post" action="/api/encoding/control/resume" data-api-form>
+            <button type="submit" class="button-secondary">Resume</button>
+          </form>
+          <form method="post" action="/api/encoding/control/stop" data-api-form>
+            <button type="submit" class="button-bad">Stop</button>
+          </form>
+        </div>
       </div>
       ${renderTable(rows, [
           ["State", item => pill(item.status)],
@@ -454,7 +589,7 @@ function renderReview(items) {
           ["Profile", item => escapeHtml(item.profileId || "—")],
           ["Output", item => escapeHtml(item.outputFilename || "pending output name")],
           ["Outbox", item => escapeHtml(buildOutboxDisplayPath(item))],
-          ["Review", item => `Approve: <code>POST /api/encoding/items/${escapeHtml(item.id)}/approve</code><br />Reject: <code>POST /api/encoding/items/${escapeHtml(item.id)}/reject</code>`]
+          ["Review", item => renderReviewActions(item)]
       ], "Nothing is ready for review yet.")}
     </section>`;
 }
@@ -542,22 +677,35 @@ function buildOutboxDisplayPath(item) {
 
 function renderQueueAction(item) {
     if (item.status === "queued") {
-        return "Waiting for worker pickup";
+        return `<div class="hint">Waiting for worker pickup</div>`;
     }
 
     if (item.status === "encoding") {
-        return "Active encode";
+        return `<div class="hint">Active encode</div>`;
     }
 
     if (item.status === "paused") {
-        return "Paused";
+        return `<div class="hint">Paused</div>`;
     }
 
     if (item.status === "review") {
-        return `Open <a href="/encoding/review">review</a>`;
+        return `<a href="/encoding/review">Open review</a>`;
     }
 
     return "—";
+}
+
+function renderReviewActions(item) {
+    return `<div class="form-stack">
+      <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/approve" data-api-form>
+        <input type="hidden" name="reviewer" value="operator" />
+        <button type="submit">Approve To Outbox</button>
+      </form>
+      <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/reject" data-api-form>
+        <input type="hidden" name="reviewer" value="operator" />
+        <button type="submit" class="button-bad">Reject</button>
+      </form>
+    </div>`;
 }
 
 function statefulValue(state, propertyPath) {
