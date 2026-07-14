@@ -94,7 +94,6 @@ function renderDiscardButton(item, { basic = false, compact = false, iconOnly = 
         "ui",
         compact ? "compact" : "",
         basic ? "basic" : "",
-        "red",
         iconOnly ? "icon" : "",
         "button"
     ].filter(Boolean).join(" ");
@@ -102,7 +101,7 @@ function renderDiscardButton(item, { basic = false, compact = false, iconOnly = 
         ? "Discard source"
         : getDiscardBlockedReason(item);
     const label = iconOnly
-        ? `<i class="trash alternate outline icon"></i>`
+        ? `<i class="large red fitted trash alternate outline icon"></i>`
         : "Discard Source";
 
     if (!allowed) {

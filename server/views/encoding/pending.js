@@ -18,18 +18,18 @@ module.exports = function renderPending(items) {
         </div>
       </div>
       ${renderTable(items, [
-        ["State", item => pill(item.status), { width: "one" }],
+        ["Source", item => escapeHtml(item.inboxRelativeDir || "--"), { width: "two" }],
         ["Actions", item => `
-          <div class="ui tiny icon buttons">
-            <a class="ui compact orange button" href="/encoding/setup?id=${encodeURIComponent(item.id)}" title="Open setup" aria-label="Open setup">
-              <i class="cog icon"></i>
+          <div class="ui mini icon buttons">
+            <a class="ui compact basic icon button" href="/encoding/setup?id=${encodeURIComponent(item.id)}" title="Open setup" aria-label="Open setup">
+              <i class="large fitted orange cog icon"></i>
             </a>
-            ${renderDiscardButton(item, { compact: true, iconOnly: true })}
+            ${renderDiscardButton(item, { basic: true, compact: true, iconOnly: true })}
           </div>
-        `, { width: "two", align: "center" }],
-        ["Size", item => escapeHtml(formatBytes(item && item.sourceMetadata ? item.sourceMetadata.fileSizeBytes : null)), { width: "one", align: "right" }],
+        `, { width: "one", align: "center" }],
+        ["State", item => pill(item.status), { width: "one" }],
         ["File", item => escapeHtml(item.originalFilename)],
-        ["Source", item => pill(item.inboxRelativeDir || "/"), { width: "two" }],
+        ["Size", item => escapeHtml(formatBytes(item && item.sourceMetadata ? item.sourceMetadata.fileSizeBytes : null)), { width: "one", align: "right" }],
       ], "No pending items yet. Scan the inbox or drop test videos into inbox with or without subdirectories to start the flow.")}
     </section>`;
 };
