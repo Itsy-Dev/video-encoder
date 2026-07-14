@@ -85,6 +85,11 @@ module.exports = class EncodingService {
         };
     }
 
+    async getItem(id) {
+        await this.ready;
+        return this._requireItem(id);
+    }
+
     async scanInbox() {
         await this.ready;
         return this._scanInboxInternal();

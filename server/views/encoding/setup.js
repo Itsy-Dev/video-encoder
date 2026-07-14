@@ -3,11 +3,10 @@ const {
     formatBitrate,
     formatBytes,
     formatDuration,
-    pill,
     renderDiscardButton
 } = require("./helpers");
 
-module.exports = function renderSetup(item, profiles, { selectedProfileId } = {}) {
+module.exports = function renderSetup(item, profiles, { selectedProfileId, sourcePreviewUrl } = {}) {
     if (!item) {
         return `<section class="ui segment encoder-panel"><div class="ui placeholder segment"><div class="ui header">No discovered item is available for setup yet.</div></div></section>`;
     }
@@ -29,7 +28,7 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId } = {}
       <div class="ui inverted segment encoding-setup-preview">
         <div class="ui stackable grid">
           <div class="four wide column">
-            ${renderSourceThumbnail(item)}
+            ${renderSourceThumbnail(item, sourcePreviewUrl)}
           </div>
           <div class="twelve wide column">
             <h3 class="ui inverted header">
@@ -139,8 +138,23 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId } = {}
     </section>`;
 };
 
-function renderSourceThumbnail(item) {
-  return `<img class="ui rounded bordered image" src="/assets/placeholder.png"/>`;
+function renderSourceThumbnail(item, sourcePreviewUrl) {
+  const previewUrl = sourcePreviewUrl || `/api/encoding/items/${encodeURIComponent(item.id)}/source`;
+
+  return `
+    <a class="ui rounded bordered image"
+      href="${escapeHtml(previewUrl)}"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="ui rounded bordered image"
+      title="Open source video in new tab"
+      aria-label="Open source video in new tab"
+    >
+      <img class="" src="/assets/placeholder.png"/>
+      <div class="ui small top right attached basic black icon label">
+      <i class="external alternate icon"></i>
+      </div>
+    </a>`;
 }
 
 function renderMetric(label, value) {

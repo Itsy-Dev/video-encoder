@@ -1,4 +1,5 @@
 const path = require("path");
+const fs = require("fs");
 
 const EncodingService = require("../modules/encoding/encoding.service");
 const { getEncoderPaths } = require("../modules/filesystem/handoff-paths");
@@ -103,6 +104,23 @@ module.exports = function encodingApi(app, database) {
         res.json({ ok: true, item });
     });
 
+    app.get("/api/encoding/items/:id/source", async function (req, res, next) {
+        try {
+            const item = await encodingService.getItem(req.params.id);
+            const sourceAbsPath = item && item.inputAbsPath ? item.inputAbsPath : null;
+
+            if (!sourceAbsPath || !fs.existsSync(sourceAbsPath)) {
+                res.status(404).send("Source video not found.");
+                return;
+            }
+
+            res.sendFile(sourceAbsPath);
+        }
+        catch (error) {
+            next(error);
+        }
+    });
+
     app.get("/encoding/pending", async function (_req, res) {
         const state = await encodingService.getDashboardState();
         const { renderPage, renderPending } = loadEncodingViews();
@@ -128,7 +146,8 @@ module.exports = function encodingApi(app, database) {
             description: "Choose a profile, keep the discovered inbox subdirectory if needed, and send the item into the automated queue.",
             state,
             body: renderSetup(selected, state.profiles, {
-                selectedProfileId
+                selectedProfileId,
+                sourcePreviewUrl: buildPendingSourceUrl(selected)
             })
         }));
     });
@@ -141,7 +160,8 @@ module.exports = function encodingApi(app, database) {
         const { renderSetup } = loadEncodingViews();
 
         res.send(renderSetup(selected, state.profiles, {
-            selectedProfileId
+            selectedProfileId,
+            sourcePreviewUrl: buildPendingSourceUrl(selected)
         }));
     });
 
@@ -219,4 +239,18 @@ function clearEncodingViewCache() {
             delete require.cache[cacheKey];
         }
     }
+}
+
+function buildPendingSourceUrl(item) {
+    if (!item || !item.inputAbsPath) return null;
+
+    const pendingRootAbs = path.resolve(getEncoderPaths().pending);
+    const inputAbsPath = path.resolve(item.inputAbsPath);
+    const relativePath = path.relative(pendingRootAbs, inputAbsPath);
+
+    if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+        return null;
+    }
+
+    return `/media/pending-source/${relativePath.split(path.sep).map(encodeURIComponent).join("/")}`;
 }

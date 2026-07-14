@@ -18,15 +18,17 @@ colors.setTheme({
 });
 
 const app = express();
+const encoderPaths = getEncoderPaths();
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "..", "public")));
 app.use("/assets", express.static(path.join(__dirname, "..", "..", "..", "packages", "shared", "public", "assets")));
 app.use("/shared/semantic", express.static(path.join(__dirname, "..", "..", "..", "node_modules", "fomantic-ui", "dist")));
+app.use("/media/pending-source", express.static(encoderPaths.pending));
 
 async function start() {
-    initFileLogger(getEncoderPaths().logs);
+    initFileLogger(encoderPaths.logs);
     console.log("[encoder] Server starting...");
 
     const database = createDatabase();
