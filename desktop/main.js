@@ -52,10 +52,16 @@ app.on("before-quit", async function onBeforeQuit(event) {
         return;
     }
 
-    isQuitting = true;
     event.preventDefault();
+    isQuitting = true;
 
     try {
+        const quitApproved = await confirmQuitIfEncodingActive();
+        if (!quitApproved) {
+            isQuitting = false;
+            return;
+        }
+
         if (encoderServer) {
             await encoderServer.shutdown();
             encoderServer = null;
@@ -81,6 +87,58 @@ async function openEncoderUi() {
     }
 
     await shell.openExternal(targetUrl);
+}
+
+async function confirmQuitIfEncodingActive() {
+    const summary = await fetchEncoderSummary();
+    if (!summary || !summary.worker || !summary.worker.activeItemId) {
+        return true;
+    }
+
+    const activeItem = Array.isArray(summary.items)
+        ? summary.items.find(item => item.id === summary.worker.activeItemId)
+        : null;
+    const activeStatus = String(activeItem && activeItem.status || "").toLowerCase();
+
+    if (!["encoding", "paused"].includes(activeStatus)) {
+        return true;
+    }
+
+    const filename = activeItem && activeItem.originalFilename
+        ? activeItem.originalFilename
+        : "current encode";
+    const statusLabel = activeStatus === "paused" ? "paused" : "active";
+
+    const result = await dialog.showMessageBox({
+        type: "warning",
+        buttons: ["Cancel", `Quit ${APP_NAME}`],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+        title: `Quit ${APP_NAME}?`,
+        message: `An ${statusLabel} encode is still running.`,
+        detail: `Quitting now will stop "${filename}" and shut down the encoder server.`
+    });
+
+    return result.response === 1;
+}
+
+async function fetchEncoderSummary() {
+    if (!encoderServer) {
+        return null;
+    }
+
+    try {
+        const response = await fetch(`${encoderServer.address}/api/encoding/summary`);
+        if (!response.ok) {
+            return null;
+        }
+
+        return response.json();
+    }
+    catch (_error) {
+        return null;
+    }
 }
 
 function tryOpenChrome(targetUrl) {
