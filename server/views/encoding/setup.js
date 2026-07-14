@@ -25,7 +25,7 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
         : "Confirm the selected profile and send this item to the queue.";
 
     return `<section id="encoding-setup-root" class="ui inverted segment">
-      <div class="ui inverted segment encoding-setup-preview">
+      <div class="ui inverted segment charcoal">
         <div class="ui stackable grid">
           <div class="four wide column">
             ${renderSourceThumbnail(item, sourcePreviewUrl)}
@@ -39,7 +39,7 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
                 </span>
               </div>
             </h3>
-            <div class="encoding-setup-info-grid">
+            <div class="encoding-metdata-grid">
               ${renderMetric("Duration", formatDuration(source.durationMs))}
               ${renderMetric("Container", source.container || "—")}
               ${renderMetric("Codec", source.videoCodec || "—")}
@@ -55,7 +55,7 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
 
       <div class="ui hidden divider"></div>
 
-      <div class="ui inverted segment encoding-setup-preview">
+      <div class="ui inverted segment charcoal">
         <h3 class="ui inverted small header">Encoding Profile / Options</h3>
 
         <form method="get" action="/encoding/setup/fragment" class="ui inverted form">
@@ -100,7 +100,7 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
 
       <div class="ui hidden divider"></div>
 
-      <div class="ui inverted segment encoding-setup-preview">
+      <div class="ui inverted segment charcoal">
         <h3 class="ui inverted small header">Video Outcome</h3>
         <div class="ui seven column stackable inverted compact grid">
           ${renderOutcomeMetric("Size", formatBytes(source.fileSizeBytes), formatBytes(estimate.sizeBytes), estimate.sizeDeltaBytes <= 0 ? "green" : "yellow", formatSizeChange(estimate.sizeDeltaBytes, source.fileSizeBytes))}
@@ -115,7 +115,7 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
 
       <div class="ui hidden divider"></div>
 
-      <div class="ui inverted segment encoding-setup-preview">
+      <div class="ui inverted segment charcoal">
         <div class="ui stackable middle aligned right aligned grid">
           <div class="fourteen wide column">
             <span class="ui small text" style="margin-top: 6px;">Status: ${escapeHtml(String(item.status || "unknown"))}</span>
