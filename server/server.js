@@ -3,6 +3,8 @@ const express = require("express");
 const colors = require("colors");
 const { createDatabase } = require("./modules/database/mysql");
 const { runMigrations } = require("./modules/database/migrate");
+const { getEncoderPaths } = require("./modules/filesystem/handoff-paths");
+const { initFileLogger } = require("./modules/filesystem/logger");
 
 require("dotenv").config({
     path: path.join(__dirname, "..", ".env")
@@ -22,6 +24,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 async function start() {
+    initFileLogger(getEncoderPaths().logs);
+    console.log("[encoder] Server starting...");
+
     const database = createDatabase();
     await runMigrations(database);
 
@@ -35,8 +40,10 @@ async function start() {
     });
 
     const shutdown = async function shutdown() {
+        console.log("[encoder] Shutdown requested.");
         server.close();
         await database.close().catch(() => {});
+        console.log("[encoder] Shutdown complete.");
     };
 
     process.once("SIGINT", shutdown);

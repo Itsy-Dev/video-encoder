@@ -93,6 +93,7 @@ module.exports = class EncodingService {
         const paths = getEncoderPaths();
         await this._ensureManagedDirectories(paths);
         const inboxFiles = await this._findInboxVideoFiles(paths.inbox);
+        console.log(`[encoder] Scan started. inbox=${paths.inbox} files=${inboxFiles.length}`);
         const results = {
             discovered: 0,
             duplicates: 0,
@@ -137,6 +138,7 @@ module.exports = class EncodingService {
             }
         }
 
+        console.log("[encoder] Scan finished.", results);
         return results;
     }
 
@@ -161,6 +163,7 @@ module.exports = class EncodingService {
             lastError: null,
             outputFilename: buildOutputFilename(item.originalFilename, selectedProfileId)
         });
+        console.log(`[encoder] Item queued. id=${queued.id} profile=${selectedProfileId} inboxDir=${queued.inboxRelativeDir || "/"}`);
         this._ensureWorkerRunning();
         return queued;
     }
@@ -204,6 +207,7 @@ module.exports = class EncodingService {
         });
 
         await this._cleanupItemFiles(exported, paths);
+        console.log(`[encoder] Item approved and exported. id=${exported.id} outbox=${outboxOutputAbsPath}`);
         return exported;
     }
 
@@ -212,7 +216,7 @@ module.exports = class EncodingService {
         const item = await this._requireItem(id);
         await this._cleanupEncodedFiles(item);
 
-        return this.repository.upsert({
+        const rejected = await this.repository.upsert({
             ...item,
             status: "rejected",
             encodedOutputAbsPath: null,
@@ -220,6 +224,8 @@ module.exports = class EncodingService {
             lastError: notes || `Rejected by ${reviewer || "operator"}`,
             rejectedAt: new Date().toISOString()
         });
+        console.log(`[encoder] Item rejected. id=${rejected.id}`);
+        return rejected;
     }
 
     getWorkerStatus() {
@@ -258,6 +264,7 @@ module.exports = class EncodingService {
 
         this.safety.resting = reason !== "manual";
         this.safety.restReason = reason;
+        console.log(`[encoder] Active item paused. id=${item.id} reason=${reason}`);
         return true;
     }
 
@@ -279,13 +286,18 @@ module.exports = class EncodingService {
         this.safety.resting = false;
         this.safety.restUntil = null;
         this.safety.restReason = null;
+        console.log(`[encoder] Active item resumed. id=${item.id}`);
         return true;
     }
 
     async stopActive() {
         await this.ready;
         if (!this.activeHandle) return false;
-        return this.activeHandle.stop();
+        const stopped = this.activeHandle.stop();
+        if (stopped && this.activeItemId) {
+            console.log(`[encoder] Active item stop requested. id=${this.activeItemId}`);
+        }
+        return stopped;
     }
 
     async _initialize() {
@@ -296,9 +308,11 @@ module.exports = class EncodingService {
         await this.repository.failInterrupted(
             "Encoding interrupted because the encoder service stopped before the job completed"
         );
+        console.log("[encoder] Startup recovery completed.");
 
         const nextQueued = await this.repository.getNextQueued();
         if (nextQueued) {
+            console.log(`[encoder] Resuming queued work on startup. nextItem=${nextQueued.id}`);
             this._ensureWorkerRunning();
         }
 
@@ -307,6 +321,7 @@ module.exports = class EncodingService {
 
     async wakeQueue() {
         await this.ready;
+        console.log("[encoder] Manual queue wake requested.");
         this._ensureWorkerRunning();
         return this.getWorkerStatus();
     }
@@ -373,6 +388,7 @@ module.exports = class EncodingService {
 
             const item = await this.repository.getNextQueued();
             if (!item) {
+                console.log("[encoder] Worker idle. No queued items remain.");
                 return;
             }
 
@@ -397,6 +413,7 @@ module.exports = class EncodingService {
         const encodedOutputAbsPath = path.join(encodedDirAbs, outputFilename);
         const encodingStartedAt = new Date().toISOString();
         const nextAttemptCount = Number(item.attemptCount || 0) + 1;
+        console.log(`[encoder] Worker picked up item. id=${item.id} profile=${profileId} attempt=${nextAttemptCount}`);
 
         await removeIfExists(workingDirAbs);
         await fsp.mkdir(encodedDirAbs, { recursive: true });
@@ -456,6 +473,7 @@ module.exports = class EncodingService {
             });
 
             this.safety.lastItemFinishedAt = new Date().toISOString();
+            console.log(`[encoder] Worker completed item. id=${encodingItem.id} encoded=${encodedOutputAbsPath}`);
         }
         catch (error) {
             const latest = await this._requireItem(encodingItem.id);
@@ -472,6 +490,7 @@ module.exports = class EncodingService {
                 attemptCount: nextAttemptCount,
                 lastError: error.message
             });
+            console.error(`[encoder] Worker failed item. id=${encodingItem.id} stopped=${Boolean(stopped)}`, error);
         }
         finally {
             this.activeHandle = null;
@@ -522,10 +541,12 @@ module.exports = class EncodingService {
         this.safety.coolingDown = true;
         this.safety.cooldownReason = reason;
         this.safety.cooldownUntil = new Date(Date.now() + ENCODING_JOB_SAFETY.POST_ITEM_COOLDOWN_MS).toISOString();
+        console.log(`[encoder] Worker cooldown started. reason=${reason} ms=${ENCODING_JOB_SAFETY.POST_ITEM_COOLDOWN_MS}`);
         await sleep(ENCODING_JOB_SAFETY.POST_ITEM_COOLDOWN_MS);
         this.safety.coolingDown = false;
         this.safety.cooldownUntil = null;
         this.safety.cooldownReason = null;
+        console.log("[encoder] Worker cooldown finished.");
     }
 
     async _requireItem(id) {
@@ -565,6 +586,7 @@ module.exports = class EncodingService {
             fileSizeBytes: inputStat.size
         });
         const sourceMetadata = await this.ffprobeService.probeFile(managedInputAbsPath, inputStat);
+        console.log(`[encoder] Ingested inbox file. id=${itemId} source=${managedInputAbsPath}`);
 
         return this.repository.upsert({
             ...item,
