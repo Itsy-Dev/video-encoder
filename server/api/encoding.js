@@ -1,12 +1,10 @@
+const path = require("path");
+
 const EncodingService = require("../modules/encoding/encoding.service");
 const { getEncoderPaths } = require("../modules/filesystem/handoff-paths");
-const renderPage = require("../views/encoding/layout");
-const renderPending = require("../views/encoding/pending");
-const renderSetup = require("../views/encoding/setup");
-const renderQueue = require("../views/encoding/queue");
-const renderReview = require("../views/encoding/review");
-const renderHistory = require("../views/encoding/history");
-const renderSettings = require("../views/encoding/settings");
+
+const VIEW_ROOT_ABS = path.resolve(__dirname, "..", "views", "encoding");
+const IS_DEV_VIEW_HOT_RELOAD = process.env.NODE_ENV !== "production";
 
 module.exports = function encodingApi(app, database) {
     const encodingService = new EncodingService(database);
@@ -100,6 +98,7 @@ module.exports = function encodingApi(app, database) {
 
     app.get("/encoding/pending", async function (_req, res) {
         const state = await encodingService.getDashboardState();
+        const { renderPage, renderPending } = loadEncodingViews();
         res.send(renderPage({
             title: "Pending",
             heading: "Pending Items",
@@ -113,6 +112,7 @@ module.exports = function encodingApi(app, database) {
         const state = await encodingService.getDashboardState();
         const selectedId = String(req.query.id || "");
         const selected = state.items.find(item => item.id === selectedId) || state.actionableItems[0] || null;
+        const { renderPage, renderSetup } = loadEncodingViews();
 
         res.send(renderPage({
             title: "Setup",
@@ -125,6 +125,7 @@ module.exports = function encodingApi(app, database) {
 
     app.get("/encoding/queue", async function (_req, res) {
         const state = await encodingService.getDashboardState();
+        const { renderPage, renderQueue } = loadEncodingViews();
         res.send(renderPage({
             title: "Queue",
             heading: "Queue Status",
@@ -137,6 +138,7 @@ module.exports = function encodingApi(app, database) {
 
     app.get("/encoding/review", async function (_req, res) {
         const state = await encodingService.getDashboardState();
+        const { renderPage, renderReview } = loadEncodingViews();
         res.send(renderPage({
             title: "Review",
             heading: "Review Completed Encodes",
@@ -148,6 +150,7 @@ module.exports = function encodingApi(app, database) {
 
     app.get("/encoding/history", async function (_req, res) {
         const state = await encodingService.getDashboardState();
+        const { renderPage, renderHistory } = loadEncodingViews();
         res.send(renderPage({
             title: "History",
             heading: "History",
@@ -160,6 +163,7 @@ module.exports = function encodingApi(app, database) {
     app.get("/encoding/settings", async function (_req, res) {
         const state = await encodingService.getDashboardState();
         const paths = getEncoderPaths();
+        const { renderPage, renderSettings } = loadEncodingViews();
 
         res.send(renderPage({
             title: "Settings",
@@ -170,3 +174,27 @@ module.exports = function encodingApi(app, database) {
         }));
     });
 };
+
+function loadEncodingViews() {
+    if (IS_DEV_VIEW_HOT_RELOAD) {
+        clearEncodingViewCache();
+    }
+
+    return {
+        renderPage: require("../views/encoding/layout"),
+        renderPending: require("../views/encoding/pending"),
+        renderSetup: require("../views/encoding/setup"),
+        renderQueue: require("../views/encoding/queue"),
+        renderReview: require("../views/encoding/review"),
+        renderHistory: require("../views/encoding/history"),
+        renderSettings: require("../views/encoding/settings")
+    };
+}
+
+function clearEncodingViewCache() {
+    for (const cacheKey of Object.keys(require.cache)) {
+        if (cacheKey === VIEW_ROOT_ABS || cacheKey.startsWith(`${VIEW_ROOT_ABS}${path.sep}`)) {
+            delete require.cache[cacheKey];
+        }
+    }
+}
