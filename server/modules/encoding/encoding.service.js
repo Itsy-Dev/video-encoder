@@ -294,7 +294,19 @@ module.exports = class EncodingService {
         await this.repository.failInterrupted(
             "Encoding interrupted because the encoder service stopped before the job completed"
         );
+
+        const nextQueued = await this.repository.getNextQueued();
+        if (nextQueued) {
+            this._ensureWorkerRunning();
+        }
+
         this._startInboxPolling();
+    }
+
+    async wakeQueue() {
+        await this.ready;
+        this._ensureWorkerRunning();
+        return this.getWorkerStatus();
     }
 
     _startInboxPolling() {

@@ -70,6 +70,14 @@ module.exports = function encodingApi(app, database) {
         });
     });
 
+    app.post("/api/encoding/control/wake", async function (_req, res) {
+        const worker = await encodingService.wakeQueue();
+        res.json({
+            ok: true,
+            worker
+        });
+    });
+
     app.post("/api/encoding/items/:id/approve", async function (req, res) {
         const item = await encodingService.approveItem(req.params.id, {
             reviewer: req.body.reviewer || "operator"
@@ -558,6 +566,9 @@ function renderQueue(state) {
         Started: ${escapeHtml(statefulValue(state, "worker.activeStartedAt"))}<br />
         Progress: ${escapeHtml(formatProgress(state && state.worker ? state.worker.activeProgress : null))}<br />
         <div class="actions" style="margin-top: 12px;">
+          <form method="post" action="/api/encoding/control/wake" data-api-form>
+            <button type="submit">Wake Queue</button>
+          </form>
           <form method="post" action="/api/encoding/control/pause" data-api-form>
             <button type="submit" class="button-warn">Pause</button>
           </form>
