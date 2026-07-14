@@ -81,8 +81,23 @@ function renderActions(item, canReview) {
     return `<section class="ui inverted horizontally fitted segment">
       <div class="ui stackable bottom aligned grid">
         <div class="seven wide column">
-          <div class="ui small buttons">
-            <a class="ui teal active disabled button">Retain Source</a>
+          <div class="ui inverted tiny header">Source</div>
+          <div class="ui form">
+            <div class="inline field" style="display: flex; align-items: center; gap: 12px;">
+              <span class="ui ${canReview ? "grey" : "disabled grey"} text">Delete</span>
+              <div class="ui fitted toggle checkbox">
+                <input
+                  type="checkbox"
+                  name="retainSourceSwitch"
+                  value="retain"
+                  checked
+                  ${canReview ? "" : "disabled"}
+                  onchange="window.updateSourceActionSwitch(this)"
+                />
+                <label></label>
+              </div>
+              <span class="ui ${canReview ? "teal" : "disabled teal"} text">Retain</span>
+            </div>
           </div>
         </div>
         <div class="nine wide right aligned column">
@@ -99,6 +114,7 @@ function renderActions(item, canReview) {
           </form>
           <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/approve" data-api-form data-confirm="Approve this encode and move it to outbox? This removes the encoder's internal working copy." style="display: inline-block;">
             <input type="hidden" name="reviewer" value="operator" />
+            <input type="hidden" name="sourceAction" value="retain" data-source-action-input />
             <button type="submit" class="ui green ${disabledClass} button" ${canReview ? "" : "disabled"}>
               <i class="check icon"></i>
               Commit

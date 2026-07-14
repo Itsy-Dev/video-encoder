@@ -160,6 +160,13 @@ module.exports = function renderPage({ title, heading, description, state, body,
       }
     };
 
+    window.updateSourceActionSwitch = function (checkbox) {
+      const root = checkbox && checkbox.closest ? checkbox.closest("section") : null;
+      const target = root ? root.querySelector("[data-source-action-input]") : document.querySelector("[data-source-action-input]");
+      if (!target) return;
+      target.value = checkbox && checkbox.checked ? "retain" : "delete";
+    };
+
     document.addEventListener("submit", async function (event) {
       const form = event.target;
       if (!(form instanceof HTMLFormElement)) return;

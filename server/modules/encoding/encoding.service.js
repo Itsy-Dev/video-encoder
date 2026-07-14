@@ -188,11 +188,12 @@ module.exports = class EncodingService {
         });
     }
 
-    async approveItem(id, { reviewer } = {}) {
+    async approveItem(id, { reviewer, sourceAction } = {}) {
         await this.ready;
         const item = await this._requireItem(id);
         const paths = getEncoderPaths();
         await this._ensureManagedDirectories(paths);
+        const normalizedSourceAction = normalizeSourceAction(sourceAction);
 
         if (!item.encodedOutputAbsPath) {
             const error = new Error("No encoded output is available to export.");
@@ -206,15 +207,25 @@ module.exports = class EncodingService {
         await fsp.mkdir(outboxDirAbs, { recursive: true });
         await moveFileIntoPlace(item.encodedOutputAbsPath, outboxOutputAbsPath);
 
+        const retainedSourceAbsPath = normalizedSourceAction === "retain"
+            ? await this._retainSourceFile(item, paths)
+            : null;
+
         const exported = await this.repository.upsert({
             ...item,
             status: "exported",
             approvedAt: new Date().toISOString(),
-            outboxOutputAbsPath
+            outboxOutputAbsPath,
+            inputAbsPath: retainedSourceAbsPath || item.inputAbsPath,
+            sourceMetadata: item.sourceMetadata ? {
+                ...item.sourceMetadata,
+                absPath: retainedSourceAbsPath || item.sourceMetadata.absPath
+            } : null,
+            lastError: `Exported by ${reviewer || "operator"} with source ${normalizedSourceAction}`
         });
 
-        await this._cleanupItemFiles(exported, paths);
-        console.log(`[encoder] Item approved and exported. id=${exported.id} outbox=${outboxOutputAbsPath}`);
+        await this._cleanupApprovedItemFiles(exported, paths, { retainedSourceAbsPath });
+        console.log(`[encoder] Item approved and exported. id=${exported.id} outbox=${outboxOutputAbsPath} sourceAction=${normalizedSourceAction}`);
         return exported;
     }
 
@@ -729,6 +740,37 @@ module.exports = class EncodingService {
         await removeIfExists(workingItemRoot);
     }
 
+    async _cleanupApprovedItemFiles(item, paths = getEncoderPaths(), { retainedSourceAbsPath = null } = {}) {
+        const pendingItemRoot = getPendingItemRoot(paths, item.id);
+
+        await this._cleanupEncodedFiles(item, paths);
+
+        if (retainedSourceAbsPath) {
+            await removeIfExists(pendingItemRoot);
+            return;
+        }
+
+        await removeIfExists(pendingItemRoot);
+    }
+
+    async _retainSourceFile(item, paths = getEncoderPaths()) {
+        if (!item.inputAbsPath) {
+            return null;
+        }
+
+        const retainedDirAbs = path.join(
+            paths.outbox,
+            "_sources",
+            "retained",
+            normalizeRelativeDir(item.inboxRelativeDir)
+        );
+        const retainedSourceAbsPath = path.join(retainedDirAbs, item.originalFilename);
+
+        await fsp.mkdir(retainedDirAbs, { recursive: true });
+        await moveFileIntoPlace(item.inputAbsPath, retainedSourceAbsPath);
+        return retainedSourceAbsPath;
+    }
+
     async _cleanupTemporaryArtifacts(paths = getEncoderPaths()) {
         await removeTempArtifacts(paths.working);
         await removeTempArtifacts(paths.encoded);
@@ -888,6 +930,10 @@ function normalizeRelativeDir(value, fallback = "") {
     }
 
     return parts.join("/");
+}
+
+function normalizeSourceAction(value) {
+    return String(value || "").toLowerCase() === "delete" ? "delete" : "retain";
 }
 
 function sleep(ms) {

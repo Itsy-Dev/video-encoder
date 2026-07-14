@@ -84,7 +84,8 @@ module.exports = function encodingApi(app, database) {
 
     app.post("/api/encoding/items/:id/approve", async function (req, res) {
         const item = await encodingService.approveItem(req.params.id, {
-            reviewer: req.body.reviewer || "operator"
+            reviewer: req.body.reviewer || "operator",
+            sourceAction: req.body.sourceAction || "retain"
         });
         res.json({ ok: true, item });
     });
