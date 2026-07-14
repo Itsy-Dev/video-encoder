@@ -28,6 +28,7 @@ const VIDEO_EXTENSIONS = new Set([
 ]);
 const STABILITY_WINDOW_MS = Number(process.env.ENCODER_INBOX_STABILITY_WINDOW_MS || 30000);
 const SIZE_RECHECK_DELAY_MS = Number(process.env.ENCODER_INBOX_RECHECK_DELAY_MS || 1500);
+const INBOX_SCAN_INTERVAL_MS = Number(process.env.ENCODER_INBOX_SCAN_INTERVAL_MS || 30000);
 const ENCODING_JOB_SAFETY = Object.freeze({
     POST_ITEM_COOLDOWN_MS: Number(process.env.ENCODER_POST_ITEM_COOLDOWN_MS || 20 * 60 * 1000),
     CONTINUOUS_RUN_LIMIT_MS: Number(process.env.ENCODER_CONTINUOUS_RUN_LIMIT_MS || 20 * 60 * 1000),
@@ -46,6 +47,8 @@ module.exports = class EncodingService {
         this.activeStartedAt = null;
         this.activeRunStartedAt = null;
         this.workerPromise = null;
+        this.scanTimer = null;
+        this.scanLoopRunning = false;
         this.safety = {
             cooldownUntil: null,
             cooldownReason: null,
@@ -83,6 +86,10 @@ module.exports = class EncodingService {
 
     async scanInbox() {
         await this.ready;
+        return this._scanInboxInternal();
+    }
+
+    async _scanInboxInternal() {
         const paths = getEncoderPaths();
         await this._ensureManagedDirectories(paths);
         const inboxFiles = await this._findInboxVideoFiles(paths.inbox);
@@ -287,6 +294,33 @@ module.exports = class EncodingService {
         await this.repository.failInterrupted(
             "Encoding interrupted because the encoder service stopped before the job completed"
         );
+        this._startInboxPolling();
+    }
+
+    _startInboxPolling() {
+        if (INBOX_SCAN_INTERVAL_MS <= 0 || this.scanLoopRunning || this.scanTimer) {
+            return;
+        }
+
+        const runNext = async () => {
+            this.scanTimer = null;
+            this.scanLoopRunning = true;
+
+            try {
+                await this._scanInboxInternal();
+            }
+            catch (error) {
+                console.error("[encoder] Inbox polling scan failed", error);
+            }
+            finally {
+                this.scanLoopRunning = false;
+                this.scanTimer = setTimeout(runNext, INBOX_SCAN_INTERVAL_MS);
+            }
+        };
+
+        runNext().catch(error => {
+            console.error("[encoder] Inbox polling loop failed", error);
+        });
     }
 
     _ensureWorkerRunning() {
