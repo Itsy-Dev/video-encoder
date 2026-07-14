@@ -119,6 +119,7 @@ module.exports = function encodingApi(app, database) {
         const state = await encodingService.getDashboardState();
         const selectedId = String(req.query.id || "");
         const selected = state.items.find(item => item.id === selectedId) || state.actionableItems[0] || null;
+        const selectedProfileId = String(req.query.profileId || (selected && (selected.profileId || selected.requestedProfileId)) || "browser_compatibility");
         const { renderPage, renderSetup } = loadEncodingViews();
 
         res.send(renderPage({
@@ -126,7 +127,9 @@ module.exports = function encodingApi(app, database) {
             heading: "Encoding Setup",
             description: "Choose a profile, keep the discovered inbox subdirectory if needed, and send the item into the automated queue.",
             state,
-            body: renderSetup(selected, state.profiles)
+            body: renderSetup(selected, state.profiles, {
+                selectedProfileId
+            })
         }));
     });
 

@@ -10,7 +10,7 @@ module.exports = function renderPage({ title, heading, description, state, body,
         ["Settings", "/encoding/settings"]
     ];
 
-  const cards = [
+    const cards = [
         ["Pending", state.counts.pending],
         ["Encoding", state.counts.encoding],
         ["Queued", state.counts.queued],
@@ -33,15 +33,53 @@ module.exports = function renderPage({ title, heading, description, state, body,
     }
 
     body {
-        background-color: var(--main-bg-color);
+      background-color: var(--main-bg-color);
     }
 
     #main {
-        position: relative;
-        min-height: 100%;
-        background-image: linear-gradient(160deg, var(--secondary-bg-color), var(--main-bg-color));
-        padding-bottom: 44px;
-        padding-top: 52px;
+      position: relative;
+      min-height: 100%;
+      background-image: linear-gradient(160deg, var(--secondary-bg-color), var(--main-bg-color));
+      padding-bottom: 44px;
+      padding-top: 8px;
+    }
+
+    .encoding-setup-preview {
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      background: rgba(255, 255, 255, 0.055) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 28px rgba(0, 0, 0, 0.22) !important;
+    }
+
+    .encoding-setup-change-row {
+      padding: 0.55rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .encoding-setup-change-row:last-child {
+      border-bottom: 0;
+    }
+
+    .encoding-setup-info-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      column-gap: 1.25rem;
+      row-gap: 0.9rem;
+    }
+
+    .encoding-setup-info-cell {
+      min-width: 0;
+    }
+
+    @media only screen and (max-width: 900px) {
+      .encoding-setup-info-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media only screen and (max-width: 560px) {
+      .encoding-setup-info-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
     }
   </style>
 </head>
@@ -66,8 +104,8 @@ module.exports = function renderPage({ title, heading, description, state, body,
             <div class="ui inverted grey raised card">
               <div class="content">
                 <h2 class="header">
-                    <div class="meta">${escapeHtml(label)}</div>
-                    <div class="">${escapeHtml(String(value))}</div>
+                  <div class="meta">${escapeHtml(label)}</div>
+                  <div>${escapeHtml(String(value))}</div>
                 </h2>
               </div>
             </div>

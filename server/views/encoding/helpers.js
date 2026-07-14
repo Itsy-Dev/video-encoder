@@ -188,6 +188,26 @@ function formatBytes(bytes) {
     return `${rounded} ${units[unitIndex]}`;
 }
 
+function formatDuration(ms) {
+    const totalSeconds = Math.max(0, Math.round(Number(ms || 0) / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
+}
+
+function formatBitrate(bps) {
+    const value = Number(bps || 0);
+    if (!Number.isFinite(value) || value <= 0) {
+        return "—";
+    }
+
+    return `${Math.round(value / 1000).toLocaleString()} kbps`;
+}
+
 function buildColumnClassName(options = {}) {
     const classes = [];
 
@@ -206,7 +226,9 @@ module.exports = {
     buildOutboxDisplayPath,
     canDiscardItem,
     escapeHtml,
+    formatBitrate,
     formatBytes,
+    formatDuration,
     formatProgress,
     getDiscardBlockedReason,
     pill,
