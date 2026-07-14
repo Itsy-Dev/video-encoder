@@ -39,6 +39,11 @@ module.exports = function renderSetup(item, profiles) {
             <a class="ui button button-inline" href="/encoding/pending">Back to Pending</a>
           </div>
         </form>
+        <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/discard" data-api-form>
+          <div class="actions">
+            <button type="submit" class="ui red basic button">Discard Source</button>
+          </div>
+        </form>
         <div class="ui message encoder-note">Scan ingests the video from inbox into internal pending storage first, preserving its optional subdirectory for outbox routing. Once queued, the worker picks it up automatically when it reaches the front.</div>
       </div>
       <div class="ui segment encoder-panel stack">

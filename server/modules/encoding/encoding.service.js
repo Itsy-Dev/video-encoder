@@ -12,7 +12,7 @@ const { getEncoderPaths } = require("../filesystem/handoff-paths");
 const PENDING_STATES = new Set(["pending"]);
 const ACTIONABLE_STATES = new Set(["pending", "rejected", "failed", "cancelled"]);
 const REVIEW_STATES = new Set(["review"]);
-const HISTORY_STATES = new Set(["approved", "rejected", "failed", "exported", "cancelled"]);
+const HISTORY_STATES = new Set(["approved", "rejected", "failed", "exported", "cancelled", "discarded"]);
 const VIDEO_EXTENSIONS = new Set([
     ".avi",
     ".flv",
@@ -226,6 +226,48 @@ module.exports = class EncodingService {
         });
         console.log(`[encoder] Item rejected. id=${rejected.id}`);
         return rejected;
+    }
+
+    async discardItem(id, { reviewer } = {}) {
+        await this.ready;
+        const item = await this._requireItem(id);
+        const paths = getEncoderPaths();
+        await this._ensureManagedDirectories(paths);
+
+        const discardedDirAbs = path.join(
+            paths.outbox,
+            "_sources",
+            "discarded",
+            normalizeRelativeDir(item.inboxRelativeDir)
+        );
+        const discardedSourceAbsPath = path.join(discardedDirAbs, item.originalFilename);
+
+        await fsp.mkdir(discardedDirAbs, { recursive: true });
+        await moveFileIntoPlace(item.inputAbsPath, discardedSourceAbsPath);
+        await this._cleanupEncodedFiles(item, paths);
+        await removeIfExists(getPendingItemRoot(paths, item.id));
+
+        const discarded = await this.repository.upsert({
+            ...item,
+            status: "discarded",
+            inputAbsPath: discardedSourceAbsPath,
+            encodedOutputAbsPath: null,
+            outboxOutputAbsPath: discardedSourceAbsPath,
+            queuedAt: null,
+            encodingStartedAt: null,
+            pausedAt: null,
+            completedAt: null,
+            approvedAt: null,
+            rejectedAt: null,
+            lastError: `Discarded by ${reviewer || "operator"}`,
+            sourceMetadata: item.sourceMetadata ? {
+                ...item.sourceMetadata,
+                absPath: discardedSourceAbsPath
+            } : null
+        });
+
+        console.log(`[encoder] Item discarded. id=${discarded.id} destination=${discardedSourceAbsPath}`);
+        return discarded;
     }
 
     getWorkerStatus() {
@@ -815,6 +857,15 @@ function getEncodedItemRoot(paths, item) {
 
 function getWorkingItemRoot(paths, itemId) {
     return path.join(paths.working, sanitizeSegment(itemId));
+}
+
+function getDiscardedSourceRoot(paths, item) {
+    return path.join(
+        paths.outbox,
+        "_sources",
+        "discarded",
+        normalizeRelativeDir(item && item.inboxRelativeDir)
+    );
 }
 
 async function pruneEmptyDirectories(rootAbsPath) {

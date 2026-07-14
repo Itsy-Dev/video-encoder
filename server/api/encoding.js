@@ -96,6 +96,13 @@ module.exports = function encodingApi(app, database) {
         res.json({ ok: true, item });
     });
 
+    app.post("/api/encoding/items/:id/discard", async function (req, res) {
+        const item = await encodingService.discardItem(req.params.id, {
+            reviewer: req.body.reviewer || "operator"
+        });
+        res.json({ ok: true, item });
+    });
+
     app.get("/encoding/pending", async function (_req, res) {
         const state = await encodingService.getDashboardState();
         const { renderPage, renderPending } = loadEncodingViews();

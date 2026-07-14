@@ -31,6 +31,7 @@ The server also runs pending SQL migrations automatically at startup.
 - `/api/encoding/items/:id/complete`
 - `/api/encoding/items/:id/approve`
 - `/api/encoding/items/:id/reject`
+- `/api/encoding/items/:id/discard`
 - `/api/encoding/control/pause`
 - `/api/encoding/control/resume`
 - `/api/encoding/control/stop`

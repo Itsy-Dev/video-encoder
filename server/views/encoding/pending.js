@@ -19,10 +19,21 @@ module.exports = function renderPending(items) {
       </div>
       ${renderTable(items, [
         ["State", item => pill(item.status), { width: "one" }],
+        ["Actions", item => `
+          <div class="ui tiny icon buttons">
+            <a class="ui compact orange button" href="/encoding/setup?id=${encodeURIComponent(item.id)}" title="Open setup" aria-label="Open setup">
+              <i class="cog icon"></i>
+            </a>
+            <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/discard" data-api-form>
+              <button type="submit" class="ui compact red button" title="Discard source" aria-label="Discard source">
+                <i class="trash alternate outline icon"></i>
+              </button>
+            </form>
+          </div>
+        `, { width: "two", align: "center" }],
         ["Size", item => escapeHtml(formatBytes(item && item.sourceMetadata ? item.sourceMetadata.fileSizeBytes : null)), { width: "one", align: "right" }],
         ["File", item => escapeHtml(item.originalFilename)],
         ["Source", item => pill(item.inboxRelativeDir || "/"), { width: "two" }],
-        ["Actions", item => `<a class="ui mini compact orange icon button" href="/encoding/setup?id=${encodeURIComponent(item.id)}" title="Open setup" aria-label="Open setup"><i class="cog icon"></i></a>`, { width: "two", align: "center" }],
       ], "No pending items yet. Scan the inbox or drop test videos into inbox with or without subdirectories to start the flow.")}
     </section>`;
 };

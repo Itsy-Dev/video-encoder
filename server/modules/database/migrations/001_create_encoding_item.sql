@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS `encoding_item` (
     `id` VARCHAR(255) NOT NULL,
-    `status` ENUM('pending','queued','encoding','paused','review','exported','rejected','failed','cancelled') NOT NULL DEFAULT 'pending',
+    `status` ENUM('pending','queued','encoding','paused','review','exported','rejected','failed','cancelled','discarded') NOT NULL DEFAULT 'pending',
     `original_filename` VARCHAR(512) NOT NULL,
     `inbox_input_abs_path` TEXT NOT NULL,
     `input_abs_path` TEXT NOT NULL,
