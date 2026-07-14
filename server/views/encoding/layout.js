@@ -124,6 +124,48 @@ module.exports = function renderPage({ title, heading, description, state, body,
       }, AUTO_REFRESH_MS);
     }
 
+    window.reloadSetupProfile = async function (form) {
+      if (!(form instanceof HTMLFormElement)) return;
+      const root = document.getElementById("encoding-setup-root");
+      if (!root) {
+        form.submit();
+        return;
+      }
+
+      const formData = new FormData(form);
+      const searchParams = new URLSearchParams();
+      for (const [key, value] of formData.entries()) {
+        searchParams.set(key, value);
+      }
+
+      try {
+        const response = await fetch(form.action + "?" + searchParams.toString(), {
+          method: "GET",
+          headers: {
+            "Accept": "text/html"
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to refresh setup profile.");
+        }
+
+        const html = await response.text();
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = html;
+        const nextRoot = wrapper.querySelector("#encoding-setup-root");
+
+        if (!nextRoot) {
+          throw new Error("Setup fragment was missing its root container.");
+        }
+
+        root.replaceWith(nextRoot);
+      }
+      catch (_error) {
+        window.location.href = "/encoding/setup?" + searchParams.toString();
+      }
+    };
+
     document.addEventListener("submit", async function (event) {
       const form = event.target;
       if (!(form instanceof HTMLFormElement)) return;

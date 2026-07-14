@@ -25,7 +25,7 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId } = {}
         ? "Update the queued item with the selected profile and options."
         : "Confirm the selected profile and send this item to the queue.";
 
-    return `<section class="ui inverted segment">
+    return `<section id="encoding-setup-root" class="ui inverted segment">
       <div class="ui inverted segment encoding-setup-preview">
         <div class="ui stackable grid">
           <div class="four wide column">
@@ -59,12 +59,12 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId } = {}
       <div class="ui inverted segment encoding-setup-preview">
         <h3 class="ui inverted small header">Encoding Profile / Options</h3>
 
-        <form method="get" action="/encoding/setup" class="ui inverted form">
+        <form method="get" action="/encoding/setup/fragment" class="ui inverted form">
           <input type="hidden" name="id" value="${escapeHtml(item.id)}" />
           <div class="fields">
             <div class="six wide field">
               <label>Profile</label>
-              <select class="ui fluid dropdown" name="profileId" onchange="this.form.submit()">
+              <select class="ui fluid dropdown" name="profileId" onchange="reloadSetupProfile(this.form)">
                 ${profiles.map(profile => `<option value="${escapeHtml(profile.id)}"${profile.id === (selectedProfile && selectedProfile.id) ? " selected" : ""}>${escapeHtml(profile.label)}</option>`).join("")}
               </select>
             </div>

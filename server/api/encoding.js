@@ -133,6 +133,18 @@ module.exports = function encodingApi(app, database) {
         }));
     });
 
+    app.get("/encoding/setup/fragment", async function (req, res) {
+        const state = await encodingService.getDashboardState();
+        const selectedId = String(req.query.id || "");
+        const selected = state.items.find(item => item.id === selectedId) || state.actionableItems[0] || null;
+        const selectedProfileId = String(req.query.profileId || (selected && (selected.profileId || selected.requestedProfileId)) || "browser_compatibility");
+        const { renderSetup } = loadEncodingViews();
+
+        res.send(renderSetup(selected, state.profiles, {
+            selectedProfileId
+        }));
+    });
+
     app.get("/encoding/queue", async function (_req, res) {
         const state = await encodingService.getDashboardState();
         const { renderPage, renderQueue } = loadEncodingViews();
