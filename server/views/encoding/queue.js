@@ -94,14 +94,14 @@ function renderActiveButtons(activeItem, worker, showForceWakeButton) {
     return `<div class="ui small compact buttons">
       <form method="post" action="/api/encoding/control/${pauseAction}" data-api-form style="display: inline-block;">
         <button type="submit" class="ui compact inverted secondary button">
-          <i class="${escapeHtml(pauseColor)} ${escapeHtml(pauseIcon)} icon"></i>
-          <span class="ui ${escapeHtml(pauseColor)} text">${escapeHtml(pauseLabel)}</span>
+          <i class="inverted ${escapeHtml(pauseColor)} ${escapeHtml(pauseIcon)} icon"></i>
+          <span class="ui inverted ${escapeHtml(pauseColor)} text">${escapeHtml(pauseLabel)}</span>
         </button>
       </form>
       <form method="post" action="/api/encoding/control/stop" data-api-form data-confirm="Stop the active encode? The current encoded output will be discarded and the source item will need to be queued again." style="display: inline-block;">
         <button type="submit" class="ui compact inverted secondary button">
-          <i class="red stop icon"></i>
-          <span class="ui red text">Stop</span>
+          <i class="inverted red stop icon"></i>
+          <span class="ui inverted red text">Stop</span>
         </button>
       </form>
     </div>`;
