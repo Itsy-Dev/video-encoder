@@ -24,6 +24,46 @@ function createDatabase() {
                 });
             });
         },
+        withTransaction(callback) {
+            return new Promise((resolve, reject) => {
+                pool.getConnection(function onConnection(error, connection) {
+                    if (error) return reject(error);
+
+                    const executor = {
+                        query(sql, values = []) {
+                            return new Promise((resolveQuery, rejectQuery) => {
+                                connection.query(sql, values, function onQuery(queryError, results, fields) {
+                                    if (queryError) return rejectQuery(queryError);
+                                    resolveQuery({ results, fields });
+                                });
+                            });
+                        }
+                    };
+
+                    connection.beginTransaction(async function onBegin(beginError) {
+                        if (beginError) {
+                            connection.release();
+                            return reject(beginError);
+                        }
+
+                        try {
+                            const result = await callback(executor);
+                            connection.commit(function onCommit(commitError) {
+                                connection.release();
+                                if (commitError) return reject(commitError);
+                                resolve(result);
+                            });
+                        }
+                        catch (callbackError) {
+                            connection.rollback(function onRollback() {
+                                connection.release();
+                                reject(callbackError);
+                            });
+                        }
+                    });
+                });
+            });
+        },
         close() {
             return new Promise((resolve, reject) => {
                 pool.end(function onClose(error) {

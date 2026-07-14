@@ -7,6 +7,11 @@ const profiles = require("./encoding-profiles");
 const EncodingRepository = require("./encoding.repository");
 const FfmpegService = require("./ffmpeg.service");
 const FfprobeService = require("./ffprobe.service");
+const {
+    STRATEGY_ID: QUEUE_POSITION_STRATEGY_ID,
+    applyQueuePositionStrategy,
+    reorderQueueItems
+} = require("./queue-ordering");
 const { getEncoderPaths } = require("../filesystem/handoff-paths");
 
 const PENDING_STATES = new Set(["pending"]);
@@ -15,6 +20,7 @@ const REVIEW_STATES = new Set(["review"]);
 const HISTORY_STATES = new Set(["approved", "rejected", "failed", "exported", "cancelled", "discarded"]);
 const DISCARDABLE_STATES = new Set(["pending", "queued", "rejected", "failed", "cancelled"]);
 const UNQUEUEABLE_STATES = new Set(["queued", "failed", "cancelled", "rejected"]);
+const QUEUE_RELATED_STATES = new Set(["encoding", "paused", "queued", "cancelled", "failed"]);
 const VIDEO_EXTENSIONS = new Set([
     ".avi",
     ".flv",
@@ -69,15 +75,19 @@ module.exports = class EncodingService {
     async getDashboardState() {
         await this.ready;
         const items = await this.repository.list();
+        const worker = this.getWorkerStatus();
+        const queuedItems = sortQueuedItems(items, worker.activeItemId);
 
         return {
             items,
+            queuedItems,
             pendingItems: items.filter(item => PENDING_STATES.has(item.status)),
             actionableItems: items.filter(item => ACTIONABLE_STATES.has(item.status)),
             reviewItems: items.filter(item => REVIEW_STATES.has(item.status)),
             historyItems: items.filter(item => HISTORY_STATES.has(item.status)),
             profiles,
-            worker: this.getWorkerStatus(),
+            queuePositionStrategy: QUEUE_POSITION_STRATEGY_ID,
+            worker,
             counts: {
                 pending: items.filter(item => PENDING_STATES.has(item.status)).length,
                 queued: items.filter(item => ["queued"].includes(item.status)).length,
@@ -153,26 +163,47 @@ module.exports = class EncodingService {
 
     async queueItem(id, { profileId, inboxRelativeDir } = {}) {
         await this.ready;
-        const item = await this._requireItem(id);
-        const selectedProfileId = profiles.some(profile => profile.id === profileId)
-            ? profileId
-            : (item.requestedProfileId || "browser_compatibility");
+        const queued = await this.repository.withTransaction(async repo => {
+            const item = await this._requireItemWithRepository(repo, id);
+            const selectedProfileId = profiles.some(profile => profile.id === profileId)
+                ? profileId
+                : (item.requestedProfileId || "browser_compatibility");
+            const existingQueue = await repo.listQueuedOrdered({ forUpdate: true });
+            const currentIndex = existingQueue.findIndex(queueItem => queueItem.id === item.id);
+            const nextQueuedAt = currentIndex >= 0
+                ? item.queuedAt
+                : new Date().toISOString();
+            const reordered = [...existingQueue];
 
-        const queued = await this.repository.upsert({
-            ...item,
-            profileId: selectedProfileId,
-            inboxRelativeDir: normalizeRelativeDir(inboxRelativeDir, item.inboxRelativeDir),
-            status: "queued",
-            queuedAt: new Date().toISOString(),
-            pausedAt: null,
-            completedAt: null,
-            approvedAt: null,
-            rejectedAt: null,
-            outboxOutputAbsPath: null,
-            lastError: null,
-            outputFilename: buildOutputFilename(item.originalFilename, selectedProfileId)
+            if (currentIndex >= 0) {
+                reordered.splice(currentIndex, 1, item);
+            }
+            else {
+                reordered.push(item);
+            }
+
+            const normalizedQueue = applyQueuePositionStrategy(reordered);
+            await repo.replaceQueuePositions(normalizedQueue);
+
+            const queueRecord = normalizedQueue.find(queueItem => queueItem.id === item.id);
+
+            return repo.upsert({
+                ...item,
+                profileId: selectedProfileId,
+                inboxRelativeDir: normalizeRelativeDir(inboxRelativeDir, item.inboxRelativeDir),
+                status: "queued",
+                queuedAt: nextQueuedAt,
+                queuePosition: queueRecord ? queueRecord.queuePosition : null,
+                pausedAt: null,
+                completedAt: null,
+                approvedAt: null,
+                rejectedAt: null,
+                outboxOutputAbsPath: null,
+                lastError: null,
+                outputFilename: buildOutputFilename(item.originalFilename, selectedProfileId)
+            });
         });
-        console.log(`[encoder] Item queued. id=${queued.id} profile=${selectedProfileId} inboxDir=${queued.inboxRelativeDir || "/"}`);
+        console.log(`[encoder] Item queued. id=${queued.id} profile=${queued.profileId || "browser_compatibility"} inboxDir=${queued.inboxRelativeDir || "/"}`);
         this._ensureWorkerRunning();
         return queued;
     }
@@ -273,23 +304,30 @@ module.exports = class EncodingService {
         await this._cleanupEncodedFiles(item, paths);
         await removeIfExists(getPendingItemRoot(paths, item.id));
 
-        const discarded = await this.repository.upsert({
-            ...item,
-            status: "discarded",
-            inputAbsPath: discardedSourceAbsPath,
-            encodedOutputAbsPath: null,
-            outboxOutputAbsPath: discardedSourceAbsPath,
-            queuedAt: null,
-            encodingStartedAt: null,
-            pausedAt: null,
-            completedAt: null,
-            approvedAt: null,
-            rejectedAt: null,
-            lastError: `Discarded by ${reviewer || "operator"}`,
-            sourceMetadata: item.sourceMetadata ? {
-                ...item.sourceMetadata,
-                absPath: discardedSourceAbsPath
-            } : null
+        const discarded = await this.repository.withTransaction(async repo => {
+            const current = await this._requireItemWithRepository(repo, id);
+            const discardedItem = await repo.upsert({
+                ...current,
+                status: "discarded",
+                inputAbsPath: discardedSourceAbsPath,
+                encodedOutputAbsPath: null,
+                outboxOutputAbsPath: discardedSourceAbsPath,
+                queuedAt: null,
+                queuePosition: null,
+                encodingStartedAt: null,
+                pausedAt: null,
+                completedAt: null,
+                approvedAt: null,
+                rejectedAt: null,
+                lastError: `Discarded by ${reviewer || "operator"}`,
+                sourceMetadata: current.sourceMetadata ? {
+                    ...current.sourceMetadata,
+                    absPath: discardedSourceAbsPath
+                } : null
+            });
+
+            await this._normalizeQueuedItemsWithRepository(repo);
+            return discardedItem;
         });
 
         console.log(`[encoder] Item discarded. id=${discarded.id} destination=${discardedSourceAbsPath}`);
@@ -308,22 +346,55 @@ module.exports = class EncodingService {
 
         await this._cleanupEncodedFiles(item);
 
-        const pending = await this.repository.upsert({
-            ...item,
-            status: "pending",
-            queuedAt: null,
-            encodingStartedAt: null,
-            pausedAt: null,
-            completedAt: null,
-            approvedAt: null,
-            rejectedAt: null,
-            encodedOutputAbsPath: null,
-            outboxOutputAbsPath: null,
-            lastError: `Removed from queue by ${reviewer || "operator"}`
+        const pending = await this.repository.withTransaction(async repo => {
+            const current = await this._requireItemWithRepository(repo, id);
+            const pendingItem = await repo.upsert({
+                ...current,
+                status: "pending",
+                queuedAt: null,
+                queuePosition: null,
+                encodingStartedAt: null,
+                pausedAt: null,
+                completedAt: null,
+                approvedAt: null,
+                rejectedAt: null,
+                encodedOutputAbsPath: null,
+                outboxOutputAbsPath: null,
+                lastError: `Removed from queue by ${reviewer || "operator"}`
+            });
+
+            await this._normalizeQueuedItemsWithRepository(repo);
+            return pendingItem;
         });
 
         console.log(`[encoder] Item removed from queue. id=${pending.id}`);
         return pending;
+    }
+
+    async moveQueueItem(id, action) {
+        await this.ready;
+
+        return this.repository.withTransaction(async repo => {
+            const current = await this._requireItemWithRepository(repo, id);
+            if (String(current.status || "").toLowerCase() !== "queued") {
+                const error = new Error("Only queued items can be reordered.");
+                error.statusCode = 409;
+                throw error;
+            }
+
+            const queue = await repo.listQueuedOrdered({ forUpdate: true });
+            const queueIndex = queue.findIndex(item => item.id === id);
+            if (queueIndex < 0) {
+                const error = new Error("Queued item was not found in the ordered queue.");
+                error.statusCode = 404;
+                throw error;
+            }
+
+            const reordered = reorderQueueItems(queue, id, action);
+            const normalizedQueue = applyQueuePositionStrategy(reordered);
+            await repo.replaceQueuePositions(normalizedQueue);
+            return this._requireItemWithRepository(repo, id);
+        });
     }
 
     getWorkerStatus() {
@@ -411,6 +482,9 @@ module.exports = class EncodingService {
         await this.repository.failInterrupted(
             "Encoding interrupted because the encoder service stopped before the job completed"
         );
+        await this.repository.withTransaction(async repo => {
+            await this._normalizeQueuedItemsWithRepository(repo);
+        });
         console.log("[encoder] Startup recovery completed.");
 
         const nextQueued = await this.repository.getNextQueued();
@@ -485,7 +559,7 @@ module.exports = class EncodingService {
                 await this._waitForCooldownToFinish();
             }
 
-            const item = await this.repository.getNextQueued();
+            const item = await this._claimNextQueuedItem();
             if (!item) {
                 console.log("[encoder] Worker idle. No queued items remain.");
                 return;
@@ -510,7 +584,7 @@ module.exports = class EncodingService {
         const workingOutputAbsPath = path.join(workingDirAbs, outputFilename);
         const encodedDirAbs = getEncodedItemRoot(paths, item);
         const encodedOutputAbsPath = path.join(encodedDirAbs, outputFilename);
-        const encodingStartedAt = new Date().toISOString();
+        const encodingStartedAt = item.encodingStartedAt || new Date().toISOString();
         const nextAttemptCount = Number(item.attemptCount || 0) + 1;
         console.log(`[encoder] Worker picked up item. id=${item.id} profile=${profileId} attempt=${nextAttemptCount}`);
 
@@ -526,6 +600,7 @@ module.exports = class EncodingService {
             encodedOutputAbsPath,
             status: "encoding",
             encodingStartedAt,
+            queuePosition: null,
             pausedAt: null,
             completedAt: null,
             attemptCount: nextAttemptCount,
@@ -586,6 +661,7 @@ module.exports = class EncodingService {
                 outputFilename,
                 encodedOutputAbsPath: null,
                 status: stopped ? "cancelled" : "failed",
+                queuePosition: null,
                 pausedAt: null,
                 completedAt: null,
                 attemptCount: nextAttemptCount,
@@ -708,6 +784,59 @@ module.exports = class EncodingService {
             throw error;
         }
         return item;
+    }
+
+    async _requireItemWithRepository(repository, id) {
+        const item = await repository.get(id);
+        if (!item) {
+            const error = new Error(`Encoding item not found: ${id}`);
+            error.statusCode = 404;
+            throw error;
+        }
+        return item;
+    }
+
+    async _normalizeQueuedItemsWithRepository(repository) {
+        const queuedItems = await repository.listQueuedOrdered({ forUpdate: true });
+        if (!queuedItems.length) {
+            return [];
+        }
+
+        const normalized = applyQueuePositionStrategy(queuedItems);
+        const needsRewrite = normalized.some((item, index) => {
+            const current = queuedItems[index];
+            return Number(current && current.queuePosition) !== Number(item.queuePosition);
+        });
+
+        if (needsRewrite) {
+            await repository.replaceQueuePositions(normalized);
+        }
+
+        return normalized;
+    }
+
+    async _claimNextQueuedItem() {
+        return this.repository.withTransaction(async repo => {
+            const queuedItems = await repo.listQueuedOrdered({ forUpdate: true });
+            if (!queuedItems.length) {
+                return null;
+            }
+
+            const normalized = applyQueuePositionStrategy(queuedItems);
+            await repo.replaceQueuePositions(normalized);
+
+            const [nextItem, ...remaining] = normalized;
+            await repo.upsert({
+                ...nextItem,
+                status: "encoding",
+                queuePosition: null,
+                encodingStartedAt: new Date().toISOString(),
+                pausedAt: null,
+                lastError: null
+            });
+            await repo.replaceQueuePositions(applyQueuePositionStrategy(remaining));
+            return this._requireItemWithRepository(repo, nextItem.id);
+        });
     }
 
     async _ingestDiscoveredItem({
@@ -1034,6 +1163,58 @@ function getDiscardBlockedMessage(status) {
     }
 
     return `Item with status "${status}" cannot be discarded.`;
+}
+
+function sortQueuedItems(items, activeItemId) {
+    return (Array.isArray(items) ? items : [])
+        .filter(item => QUEUE_RELATED_STATES.has(String(item && item.status || "").toLowerCase()))
+        .sort((left, right) => {
+            if (left && left.id === activeItemId && right && right.id !== activeItemId) {
+                return -1;
+            }
+
+            if (right && right.id === activeItemId && left && left.id !== activeItemId) {
+                return 1;
+            }
+
+            const leftPriority = getQueueRelatedPriority(left);
+            const rightPriority = getQueueRelatedPriority(right);
+            if (leftPriority !== rightPriority) {
+                return leftPriority - rightPriority;
+            }
+
+            const leftPosition = Number.isFinite(Number(left && left.queuePosition))
+                ? Number(left.queuePosition)
+                : Number.MAX_SAFE_INTEGER;
+            const rightPosition = Number.isFinite(Number(right && right.queuePosition))
+                ? Number(right.queuePosition)
+                : Number.MAX_SAFE_INTEGER;
+
+            if (leftPosition !== rightPosition) {
+                return leftPosition - rightPosition;
+            }
+
+            const leftTime = new Date(left && (left.queuedAt || left.requestedAt || left.createdAt) || 0).getTime();
+            const rightTime = new Date(right && (right.queuedAt || right.requestedAt || right.createdAt) || 0).getTime();
+            if (leftTime !== rightTime) {
+                return leftTime - rightTime;
+            }
+
+            const leftUpdated = new Date(left && left.updatedAt || 0).getTime();
+            const rightUpdated = new Date(right && right.updatedAt || 0).getTime();
+            return leftUpdated - rightUpdated;
+        });
+}
+
+function getQueueRelatedPriority(item) {
+    const status = String(item && item.status || "").toLowerCase();
+    return {
+        encoding: 0,
+        paused: 0,
+        queued: 1,
+        cancelled: 2,
+        failed: 3
+    }[status] ?? Number.MAX_SAFE_INTEGER;
 }
 
 function getUnqueueBlockedMessage(status) {

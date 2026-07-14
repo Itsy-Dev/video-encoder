@@ -1,6 +1,18 @@
 class EncodingRepository {
-    constructor(database) {
-        this.database = database;
+    constructor(executor) {
+        this.database = executor;
+    }
+
+    withExecutor(executor) {
+        return new EncodingRepository(executor);
+    }
+
+    withTransaction(callback) {
+        if (!this.database || typeof this.database.withTransaction !== "function") {
+            throw new Error("EncodingRepository.withTransaction requires a transactional database executor");
+        }
+
+        return this.database.withTransaction(executor => callback(this.withExecutor(executor), executor));
     }
 
     async getNextQueued() {
@@ -37,7 +49,11 @@ class EncodingRepository {
             LEFT JOIN encoding_item_metadata em
                 ON em.encoding_item_id = ei.id AND em.kind = 'encoded'
             WHERE ei.status = 'queued'
-            ORDER BY ei.queued_at ASC, ei.updated_at ASC
+            ORDER BY
+                CASE WHEN ei.queue_position IS NULL THEN 1 ELSE 0 END ASC,
+                ei.queue_position ASC,
+                ei.queued_at ASC,
+                ei.updated_at ASC
             LIMIT 1
         `);
 
@@ -148,6 +164,70 @@ class EncodingRepository {
         return Array.isArray(results) && results.length ? mapRowToItem(results[0]) : null;
     }
 
+    async listQueuedOrdered({ forUpdate = false } = {}) {
+        const lockSql = forUpdate ? "FOR UPDATE" : "";
+        const { results } = await this.database.query(`
+            SELECT
+                ei.*,
+                sm.abs_path AS source_abs_path,
+                sm.file_size_bytes AS source_file_size_bytes,
+                sm.duration_ms AS source_duration_ms,
+                sm.container AS source_container,
+                sm.video_codec AS source_video_codec,
+                sm.audio_codec AS source_audio_codec,
+                sm.width AS source_width,
+                sm.height AS source_height,
+                sm.frame_rate AS source_frame_rate,
+                sm.bit_rate AS source_bit_rate,
+                sm.probe_json AS source_probe_json,
+                sm.probed_at AS source_probed_at,
+                em.abs_path AS encoded_abs_path,
+                em.file_size_bytes AS encoded_file_size_bytes,
+                em.duration_ms AS encoded_duration_ms,
+                em.container AS encoded_container,
+                em.video_codec AS encoded_video_codec,
+                em.audio_codec AS encoded_audio_codec,
+                em.width AS encoded_width,
+                em.height AS encoded_height,
+                em.frame_rate AS encoded_frame_rate,
+                em.bit_rate AS encoded_bit_rate,
+                em.probe_json AS encoded_probe_json,
+                em.probed_at AS encoded_probed_at
+            FROM encoding_item ei
+            LEFT JOIN encoding_item_metadata sm
+                ON sm.encoding_item_id = ei.id AND sm.kind = 'source'
+            LEFT JOIN encoding_item_metadata em
+                ON em.encoding_item_id = ei.id AND em.kind = 'encoded'
+            WHERE ei.status = 'queued'
+            ORDER BY
+                CASE WHEN ei.queue_position IS NULL THEN 1 ELSE 0 END ASC,
+                ei.queue_position ASC,
+                ei.queued_at ASC,
+                ei.updated_at ASC
+            ${lockSql}
+        `);
+
+        return Array.isArray(results) ? results.map(mapRowToItem) : [];
+    }
+
+    async replaceQueuePositions(items) {
+        const ordered = Array.isArray(items) ? items : [];
+
+        for (const item of ordered) {
+            await this.database.query(`
+                UPDATE encoding_item
+                SET
+                    queue_position = ?,
+                    updated_at = updated_at
+                WHERE id = ?
+                LIMIT 1
+            `, [
+                numberOrNull(item && item.queuePosition),
+                item && item.id
+            ]);
+        }
+    }
+
     async upsert(item) {
         const next = {
             ...item,
@@ -171,6 +251,7 @@ class EncodingRepository {
                 attempt_count,
                 requested_at,
                 queued_at,
+                queue_position,
                 encoding_started_at,
                 paused_at,
                 completed_at,
@@ -178,7 +259,7 @@ class EncodingRepository {
                 rejected_at,
                 created_at,
                 updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 status = VALUES(status),
                 original_filename = VALUES(original_filename),
@@ -194,6 +275,7 @@ class EncodingRepository {
                 attempt_count = VALUES(attempt_count),
                 requested_at = VALUES(requested_at),
                 queued_at = VALUES(queued_at),
+                queue_position = VALUES(queue_position),
                 encoding_started_at = VALUES(encoding_started_at),
                 paused_at = VALUES(paused_at),
                 completed_at = VALUES(completed_at),
@@ -216,6 +298,7 @@ class EncodingRepository {
             Number(next.attemptCount || 0),
             toSqlDatetime(next.requestedAt),
             toSqlDatetime(next.queuedAt),
+            numberOrNull(next.queuePosition),
             toSqlDatetime(next.encodingStartedAt),
             toSqlDatetime(next.pausedAt),
             toSqlDatetime(next.completedAt),
@@ -302,6 +385,7 @@ function mapRowToItem(row) {
         attemptCount: Number(row.attempt_count || 0),
         requestedAt: toIsoOrNull(row.requested_at),
         queuedAt: toIsoOrNull(row.queued_at),
+        queuePosition: numberOrNull(row.queue_position),
         encodingStartedAt: toIsoOrNull(row.encoding_started_at),
         pausedAt: toIsoOrNull(row.paused_at),
         completedAt: toIsoOrNull(row.completed_at),

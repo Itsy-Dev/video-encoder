@@ -112,6 +112,26 @@ module.exports = function encodingApi(app, database) {
         res.json({ ok: true, item });
     });
 
+    app.post("/api/encoding/items/:id/queue/move-up", async function (req, res) {
+        const item = await encodingService.moveQueueItem(req.params.id, "up");
+        res.json({ ok: true, item });
+    });
+
+    app.post("/api/encoding/items/:id/queue/move-down", async function (req, res) {
+        const item = await encodingService.moveQueueItem(req.params.id, "down");
+        res.json({ ok: true, item });
+    });
+
+    app.post("/api/encoding/items/:id/queue/move-front", async function (req, res) {
+        const item = await encodingService.moveQueueItem(req.params.id, "front");
+        res.json({ ok: true, item });
+    });
+
+    app.post("/api/encoding/items/:id/queue/move-back", async function (req, res) {
+        const item = await encodingService.moveQueueItem(req.params.id, "back");
+        res.json({ ok: true, item });
+    });
+
     app.get("/api/encoding/items/:id/source", async function (req, res, next) {
         try {
             const item = await encodingService.getItem(req.params.id);
