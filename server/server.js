@@ -22,6 +22,7 @@ const app = express();
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "..", "public")));
+app.use("/shared/semantic", express.static(path.join(__dirname, "..", "..", "..", "node_modules", "fomantic-ui", "dist")));
 
 async function start() {
     initFileLogger(getEncoderPaths().logs);

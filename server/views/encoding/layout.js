@@ -24,100 +24,92 @@ module.exports = function renderPage({ title, heading, description, state, body,
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Encoder · ${escapeHtml(title)}</title>
+  <link rel="stylesheet" type="text/css" href="/shared/semantic/semantic.min.css" />
   <style>
     :root {
-      --bg: #f5f1e8;
-      --surface: #fffdf8;
-      --ink: #1f2a2e;
-      --muted: #6b7478;
-      --line: #d9cfbf;
-      --accent: #1d6b57;
-      --accent-soft: #d7ebe5;
-      --warn: #9c5b1a;
-      --good: #2f6a3a;
-      --bad: #8b3431;
+      --encoder-accent: #2f6f60;
+      --encoder-bg: #f4f2eb;
     }
-    * { box-sizing: border-box; }
     body {
-      margin: 0;
-      font-family: Georgia, "Times New Roman", serif;
-      color: var(--ink);
       background:
-        radial-gradient(circle at top left, rgba(29,107,87,.10), transparent 35%),
-        linear-gradient(180deg, #f8f4ec 0%, var(--bg) 100%);
+        radial-gradient(circle at top left, rgba(47,111,96,.10), transparent 30%),
+        linear-gradient(180deg, #faf7f0 0%, var(--encoder-bg) 100%);
+      color: #243238;
     }
-    a { color: var(--accent); text-decoration: none; }
-    .shell { max-width: 1200px; margin: 0 auto; padding: 24px; }
-    .hero, .panel, table {
-      background: rgba(255,253,248,.92);
-      border: 1px solid var(--line);
-      box-shadow: 0 10px 35px rgba(43, 54, 58, .08);
-      border-radius: 18px;
+    .encoder-shell {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 3rem;
     }
-    .hero { padding: 24px; margin-bottom: 20px; }
-    .eyebrow {
-      display: inline-block;
+    .encoder-hero.ui.segment {
+      border-radius: 1.5rem;
+      box-shadow: 0 18px 45px rgba(36, 50, 56, 0.10);
+      border: 1px solid rgba(47, 111, 96, 0.12);
+      background:
+        linear-gradient(135deg, rgba(47,111,96,.10), rgba(255,255,255,.95));
+    }
+    .encoder-eyebrow {
       text-transform: uppercase;
-      letter-spacing: .12em;
-      font-size: 12px;
-      color: var(--accent);
-      margin-bottom: 12px;
+      letter-spacing: .18em;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--encoder-accent);
+      margin-bottom: 0.75rem;
     }
-    h1 { margin: 0 0 8px; font-size: 40px; }
-    p { margin: 0; color: var(--muted); line-height: 1.5; }
-    .nav {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin: 16px 0 0;
+    .encoder-title {
+      margin: 0 0 0.5rem;
+      font-size: 2.6rem;
+      line-height: 1.1;
     }
-    .nav a {
-      padding: 10px 14px;
+    .encoder-description {
+      color: rgba(36, 50, 56, 0.72);
+      font-size: 1rem;
+    }
+    .encoder-nav.ui.menu {
+      margin-top: 1.5rem;
       border-radius: 999px;
-      border: 1px solid var(--line);
-      background: white;
+      border: 1px solid rgba(47,111,96,.12);
+      box-shadow: none;
+      overflow-x: auto;
     }
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 12px;
-      margin: 20px 0;
+    .encoder-nav.ui.menu .item {
+      color: #37534d;
     }
-    .card {
-      padding: 16px;
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: 16px;
+    .encoder-nav.ui.menu .item:hover {
+      color: var(--encoder-accent);
     }
-    .card .label {
-      font-size: 12px;
-      letter-spacing: .08em;
+    .encoder-cards {
+      margin: 1.5rem 0;
+    }
+    .encoder-stat.ui.segment {
+      border-radius: 1.2rem;
+      box-shadow: 0 10px 28px rgba(36, 50, 56, 0.08);
+      border: 1px solid rgba(47,111,96,.10);
+    }
+    .encoder-stat-label {
+      font-size: 0.78rem;
+      letter-spacing: .12em;
       text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 6px;
+      color: rgba(36, 50, 56, 0.6);
+      margin-bottom: 0.5rem;
     }
-    .card .value { font-size: 28px; }
-    .panel { padding: 18px; margin-bottom: 20px; }
+    .encoder-stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #243238;
+    }
+    .encoder-panel.ui.segment {
+      border-radius: 1.2rem;
+      box-shadow: 0 14px 36px rgba(36, 50, 56, 0.08);
+      border: 1px solid rgba(47,111,96,.10);
+    }
     .toolbar {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 1rem;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 16px;
     }
-    button, .button {
-      border: 0;
-      cursor: pointer;
-      background: var(--accent);
-      color: white;
-      padding: 10px 14px;
-      border-radius: 999px;
-      font: inherit;
-    }
-    .button-secondary { background: #6f7d7a; }
-    .button-bad { background: var(--bad); }
-    .button-warn { background: var(--warn); }
     .button-inline {
       display: inline-flex;
       align-items: center;
@@ -126,127 +118,71 @@ module.exports = function renderPage({ title, heading, description, state, body,
     }
     .form-stack {
       display: grid;
-      gap: 12px;
-    }
-    .form-inline {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      align-items: center;
-    }
-    label {
-      display: grid;
-      gap: 6px;
-      font-size: 14px;
-      color: var(--muted);
-    }
-    input, select, textarea {
-      width: 100%;
-      padding: 10px 12px;
-      border-radius: 12px;
-      border: 1px solid var(--line);
-      background: white;
-      color: var(--ink);
-      font: inherit;
-    }
-    textarea {
-      min-height: 90px;
-      resize: vertical;
+      gap: 0.9rem;
     }
     .actions {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
-    }
-    .hint {
-      font-size: 12px;
-      color: var(--muted);
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      overflow: hidden;
-    }
-    th, td {
-      text-align: left;
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--line);
-      vertical-align: top;
-    }
-    th {
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: .08em;
-      color: var(--muted);
-      background: rgba(215, 235, 229, .35);
-    }
-    tr:last-child td { border-bottom: 0; }
-    .pill {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: var(--accent-soft);
-      color: var(--accent);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: .08em;
+      gap: 0.65rem;
     }
     .split {
       display: grid;
       grid-template-columns: 1.2fr .8fr;
-      gap: 20px;
+      gap: 1.5rem;
     }
     .stack { display: grid; gap: 12px; }
-    .kv {
-      display: grid;
-      grid-template-columns: 160px 1fr;
-      gap: 8px;
-      padding: 8px 0;
-      border-bottom: 1px solid var(--line);
+    .ui.table {
+      border-radius: 1rem;
+      overflow: hidden;
     }
-    .kv:last-child { border-bottom: 0; }
-    .kv .k { color: var(--muted); }
-    .note {
-      padding: 14px;
-      border-radius: 14px;
-      background: #f0ece3;
-      color: var(--muted);
+    .ui.table thead th {
+      background: #eef4f2;
+      color: #49625d;
     }
-    .empty {
-      padding: 24px;
-      border: 1px dashed var(--line);
-      border-radius: 16px;
-      color: var(--muted);
-      background: rgba(255,255,255,.45);
+    .ui.label {
+      background: #e0ece9;
+      color: #2f6f60;
+    }
+    .ui.message.encoder-note {
+      border-radius: 1rem;
+      box-shadow: none;
+      border: 1px solid rgba(47,111,96,.10);
+    }
+    .ui.placeholder.segment {
+      border-radius: 1.1rem;
     }
     code {
-      background: rgba(215, 235, 229, .5);
-      padding: 2px 5px;
-      border-radius: 6px;
-      font-size: .95em;
+      background: rgba(224, 236, 233, 0.8);
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.35rem;
+    }
+    .ui.form input[disabled] {
+      opacity: 1;
     }
     @media (max-width: 900px) {
       .split { grid-template-columns: 1fr; }
-      h1 { font-size: 32px; }
-      .shell { padding: 16px; }
+      .encoder-title { font-size: 2rem; }
+      .encoder-shell { padding: 1rem 1rem 2rem; }
     }
   </style>
 </head>
 <body>
-  <div class="shell">
-    <section class="hero">
-      <div class="eyebrow">Standalone Encoder</div>
-      <h1>${escapeHtml(heading)}</h1>
-      <p>${escapeHtml(description)}</p>
-      <div class="nav">
-        ${nav.map(([label, href]) => `<a href="${href}">${escapeHtml(label)}</a>`).join("")}
+  <div class="encoder-shell">
+    <section class="ui segment encoder-hero">
+      <div class="encoder-eyebrow">Standalone Encoder</div>
+      <h1 class="encoder-title">${escapeHtml(heading)}</h1>
+      <p class="encoder-description">${escapeHtml(description)}</p>
+      <div class="ui secondary menu encoder-nav">
+        ${nav.map(([label, href]) => `<a class="item" href="${href}">${escapeHtml(label)}</a>`).join("")}
       </div>
     </section>
-    <section class="cards">
+    <section class="ui stackable five column grid encoder-cards">
       ${cards.map(([label, value]) => `
-        <div class="card">
-          <div class="label">${escapeHtml(label)}</div>
-          <div class="value">${escapeHtml(String(value))}</div>
+        <div class="column">
+          <div class="ui segment encoder-stat">
+            <div class="encoder-stat-label">${escapeHtml(label)}</div>
+            <div class="encoder-stat-value">${escapeHtml(String(value))}</div>
+          </div>
         </div>
       `).join("")}
     </section>

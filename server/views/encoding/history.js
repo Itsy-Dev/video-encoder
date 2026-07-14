@@ -1,7 +1,7 @@
 const { escapeHtml, pill, renderTable } = require("./helpers");
 
 module.exports = function renderHistory(items) {
-    return `<section class="panel">
+    return `<section class="ui segment encoder-panel">
       ${renderTable(items, [
           ["State", item => pill(item.status)],
           ["File", item => escapeHtml(item.originalFilename)],

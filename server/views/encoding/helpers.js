@@ -1,9 +1,14 @@
 function renderTable(items, columns, emptyMessage) {
     if (!items.length) {
-        return `<div class="empty">${escapeHtml(emptyMessage)}</div>`;
+        return `<div class="ui placeholder segment">
+          <div class="ui icon header">
+            <i class="inbox icon"></i>
+            ${escapeHtml(emptyMessage)}
+          </div>
+        </div>`;
     }
 
-    return `<table>
+    return `<table class="ui celled striped table">
       <thead>
         <tr>${columns.map(([label]) => `<th>${escapeHtml(label)}</th>`).join("")}</tr>
       </thead>
@@ -16,16 +21,20 @@ function renderTable(items, columns, emptyMessage) {
 }
 
 function renderKeyValue(entries) {
-    return entries.map(([key, value]) => `
-      <div class="kv">
-        <div class="k">${escapeHtml(key)}</div>
-        <div>${escapeHtml(String(value || "—"))}</div>
-      </div>
-    `).join("");
+    return `<div class="ui relaxed divided list">
+      ${entries.map(([key, value]) => `
+        <div class="item">
+          <div class="content">
+            <div class="header">${escapeHtml(key)}</div>
+            <div class="description"><code>${escapeHtml(String(value || "—"))}</code></div>
+          </div>
+        </div>
+      `).join("")}
+    </div>`;
 }
 
 function pill(value) {
-    return `<span class="pill">${escapeHtml(String(value || "unknown"))}</span>`;
+    return `<span class="ui tiny label">${escapeHtml(String(value || "unknown"))}</span>`;
 }
 
 function escapeHtml(value) {
@@ -44,15 +53,15 @@ function buildOutboxDisplayPath(item) {
 
 function renderQueueAction(item) {
     if (item.status === "queued") {
-        return `<div class="hint">Waiting for worker pickup</div>`;
+        return `<div class="ui tiny grey text">Waiting for worker pickup</div>`;
     }
 
     if (item.status === "encoding") {
-        return `<div class="hint">Active encode</div>`;
+        return `<div class="ui tiny green text">Active encode</div>`;
     }
 
     if (item.status === "paused") {
-        return `<div class="hint">Paused</div>`;
+        return `<div class="ui tiny orange text">Paused</div>`;
     }
 
     if (item.status === "review") {
@@ -66,11 +75,11 @@ function renderReviewActions(item) {
     return `<div class="form-stack">
       <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/approve" data-api-form>
         <input type="hidden" name="reviewer" value="operator" />
-        <button type="submit">Approve To Outbox</button>
+        <button type="submit" class="ui green button">Approve To Outbox</button>
       </form>
       <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/reject" data-api-form>
         <input type="hidden" name="reviewer" value="operator" />
-        <button type="submit" class="button-bad">Reject</button>
+        <button type="submit" class="ui red button">Reject</button>
       </form>
     </div>`;
 }

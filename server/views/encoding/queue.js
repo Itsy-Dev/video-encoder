@@ -4,24 +4,26 @@ module.exports = function renderQueue(state) {
     const items = state.items || [];
     const rows = items.filter(item => ["ready", "queued", "encoding", "paused", "completed", "review"].includes(item.status));
 
-    return `<section class="panel">
-      <div class="note" style="margin-bottom: 16px;">
-        <strong>Worker</strong><br />
+    return `<section class="ui segment encoder-panel">
+      <div class="ui message encoder-note" style="margin-bottom: 16px;">
+        <div class="header">Worker</div>
+        <p>
         Active Item: ${escapeHtml(statefulValue(state, "worker.activeItemId"))}<br />
         Started: ${escapeHtml(statefulValue(state, "worker.activeStartedAt"))}<br />
-        Progress: ${escapeHtml(formatProgress(state && state.worker ? state.worker.activeProgress : null))}<br />
+        Progress: ${escapeHtml(formatProgress(state && state.worker ? state.worker.activeProgress : null))}
+        </p>
         <div class="actions" style="margin-top: 12px;">
           <form method="post" action="/api/encoding/control/wake" data-api-form>
-            <button type="submit">Wake Queue</button>
+            <button type="submit" class="ui button">Wake Queue</button>
           </form>
           <form method="post" action="/api/encoding/control/pause" data-api-form>
-            <button type="submit" class="button-warn">Pause</button>
+            <button type="submit" class="ui orange button">Pause</button>
           </form>
           <form method="post" action="/api/encoding/control/resume" data-api-form>
-            <button type="submit" class="button-secondary">Resume</button>
+            <button type="submit" class="ui button">Resume</button>
           </form>
           <form method="post" action="/api/encoding/control/stop" data-api-form>
-            <button type="submit" class="button-bad">Stop</button>
+            <button type="submit" class="ui red button">Stop</button>
           </form>
         </div>
       </div>

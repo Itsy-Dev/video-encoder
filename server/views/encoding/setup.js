@@ -2,13 +2,13 @@ const { buildOutboxDisplayPath, escapeHtml, renderKeyValue } = require("./helper
 
 module.exports = function renderSetup(item, profiles) {
     if (!item) {
-        return `<section class="panel"><div class="empty">No discovered item is available for setup yet.</div></section>`;
+        return `<section class="ui segment encoder-panel"><div class="ui placeholder segment"><div class="ui header">No discovered item is available for setup yet.</div></div></section>`;
     }
 
     return `<section class="split">
-      <div class="panel stack">
+      <div class="ui segment encoder-panel stack">
         <div>
-          <strong>${escapeHtml(item.originalFilename)}</strong>
+          <h2 class="ui header">${escapeHtml(item.originalFilename)}</h2>
           <p>Choose the profile and confirm the preserved inbox subdirectory before the item enters the automated single-worker queue.</p>
         </div>
         ${renderKeyValue([
@@ -22,31 +22,31 @@ module.exports = function renderSetup(item, profiles) {
             ["Encoded Output Path", item.encodedOutputAbsPath || "not generated"],
             ["Output Folder", buildOutboxDisplayPath(item)]
         ])}
-        <form class="form-stack" method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/queue" data-api-form>
-          <label>
-            Profile
-            <select name="profileId">
+        <form class="ui form form-stack" method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/queue" data-api-form>
+          <div class="field">
+            <label>Profile</label>
+            <select class="ui dropdown" name="profileId">
               ${profiles.map(profile => `<option value="${escapeHtml(profile.id)}"${profile.id === (item.profileId || item.requestedProfileId || "browser_compatibility") ? " selected" : ""}>${escapeHtml(profile.label)} (${escapeHtml(profile.id)})</option>`).join("")}
             </select>
-          </label>
-          <label>
-            Inbox Relative Dir
+          </div>
+          <div class="field">
+            <label>Inbox Relative Dir</label>
             <input value="${escapeHtml(item.inboxRelativeDir || "")}" disabled />
-          </label>
+          </div>
           <input type="hidden" name="inboxRelativeDir" value="${escapeHtml(item.inboxRelativeDir || "")}" />
           <div class="actions">
-            <button type="submit">Queue Item</button>
-            <a class="button button-secondary button-inline" href="/encoding/pending">Back to Pending</a>
+            <button type="submit" class="ui primary button">Queue Item</button>
+            <a class="ui button button-inline" href="/encoding/pending">Back to Pending</a>
           </div>
         </form>
-        <div class="note">Scan ingests the video from inbox into internal pending storage first, preserving its optional subdirectory for outbox routing. Once queued, the worker picks it up automatically when it reaches the front.</div>
+        <div class="ui message encoder-note">Scan ingests the video from inbox into internal pending storage first, preserving its optional subdirectory for outbox routing. Once queued, the worker picks it up automatically when it reaches the front.</div>
       </div>
-      <div class="panel stack">
-        <strong>Available Profiles</strong>
+      <div class="ui segment encoder-panel stack">
+        <h3 class="ui header">Available Profiles</h3>
         ${profiles.map(profile => `
-          <div class="note">
-            <strong>${escapeHtml(profile.id)}</strong><br />
-            ${escapeHtml(profile.label)}<br />
+          <div class="ui message encoder-note">
+            <div class="header">${escapeHtml(profile.id)}</div>
+            <p>${escapeHtml(profile.label)}</p>
             <small>${escapeHtml(profile.description)}</small>
           </div>
         `).join("")}
