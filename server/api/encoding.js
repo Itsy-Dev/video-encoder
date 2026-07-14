@@ -128,6 +128,23 @@ module.exports = function encodingApi(app, database) {
         }
     });
 
+    app.get("/api/encoding/items/:id/encoded", async function (req, res, next) {
+        try {
+            const item = await encodingService.getItem(req.params.id);
+            const encodedAbsPath = item && item.encodedOutputAbsPath ? item.encodedOutputAbsPath : null;
+
+            if (!encodedAbsPath || !fs.existsSync(encodedAbsPath)) {
+                res.status(404).send("Encoded video not found.");
+                return;
+            }
+
+            res.sendFile(encodedAbsPath);
+        }
+        catch (error) {
+            next(error);
+        }
+    });
+
     app.get("/encoding/pending", async function (_req, res) {
         const state = await encodingService.getDashboardState();
         const { renderPage, renderPending } = loadEncodingViews();
@@ -197,6 +214,23 @@ module.exports = function encodingApi(app, database) {
         }));
     });
 
+    app.get("/encoding/review/item", async function (req, res) {
+        const state = await encodingService.getDashboardState();
+        const selectedId = String(req.query.id || "");
+        const selected = state.reviewItems.find(item => item.id === selectedId) || state.reviewItems[0] || null;
+        const { renderPage, renderReviewItem } = loadEncodingViews();
+
+        res.send(renderPage({
+            title: "Review Item",
+            heading: "Review Completed Encodes",
+            description: "Review the encoded output, compare it against the source, then commit or reject.",
+            state,
+            body: renderReviewItem(selected, {
+                encodedPreviewUrl: selected ? `/api/encoding/items/${encodeURIComponent(selected.id)}/encoded` : null
+            })
+        }));
+    });
+
     app.get("/encoding/history", async function (_req, res) {
         const state = await encodingService.getDashboardState();
         const { renderPage, renderHistory } = loadEncodingViews();
@@ -235,6 +269,7 @@ function loadEncodingViews() {
         renderSetup: require("../views/encoding/setup"),
         renderQueue: require("../views/encoding/queue"),
         renderReview: require("../views/encoding/review"),
+        renderReviewItem: require("../views/encoding/review-item"),
         renderHistory: require("../views/encoding/history"),
         renderSettings: require("../views/encoding/settings")
     };

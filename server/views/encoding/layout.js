@@ -56,6 +56,25 @@ module.exports = function renderPage({ title, heading, description, state, body,
       column-gap: 1.25rem;
       row-gap: 0.9rem;
     }
+
+
+
+   .video-box {
+      overflow: hidden;
+      padding-top: 56.25%; /* 16:9*/
+      position: relative;
+   }
+
+   .video-box iframe, .video-box video, .video-box .video-fill {
+      border: 0;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      padding-bottom: 8px;
+   }
+
   </style>
 </head>
 <body>
