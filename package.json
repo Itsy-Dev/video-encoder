@@ -5,6 +5,10 @@
   "main": "server/server.js",
   "scripts": {
     "start": "node server/server.js",
-    "migrate": "node server/scripts/migrate.js"
+    "migrate": "node server/scripts/migrate.js",
+    "desktop": "electron desktop/main.js"
+  },
+  "devDependencies": {
+    "electron": "31.7.7"
   }
 }
