@@ -208,6 +208,13 @@ function formatBitrate(bps) {
     return `${Math.round(value / 1000).toLocaleString()} kbps`;
 }
 
+function formatDateTime(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleString();
+}
+
 function buildColumnClassName(options = {}) {
     const classes = [];
 
@@ -228,6 +235,7 @@ module.exports = {
     escapeHtml,
     formatBitrate,
     formatBytes,
+    formatDateTime,
     formatDuration,
     formatProgress,
     getDiscardBlockedReason,
