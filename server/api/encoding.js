@@ -102,7 +102,7 @@ module.exports = function encodingApi(app, database) {
         const state = await encodingService.getDashboardState();
         res.send(renderPage({
             title: "Pending",
-            heading: "Actionable Items",
+            heading: "Pending Items",
             description: "Discovered, stopped, failed, and rejected items awaiting profile selection and queue decisions.",
             state,
             body: renderPending(state.actionableItems)

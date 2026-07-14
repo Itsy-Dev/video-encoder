@@ -10,15 +10,16 @@ module.exports = function renderPage({ title, heading, description, state, body,
         ["Settings", "/encoding/settings"]
     ];
 
-    const cards = [
+  const cards = [
         ["Pending", state.counts.pending],
-        ["Queued", state.counts.queued],
         ["Encoding", state.counts.encoding],
+        ["Queued", state.counts.queued],
         ["Review", state.counts.review],
         ["Approved", state.counts.approved]
     ];
 
-    return `<!doctype html>
+    return `
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -28,166 +29,47 @@ module.exports = function renderPage({ title, heading, description, state, body,
   <style>
     :root {
       --encoder-accent: #2f6f60;
-      --encoder-bg: #f4f2eb;
+      --encoder-bg: #112924;
     }
     body {
       background:
-        radial-gradient(circle at top left, rgba(47,111,96,.10), transparent 30%),
-        linear-gradient(180deg, #faf7f0 0%, var(--encoder-bg) 100%);
+        linear-gradient(180deg, var(--encoder-accent) 0%, var(--encoder-bg) 65%);
       color: #243238;
-    }
-    .encoder-shell {
-      max-width: 1220px;
-      margin: 0 auto;
-      padding: 2rem 1.5rem 3rem;
-    }
-    .encoder-hero.ui.segment {
-      border-radius: 1.5rem;
-      box-shadow: 0 18px 45px rgba(36, 50, 56, 0.10);
-      border: 1px solid rgba(47, 111, 96, 0.12);
-      background:
-        linear-gradient(135deg, rgba(47,111,96,.10), rgba(255,255,255,.95));
-    }
-    .encoder-eyebrow {
-      text-transform: uppercase;
-      letter-spacing: .18em;
-      font-size: 0.78rem;
-      font-weight: 700;
-      color: var(--encoder-accent);
-      margin-bottom: 0.75rem;
-    }
-    .encoder-title {
-      margin: 0 0 0.5rem;
-      font-size: 2.6rem;
-      line-height: 1.1;
-    }
-    .encoder-description {
-      color: rgba(36, 50, 56, 0.72);
-      font-size: 1rem;
-    }
-    .encoder-nav.ui.menu {
-      margin-top: 1.5rem;
-      border-radius: 999px;
-      border: 1px solid rgba(47,111,96,.12);
-      box-shadow: none;
-      overflow-x: auto;
-    }
-    .encoder-nav.ui.menu .item {
-      color: #37534d;
-    }
-    .encoder-nav.ui.menu .item:hover {
-      color: var(--encoder-accent);
-    }
-    .encoder-cards {
-      margin: 1.5rem 0;
-    }
-    .encoder-stat.ui.segment {
-      border-radius: 1.2rem;
-      box-shadow: 0 10px 28px rgba(36, 50, 56, 0.08);
-      border: 1px solid rgba(47,111,96,.10);
-    }
-    .encoder-stat-label {
-      font-size: 0.78rem;
-      letter-spacing: .12em;
-      text-transform: uppercase;
-      color: rgba(36, 50, 56, 0.6);
-      margin-bottom: 0.5rem;
-    }
-    .encoder-stat-value {
-      font-size: 2rem;
-      font-weight: 700;
-      color: #243238;
-    }
-    .encoder-panel.ui.segment {
-      border-radius: 1.2rem;
-      box-shadow: 0 14px 36px rgba(36, 50, 56, 0.08);
-      border: 1px solid rgba(47,111,96,.10);
-    }
-    .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .button-inline {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      text-decoration: none;
-    }
-    .form-stack {
-      display: grid;
-      gap: 0.9rem;
-    }
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.65rem;
-    }
-    .split {
-      display: grid;
-      grid-template-columns: 1.2fr .8fr;
-      gap: 1.5rem;
-    }
-    .stack { display: grid; gap: 12px; }
-    .ui.table {
-      border-radius: 1rem;
-      overflow: hidden;
-    }
-    .ui.table thead th {
-      background: #eef4f2;
-      color: #49625d;
-    }
-    .ui.label {
-      background: #e0ece9;
-      color: #2f6f60;
-    }
-    .ui.message.encoder-note {
-      border-radius: 1rem;
-      box-shadow: none;
-      border: 1px solid rgba(47,111,96,.10);
-    }
-    .ui.placeholder.segment {
-      border-radius: 1.1rem;
-    }
-    code {
-      background: rgba(224, 236, 233, 0.8);
-      padding: 0.15rem 0.45rem;
-      border-radius: 0.35rem;
-    }
-    .ui.form input[disabled] {
-      opacity: 1;
-    }
-    @media (max-width: 900px) {
-      .split { grid-template-columns: 1fr; }
-      .encoder-title { font-size: 2rem; }
-      .encoder-shell { padding: 1rem 1rem 2rem; }
     }
   </style>
 </head>
 <body>
-  <div class="encoder-shell">
-    <section class="ui segment encoder-hero">
-      <div class="encoder-eyebrow">Standalone Encoder</div>
-      <h1 class="encoder-title">${escapeHtml(heading)}</h1>
-      <p class="encoder-description">${escapeHtml(description)}</p>
-      <div class="ui secondary menu encoder-nav">
+  <div class="ui inverted segments container">
+    <section class="ui segment">
+      <h1 class="ui header">
+        <i class="file video icon"></i>
+        <div class="content">${escapeHtml(heading)}
+          <p class="sub header">${escapeHtml(description)}</p>
+        </div>
+      </h1>
+      <div class="ui inverted secondary menu">
         ${nav.map(([label, href]) => `<a class="item" href="${href}">${escapeHtml(label)}</a>`).join("")}
       </div>
     </section>
-    <section class="ui stackable five column grid encoder-cards">
-      ${cards.map(([label, value]) => `
-        <div class="column">
-          <div class="ui segment encoder-stat">
-            <div class="encoder-stat-label">${escapeHtml(label)}</div>
-            <div class="encoder-stat-value">${escapeHtml(String(value))}</div>
+    <section class="ui segment">
+      <div class="ui stackable five column grid">
+        ${cards.map(([label, value]) => `
+          <div class="column">
+            <div class="ui inverted grey raised card">
+              <div class="content">
+                <h2 class="header">
+                    <div class="meta">${escapeHtml(label)}</div>
+                    <div class="">${escapeHtml(String(value))}</div>
+                </h2>
+              </div>
+            </div>
           </div>
-        </div>
-      `).join("")}
+        `).join("")}
+      </div>
     </section>
     ${body}
   </div>
+
   <script>
     const AUTO_REFRESH_MS = ${Number(autoRefreshMs || 0)};
     if (AUTO_REFRESH_MS > 0) {

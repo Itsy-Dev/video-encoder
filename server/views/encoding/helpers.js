@@ -8,13 +8,19 @@ function renderTable(items, columns, emptyMessage) {
         </div>`;
     }
 
-    return `<table class="ui celled striped table">
+    return `<table class="ui celled striped inverted small compact table">
       <thead>
-        <tr>${columns.map(([label]) => `<th>${escapeHtml(label)}</th>`).join("")}</tr>
+        <tr>${columns.map(column => {
+            const [label, , options = {}] = column;
+            return `<th class="${escapeHtml(buildColumnClassName(options))}">${escapeHtml(label)}</th>`;
+        }).join("")}</tr>
       </thead>
       <tbody>
         ${items.map(item => `
-          <tr>${columns.map(([, render]) => `<td>${render(item)}</td>`).join("")}</tr>
+          <tr>${columns.map(column => {
+            const [, render, options = {}] = column;
+            return `<td class="${escapeHtml(buildColumnClassName(options))}">${render(item)}</td>`;
+          }).join("")}</tr>
         `).join("")}
       </tbody>
     </table>`;
@@ -105,9 +111,45 @@ function formatProgress(progress) {
     return parts.length ? parts.join(", ") : "—";
 }
 
+function formatBytes(bytes) {
+    const value = Number(bytes);
+    if (!Number.isFinite(value) || value < 0) {
+        return "—";
+    }
+
+    if (value < 1024) return `${value} B`;
+
+    const units = ["KB", "MB", "GB", "TB"];
+    let size = value / 1024;
+    let unitIndex = 0;
+
+    while (size >= 1024 && unitIndex < units.length - 1) {
+        size /= 1024;
+        unitIndex += 1;
+    }
+
+    const rounded = size >= 100 ? Math.round(size) : size >= 10 ? size.toFixed(1) : size.toFixed(2);
+    return `${rounded} ${units[unitIndex]}`;
+}
+
+function buildColumnClassName(options = {}) {
+    const classes = [];
+
+    if (options.width) {
+        classes.push(options.width, "wide");
+    }
+
+    if (options.align) {
+        classes.push(options.align, "aligned");
+    }
+
+    return classes.join(" ").trim();
+}
+
 module.exports = {
     buildOutboxDisplayPath,
     escapeHtml,
+    formatBytes,
     formatProgress,
     pill,
     renderKeyValue,
