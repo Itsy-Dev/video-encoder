@@ -25,6 +25,8 @@ module.exports = function renderPage({ title, heading, description, state, body,
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Encoder · ${escapeHtml(title)}</title>
+  <link rel="icon" type="image/png" href="/assets/icon.png" />
+  <link rel="apple-touch-icon" href="/assets/icon.png" />
   <link rel="stylesheet" type="text/css" href="/shared/semantic/semantic.min.css" />
   <style>
     :root {
