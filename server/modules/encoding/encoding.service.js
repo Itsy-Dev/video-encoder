@@ -58,6 +58,8 @@ module.exports = class EncodingService {
             restUntil: null,
             restReason: null,
             resting: false,
+            pausedStartedAt: null,
+            totalPausedMs: 0,
             lastItemFinishedAt: null,
             config: ENCODING_JOB_SAFETY
         };
@@ -334,6 +336,9 @@ module.exports = class EncodingService {
             isActive: Boolean(this.activeHandle),
             safety: {
                 ...this.safety,
+                currentPauseMs: this.safety.pausedStartedAt
+                    ? Math.max(0, now - new Date(this.safety.pausedStartedAt).getTime())
+                    : 0,
                 cooldownRemainingMs: this.safety.cooldownUntil
                     ? Math.max(0, new Date(this.safety.cooldownUntil).getTime() - now)
                     : 0,
@@ -358,6 +363,7 @@ module.exports = class EncodingService {
             pausedAt: new Date().toISOString()
         });
 
+        this.safety.pausedStartedAt = new Date().toISOString();
         this.safety.resting = reason !== "manual";
         this.safety.restReason = reason;
         console.log(`[encoder] Active item paused. id=${item.id} reason=${reason}`);
@@ -378,6 +384,7 @@ module.exports = class EncodingService {
             pausedAt: null
         });
 
+        this._commitPausedDuration();
         this.activeRunStartedAt = new Date().toISOString();
         this.safety.resting = false;
         this.safety.restUntil = null;
@@ -529,6 +536,8 @@ module.exports = class EncodingService {
         this.activeStartedAt = encodingStartedAt;
         this.activeRunStartedAt = encodingStartedAt;
         this.activeProgress = null;
+        this.safety.pausedStartedAt = null;
+        this.safety.totalPausedMs = 0;
         this.activeHandle = this.ffmpegService.startEncodeFile({
             inputAbsPath: encodingItem.inputAbsPath,
             outputAbsPath: workingOutputAbsPath,
@@ -590,6 +599,9 @@ module.exports = class EncodingService {
             this.activeProgress = null;
             this.activeStartedAt = null;
             this.activeRunStartedAt = null;
+            this._commitPausedDuration();
+            this.safety.pausedStartedAt = null;
+            this.safety.totalPausedMs = 0;
             this.safety.resting = false;
             this.safety.restUntil = null;
             this.safety.restReason = null;
@@ -673,6 +685,19 @@ module.exports = class EncodingService {
         this.safety.restUntil = null;
         this.safety.restReason = null;
         return hadRest;
+    }
+
+    _commitPausedDuration() {
+        if (!this.safety.pausedStartedAt) {
+            return;
+        }
+
+        const pausedMs = Date.now() - new Date(this.safety.pausedStartedAt).getTime();
+        if (Number.isFinite(pausedMs) && pausedMs > 0) {
+            this.safety.totalPausedMs += pausedMs;
+        }
+
+        this.safety.pausedStartedAt = null;
     }
 
     async _requireItem(id) {

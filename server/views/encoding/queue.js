@@ -33,6 +33,7 @@ function renderActiveQueuePanel(state, activeItem, showForceWakeButton) {
     const activePath = activeItem && activeItem.inputAbsPath
         ? escapeHtml(activeItem.inputAbsPath)
         : "Idle";
+    const pausedTimeMs = calculatePausedTimeMs(activeItem, worker);
 
     return `<div class="ui inverted charcoal segment">
       <div class="ui stackable grid">
@@ -60,7 +61,7 @@ function renderActiveQueuePanel(state, activeItem, showForceWakeButton) {
 
       <div class="ui eight column inverted stackable compact grid" style="margin-top: 4px;">
         ${renderMetric("Active Time", formatElapsed(worker.activeStartedAt || (activeItem && activeItem.encodingStartedAt)))}
-        ${renderMetric("Paused Time", formatElapsed(activeItem && activeItem.pausedAt))}
+        ${renderMetric("Paused Time", formatRemaining(pausedTimeMs))}
         ${renderMetric("Remaining", formatRemaining(calculateRemainingProcessingMs(activeItem, progress)))}
         ${renderMetric("Speed", progress.speed || "—")}
         ${renderMetric("FPS", progress.fps == null ? "—" : progress.fps)}
@@ -316,6 +317,23 @@ function calculateRemainingProcessingMs(activeItem, progress) {
     }
 
     return Math.round(remainingMediaMs / speed);
+}
+
+function calculatePausedTimeMs(activeItem, worker) {
+    const safety = worker && worker.safety ? worker.safety : {};
+    const totalPausedMs = Number(safety.totalPausedMs || 0);
+    const currentPauseMs = Number(safety.currentPauseMs || 0);
+
+    if (totalPausedMs || currentPauseMs) {
+        return totalPausedMs + currentPauseMs;
+    }
+
+    if (activeItem && activeItem.pausedAt) {
+        const ms = Date.now() - new Date(activeItem.pausedAt).getTime();
+        return Number.isFinite(ms) && ms > 0 ? ms : 0;
+    }
+
+    return 0;
 }
 
 function formatEstimatedSize(progressPercent, totalSizeBytes) {
