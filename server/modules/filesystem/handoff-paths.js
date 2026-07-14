@@ -1,14 +1,18 @@
 const path = require("path");
 
+const ENCODER_SERVICE_ROOT = path.resolve(__dirname, "..", "..", "..");
+
 function getEncoderHandoffRoot() {
-    return path.resolve(
-        process.env.ENCODER_HANDOFF_ROOT || path.join(__dirname, "..", "..", "..", "handoff")
+    return resolveEncoderPath(
+        process.env.ENCODER_HANDOFF_ROOT,
+        path.join(ENCODER_SERVICE_ROOT, "handoff")
     );
 }
 
 function getEncoderInternalRoot() {
-    return path.resolve(
-        process.env.ENCODER_INTERNAL_ROOT || path.join(__dirname, "..", "..", "..", ".internal")
+    return resolveEncoderPath(
+        process.env.ENCODER_INTERNAL_ROOT,
+        path.join(ENCODER_SERVICE_ROOT, ".internal")
     );
 }
 
@@ -25,6 +29,19 @@ function getEncoderPaths() {
         encoded: path.join(internalRoot, "encoded"),
         logs: path.join(internalRoot, "logs")
     };
+}
+
+function resolveEncoderPath(targetPath, fallbackAbsPath) {
+    const value = String(targetPath || "").trim();
+    if (!value) {
+        return fallbackAbsPath;
+    }
+
+    if (path.isAbsolute(value)) {
+        return path.resolve(value);
+    }
+
+    return path.resolve(ENCODER_SERVICE_ROOT, value);
 }
 
 module.exports = {
