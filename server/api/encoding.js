@@ -104,6 +104,13 @@ module.exports = function encodingApi(app, database) {
         res.json({ ok: true, item });
     });
 
+    app.post("/api/encoding/items/:id/unqueue", async function (req, res) {
+        const item = await encodingService.unqueueItem(req.params.id, {
+            reviewer: req.body.reviewer || "operator"
+        });
+        res.json({ ok: true, item });
+    });
+
     app.get("/api/encoding/items/:id/source", async function (req, res, next) {
         try {
             const item = await encodingService.getItem(req.params.id);

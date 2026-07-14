@@ -14,6 +14,7 @@ const ACTIONABLE_STATES = new Set(["pending", "rejected", "failed", "cancelled"]
 const REVIEW_STATES = new Set(["review"]);
 const HISTORY_STATES = new Set(["approved", "rejected", "failed", "exported", "cancelled", "discarded"]);
 const DISCARDABLE_STATES = new Set(["pending", "queued", "rejected", "failed", "cancelled"]);
+const UNQUEUEABLE_STATES = new Set(["queued", "failed", "cancelled", "rejected"]);
 const VIDEO_EXTENSIONS = new Set([
     ".avi",
     ".flv",
@@ -282,6 +283,36 @@ module.exports = class EncodingService {
         return discarded;
     }
 
+    async unqueueItem(id, { reviewer } = {}) {
+        await this.ready;
+        const item = await this._requireItem(id);
+
+        if (!UNQUEUEABLE_STATES.has(item.status)) {
+            const error = new Error(getUnqueueBlockedMessage(item.status));
+            error.statusCode = 409;
+            throw error;
+        }
+
+        await this._cleanupEncodedFiles(item);
+
+        const pending = await this.repository.upsert({
+            ...item,
+            status: "pending",
+            queuedAt: null,
+            encodingStartedAt: null,
+            pausedAt: null,
+            completedAt: null,
+            approvedAt: null,
+            rejectedAt: null,
+            encodedOutputAbsPath: null,
+            outboxOutputAbsPath: null,
+            lastError: `Removed from queue by ${reviewer || "operator"}`
+        });
+
+        console.log(`[encoder] Item removed from queue. id=${pending.id}`);
+        return pending;
+    }
+
     getWorkerStatus() {
         const now = Date.now();
         return {
@@ -375,7 +406,9 @@ module.exports = class EncodingService {
 
     async wakeQueue() {
         await this.ready;
-        console.log("[encoder] Manual queue wake requested.");
+        const forcedCooldown = this._clearCooldownState();
+        const forcedRest = this._clearRestState();
+        console.log(`[encoder] Manual queue wake requested. forcedCooldown=${forcedCooldown} forcedRest=${forcedRest}`);
         this._ensureWorkerRunning();
         return this.getWorkerStatus();
     }
@@ -431,13 +464,7 @@ module.exports = class EncodingService {
     async _workLoop() {
         while (true) {
             if (this.safety.cooldownUntil) {
-                const remainingMs = new Date(this.safety.cooldownUntil).getTime() - Date.now();
-                if (remainingMs > 0) {
-                    await sleep(remainingMs);
-                }
-                this.safety.coolingDown = false;
-                this.safety.cooldownUntil = null;
-                this.safety.cooldownReason = null;
+                await this._waitForCooldownToFinish();
             }
 
             const item = await this.repository.getNextQueued();
@@ -581,7 +608,7 @@ module.exports = class EncodingService {
             this.safety.restReason = "rest-cycle";
             this.safety.restUntil = new Date(Date.now() + ENCODING_JOB_SAFETY.PROCESS_REST_MS).toISOString();
 
-            await sleep(ENCODING_JOB_SAFETY.PROCESS_REST_MS);
+            await this._waitForRestToFinish();
 
             if (this.activeHandle !== handle || handle.child.exitCode != null || handle.stopRequested) {
                 return;
@@ -596,11 +623,45 @@ module.exports = class EncodingService {
         this.safety.cooldownReason = reason;
         this.safety.cooldownUntil = new Date(Date.now() + ENCODING_JOB_SAFETY.POST_ITEM_COOLDOWN_MS).toISOString();
         console.log(`[encoder] Worker cooldown started. reason=${reason} ms=${ENCODING_JOB_SAFETY.POST_ITEM_COOLDOWN_MS}`);
-        await sleep(ENCODING_JOB_SAFETY.POST_ITEM_COOLDOWN_MS);
+        await this._waitForCooldownToFinish();
+        console.log("[encoder] Worker cooldown finished.");
+    }
+
+    async _waitForCooldownToFinish() {
+        await this._waitForSafetyWindow("cooldownUntil");
+        this._clearCooldownState();
+    }
+
+    async _waitForRestToFinish() {
+        await this._waitForSafetyWindow("restUntil");
+        this._clearRestState();
+    }
+
+    async _waitForSafetyWindow(key) {
+        while (this.safety[key]) {
+            const remainingMs = new Date(this.safety[key]).getTime() - Date.now();
+            if (remainingMs <= 0) {
+                return;
+            }
+
+            await sleep(Math.min(remainingMs, 1000));
+        }
+    }
+
+    _clearCooldownState() {
+        const hadCooldown = Boolean(this.safety.cooldownUntil || this.safety.coolingDown || this.safety.cooldownReason);
         this.safety.coolingDown = false;
         this.safety.cooldownUntil = null;
         this.safety.cooldownReason = null;
-        console.log("[encoder] Worker cooldown finished.");
+        return hadCooldown;
+    }
+
+    _clearRestState() {
+        const hadRest = Boolean(this.safety.restUntil || this.safety.resting || this.safety.restReason);
+        this.safety.resting = false;
+        this.safety.restUntil = null;
+        this.safety.restReason = null;
+        return hadRest;
     }
 
     async _requireItem(id) {
@@ -902,6 +963,22 @@ function getDiscardBlockedMessage(status) {
     }
 
     return `Item with status "${status}" cannot be discarded.`;
+}
+
+function getUnqueueBlockedMessage(status) {
+    if (status === "encoding" || status === "paused") {
+        return "Active items must be stopped before they can be removed from the queue.";
+    }
+
+    if (status === "review") {
+        return "Items in review cannot be removed from the queue.";
+    }
+
+    if (status === "approved" || status === "exported" || status === "discarded") {
+        return "Completed items cannot be removed from the queue.";
+    }
+
+    return `Item with status "${status}" cannot be removed from the queue.`;
 }
 
 async function pruneEmptyDirectories(rootAbsPath) {
