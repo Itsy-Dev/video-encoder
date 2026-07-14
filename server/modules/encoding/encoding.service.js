@@ -616,7 +616,8 @@ module.exports = class EncodingService {
         this.activeHandle = this.ffmpegService.startEncodeFile({
             inputAbsPath: encodingItem.inputAbsPath,
             outputAbsPath: workingOutputAbsPath,
-            profileId
+            profileId,
+            sourceMetadata: encodingItem.sourceMetadata || null
         });
 
         this.activeHandle.on("progress", progress => {

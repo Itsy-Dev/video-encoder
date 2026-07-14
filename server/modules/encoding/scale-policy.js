@@ -1,3 +1,7 @@
+const EncodingOptions = require("./encoding-options");
+
+const { CustomFamilyFallback, ResolutionTier, ScaleMode, TierFallback } = EncodingOptions;
+
 function getChromaDimensionRequirements(pixelFormatId) {
     const pixelFormat = String(pixelFormatId || "").toLowerCase();
 
@@ -10,6 +14,92 @@ function getChromaDimensionRequirements(pixelFormatId) {
     }
 
     return { widthStep: 1, heightStep: 1 };
+}
+
+function detectAspectFamily(sourceMetadata = {}) {
+    const ratio = getDisplayAspectRatioValue(sourceMetadata);
+    const families = EncodingOptions.getAspectFamilies().filter(family => family.id !== EncodingOptions.AspectFamily.CUSTOM.id);
+
+    for (const family of families) {
+        if (!family.ratio || !family.tolerance) {
+            continue;
+        }
+
+        const relativeDelta = Math.abs(ratio - family.ratio) / family.ratio;
+        if (relativeDelta <= family.tolerance) {
+            return family;
+        }
+    }
+
+    return EncodingOptions.AspectFamily.CUSTOM;
+}
+
+function resolveScalePlan(profile, sourceMetadata = {}) {
+    const sourceWidth = toPositiveInt(sourceMetadata.width);
+    const sourceHeight = toPositiveInt(sourceMetadata.height);
+    const pixelFormatId = profile && profile.pixelFormat ? profile.pixelFormat.id : null;
+    const family = detectAspectFamily(sourceMetadata);
+    const requestedTier = profile && profile.targetTier ? profile.targetTier : ResolutionTier.ORIGINAL;
+    const requestedStandard = requestedTier.id === ResolutionTier.ORIGINAL.id
+        ? null
+        : EncodingOptions.getStandardForFamilyTier(family.id, requestedTier.id);
+    const fallbackStandard = requestedStandard
+        ? requestedStandard
+        : resolveFallbackStandard(family.id, requestedTier, profile && profile.tierFallback);
+    const customMaxBox = requestedTier && requestedTier.maxBox ? requestedTier.maxBox : null;
+
+    let selectedStandard = requestedStandard || fallbackStandard || null;
+    let targetWidth = selectedStandard ? selectedStandard.width : null;
+    let targetHeight = selectedStandard ? selectedStandard.height : null;
+    let decision = "Preserve source size";
+
+    if (profile && profile.scaleMode && profile.scaleMode.id === ScaleMode.MATCH_SOURCE_FAMILY.id) {
+        if (selectedStandard) {
+            decision = selectedStandard === requestedStandard
+                ? `Match ${family.label} to ${selectedStandard.label}`
+                : `Fallback to ${selectedStandard.label}`;
+        }
+        else if (
+            family.id === EncodingOptions.AspectFamily.CUSTOM.id
+            && profile.customFamilyFallback
+            && profile.customFamilyFallback.id === CustomFamilyFallback.SAFE_FIT.id
+            && customMaxBox
+        ) {
+            targetWidth = customMaxBox.width;
+            targetHeight = customMaxBox.height;
+            decision = `Safe fit custom aspect ratio within ${requestedTier.label}`;
+        }
+        else {
+            decision = requestedTier.id === ResolutionTier.ORIGINAL.id
+                ? "Preserve source size"
+                : `Preserve source size because ${requestedTier.label} is unavailable for ${family.label}`;
+        }
+    }
+
+    const estimatedDimensions = estimateFittedDimensions(
+        sourceWidth,
+        sourceHeight,
+        targetWidth,
+        targetHeight,
+        pixelFormatId
+    );
+
+    return {
+        family,
+        requestedTier,
+        requestedStandard,
+        selectedStandard,
+        decision,
+        targetWidth,
+        targetHeight,
+        estimatedDimensions,
+        customFallbackUsed: Boolean(
+            family.id === EncodingOptions.AspectFamily.CUSTOM.id
+            && !selectedStandard
+            && targetWidth
+            && targetHeight
+        )
+    };
 }
 
 function estimateFittedDimensions(sourceWidth, sourceHeight, targetWidth, targetHeight, pixelFormatId) {
@@ -61,26 +151,98 @@ function buildSafeScaleFilter({ targetWidth, targetHeight, scalingAlgorithm, pix
 }
 
 function describeScalePolicy(profile) {
-    const hasTargetBox = Boolean(
-        profile &&
-        profile.resolution &&
-        toPositiveInt(profile.resolution.width) &&
-        toPositiveInt(profile.resolution.height)
-    );
-    const { widthStep, heightStep } = getChromaDimensionRequirements(
-        profile && profile.pixelFormat && profile.pixelFormat.id
-    );
-    const dimensionPolicy = widthStep > 1 || heightStep > 1
-        ? `normalize to ${widthStep}x${heightStep} chroma-safe dimensions`
-        : "keep original dimensions";
+    const scaleMode = profile && profile.scaleMode ? profile.scaleMode.label : "—";
+    const targetTier = profile && profile.targetTier ? profile.targetTier.label : "—";
+    const tierFallback = profile && profile.tierFallback ? profile.tierFallback.label : "—";
+    const customFallback = profile && profile.customFamilyFallback ? profile.customFamilyFallback.label : "—";
 
     return [
-        hasTargetBox ? "fit within target bounds" : "keep original size",
-        "preserve aspect ratio",
+        scaleMode,
+        `target ${targetTier}`,
+        `missing-tier fallback ${tierFallback}`,
+        `custom fallback ${customFallback}`,
         "never upscale",
-        dimensionPolicy,
-        "set square pixels"
+        "square pixels"
     ].join(", ");
+}
+
+function resolveFallbackStandard(familyId, requestedTier, fallbackMode) {
+    const standards = EncodingOptions.getStandardsForFamily(familyId);
+    if (!standards.length || !requestedTier || !fallbackMode) {
+        return null;
+    }
+
+    if (fallbackMode.id === TierFallback.PRESERVE_SOURCE.id) {
+        return null;
+    }
+
+    if (fallbackMode.id === TierFallback.LOWEST_AVAILABLE.id) {
+        return standards.slice().sort(compareStandardTierAscending)[0] || null;
+    }
+
+    if (fallbackMode.id === TierFallback.NEXT_LOWER.id) {
+        const requestedOrder = requestedTier.order;
+        return standards
+            .slice()
+            .sort(compareStandardTierDescending)
+            .find(standard => {
+                const standardTier = EncodingOptions.getResolutionTierById(standard.tierId);
+                return standardTier && standardTier.order < requestedOrder;
+            }) || null;
+    }
+
+    return null;
+}
+
+function compareStandardTierAscending(left, right) {
+    const leftTier = EncodingOptions.getResolutionTierById(left && left.tierId);
+    const rightTier = EncodingOptions.getResolutionTierById(right && right.tierId);
+    return Number(leftTier && leftTier.order || 0) - Number(rightTier && rightTier.order || 0);
+}
+
+function compareStandardTierDescending(left, right) {
+    return compareStandardTierAscending(right, left);
+}
+
+function getDisplayAspectRatioValue(sourceMetadata = {}) {
+    const probeJson = sourceMetadata && sourceMetadata.probeJson ? sourceMetadata.probeJson : null;
+    const streams = Array.isArray(probeJson && probeJson.streams) ? probeJson.streams : [];
+    const videoStream = streams.find(stream => stream.codec_type === "video") || null;
+    const displayAspectRatio = parseAspectRatioValue(videoStream && videoStream.display_aspect_ratio);
+    if (displayAspectRatio) {
+        return displayAspectRatio;
+    }
+
+    const width = toPositiveInt(sourceMetadata.width);
+    const height = toPositiveInt(sourceMetadata.height);
+    if (!width || !height) {
+        return 1;
+    }
+
+    return width / height;
+}
+
+function parseAspectRatioValue(value) {
+    if (!value) {
+        return null;
+    }
+
+    const text = String(value).trim();
+    if (!text || text === "0:1") {
+        return null;
+    }
+
+    if (!text.includes(":")) {
+        const numeric = Number(text);
+        return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+    }
+
+    const [left, right] = text.split(":").map(Number);
+    if (!Number.isFinite(left) || !Number.isFinite(right) || right <= 0) {
+        return null;
+    }
+
+    return left / right;
 }
 
 function toPositiveInt(value) {
@@ -105,6 +267,8 @@ function normalizeDimension(value, step) {
 module.exports = {
     buildSafeScaleFilter,
     describeScalePolicy,
+    detectAspectFamily,
     estimateFittedDimensions,
-    getChromaDimensionRequirements
+    getChromaDimensionRequirements,
+    resolveScalePlan
 };

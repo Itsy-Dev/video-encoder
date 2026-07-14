@@ -8,7 +8,7 @@ const {
 } = require("./helpers");
 const {
     describeScalePolicy,
-    estimateFittedDimensions
+    resolveScalePlan
 } = require("../../modules/encoding/scale-policy");
 
 module.exports = function renderSetup(item, profiles, { selectedProfileId, sourcePreviewUrl } = {}) {
@@ -21,7 +21,8 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
         || profiles.find(profile => profile.id === item.profileId)
         || profiles[0]
         || null;
-    const estimate = buildEstimate(source, selectedProfile);
+    const scalePlan = resolveScalePlan(selectedProfile, source);
+    const estimate = buildEstimate(source, selectedProfile, scalePlan);
     const responseAt = item.queuedAt || item.updatedAt || item.createdAt || null;
     const isQueued = String(item.status || "").toLowerCase() === "queued";
     const confirmLabel = isQueued ? "Update" : "Confirm";
@@ -52,6 +53,7 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
               ${renderMetric("Size", formatBytes(source.fileSizeBytes))}
               ${renderMetric("Resolution", formatResolution(source.width, source.height))}
               ${renderMetric("Aspect Ratio", formatAspectRatio(source))}
+              ${renderMetric("Aspect Family", scalePlan.family ? scalePlan.family.label : "—")}
               ${renderMetric("FPS", formatFps(source.frameRate))}
               ${renderMetric("Bit Rate", formatBitrate(source.bitRate))}
             </div>
@@ -85,9 +87,9 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
           <input type="hidden" name="inboxRelativeDir" value="${escapeHtml(item.inboxRelativeDir || "")}" />
           <div class="four fields">
             ${renderDisabledField("CRF", selectedProfile && selectedProfile.crf != null ? selectedProfile.crf : "—")}
-            ${renderDisabledField("Resolution", selectedProfile && selectedProfile.resolution ? selectedProfile.resolution.label : "—")}
+            ${renderDisabledField("Target Tier", selectedProfile && selectedProfile.targetTier ? selectedProfile.targetTier.label : "—")}
+            ${renderDisabledField("Scale Mode", selectedProfile && selectedProfile.scaleMode ? selectedProfile.scaleMode.label : "—")}
             ${renderDisabledField("Preset", selectedProfile && selectedProfile.preset ? selectedProfile.preset.label : "—")}
-            ${renderDisabledField("Scaling Algorithm", selectedProfile && selectedProfile.scaling ? selectedProfile.scaling.label : "—")}
           </div>
           <div class="four fields">
             ${renderDisabledField("Container", selectedProfile && selectedProfile.container ? selectedProfile.container.label : "—")}
@@ -102,10 +104,16 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
             ${renderDisabledField("Sample Rate", selectedProfile && selectedProfile.sampleRate ? selectedProfile.sampleRate.label : "48 kHz")}
           </div>
           <div class="four fields">
+            ${renderDisabledField("Scaling Algorithm", selectedProfile && selectedProfile.scaling ? selectedProfile.scaling.label : "—")}
+            ${renderDisabledField("Tier Fallback", selectedProfile && selectedProfile.tierFallback ? selectedProfile.tierFallback.label : "—")}
+            ${renderDisabledField("Custom Fallback", selectedProfile && selectedProfile.customFamilyFallback ? selectedProfile.customFamilyFallback.label : "—")}
             ${renderDisabledField("Level", selectedProfile && selectedProfile.level ? selectedProfile.level.label : "Auto")}
+          </div>
+          <div class="four fields">
             ${renderDisabledField("Fast Start", selectedProfile && selectedProfile.fastStart ? selectedProfile.fastStart.label : "Auto")}
             ${renderDisabledField("Subtitles", selectedProfile && selectedProfile.subtitleMode ? selectedProfile.subtitleMode.label : "—")}
             ${renderDisabledField("Scale Policy", describeScalePolicy(selectedProfile))}
+            ${renderDisabledField("Decision", buildScaleDecision(scalePlan))}
           </div>
         </form>
       </div>
@@ -118,6 +126,7 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
           ${renderOutcomeMetric("Size", formatBytes(source.fileSizeBytes), formatBytes(estimate.sizeBytes), estimate.sizeDeltaBytes <= 0 ? "green" : "yellow", formatSizeChange(estimate.sizeDeltaBytes, source.fileSizeBytes))}
           ${renderOutcomeMetric("Resolution", formatResolution(source.width, source.height), formatResolution(estimate.width, estimate.height))}
           ${renderOutcomeMetric("Aspect Ratio", formatAspectRatio(source), formatAspectRatio(estimate.width, estimate.height))}
+          ${renderOutcomeMetric("Target Standard", scalePlan.family ? scalePlan.family.label : "—", estimate.targetStandardLabel)}
           ${renderOutcomeMetric("FPS", formatFps(source.frameRate), formatFps(estimate.fps))}
           ${renderOutcomeMetric("Bitrate", formatBitrate(source.bitRate), formatBitrate(estimate.videoBitrateBps), null, formatBitrateChange(estimate.videoBitrateBps, source.bitRate))}
           ${renderOutcomeMetric("Container", source.container || "—", estimate.container)}
@@ -197,8 +206,8 @@ function renderOutcomeMetric(label, before, after, color = null, change = null) 
     </div>`;
 }
 
-function buildEstimate(source, profile) {
-    const dimensions = estimatedDimensions(source, profile);
+function buildEstimate(source, profile, scalePlan) {
+    const dimensions = estimatedDimensions(source, profile, scalePlan);
     const videoBitrateBps = estimatedBitrate(source, profile, dimensions);
     const durationSec = Math.max(0, Number(source && source.durationMs || 0) / 1000);
     const sizeBytes = videoBitrateBps > 0 && durationSec > 0
@@ -212,20 +221,17 @@ function buildEstimate(source, profile) {
         container: profile && profile.container ? profile.container.label : "—",
         videoCodec: profile && profile.videoCodec ? profile.videoCodec.label : "—",
         pixelFormat: profile && profile.pixelFormat ? profile.pixelFormat.label : "—",
+        targetStandardLabel: getScaleTargetLabel(scalePlan),
         videoBitrateBps,
         sizeBytes,
         sizeDeltaBytes: sizeBytes - Number(source && source.fileSizeBytes || 0)
     };
 }
 
-function estimatedDimensions(source, profile) {
-    return estimateFittedDimensions(
-        source && source.width,
-        source && source.height,
-        profile && profile.resolution ? profile.resolution.width : null,
-        profile && profile.resolution ? profile.resolution.height : null,
-        profile && profile.pixelFormat ? profile.pixelFormat.id : null
-    );
+function estimatedDimensions(_source, _profile, scalePlan) {
+    return scalePlan && scalePlan.estimatedDimensions
+        ? scalePlan.estimatedDimensions
+        : { width: null, height: null };
 }
 
 function estimatedBitrate(source, profile, dimensions) {
@@ -264,6 +270,30 @@ function getPixelFormat(source) {
     const streams = Array.isArray(probeJson && probeJson.streams) ? probeJson.streams : [];
     const videoStream = streams.find(stream => stream.codec_type === "video") || null;
     return videoStream && videoStream.pix_fmt ? String(videoStream.pix_fmt) : "—";
+}
+
+function getScaleTargetLabel(scalePlan) {
+    if (!scalePlan) {
+        return "—";
+    }
+
+    if (scalePlan.selectedStandard) {
+        return `${scalePlan.selectedStandard.label} (${scalePlan.selectedStandard.width} x ${scalePlan.selectedStandard.height})`;
+    }
+
+    if (scalePlan.customFallbackUsed && scalePlan.targetWidth && scalePlan.targetHeight) {
+        return `Safe Fit (${scalePlan.targetWidth} x ${scalePlan.targetHeight})`;
+    }
+
+    return "Preserve Source";
+}
+
+function buildScaleDecision(scalePlan) {
+    if (!scalePlan) {
+        return "—";
+    }
+
+    return scalePlan.decision || "—";
 }
 
 function formatSizeChange(deltaBytes, sourceBytes) {

@@ -4,7 +4,7 @@ const path = require("path");
 const EventEmitter = require("events");
 const { spawn, spawnSync } = require("child_process");
 const encodingProfiles = require("./encoding-profiles");
-const { buildSafeScaleFilter } = require("./scale-policy");
+const { buildSafeScaleFilter, resolveScalePlan } = require("./scale-policy");
 
 const FFMPEG_BIN = process.env.ENCODER_FFMPEG_BIN || "ffmpeg";
 const ENCODER_FFMPEG_SAFETY = Object.freeze({
@@ -21,25 +21,25 @@ const ENCODER_FFMPEG_SAFETY = Object.freeze({
 })();
 
 module.exports = class FfmpegService {
-    startEncodeFile({ inputAbsPath, outputAbsPath, profileId }) {
+    startEncodeFile({ inputAbsPath, outputAbsPath, profileId, sourceMetadata = null }) {
         if (!inputAbsPath) throw new Error("FfmpegService.startEncodeFile: inputAbsPath is required");
         if (!outputAbsPath) throw new Error("FfmpegService.startEncodeFile: outputAbsPath is required");
 
         return createEncodingHandle({
             command: FFMPEG_BIN,
-            args: this._buildArgs(inputAbsPath, outputAbsPath, profileId),
+            args: this._buildArgs(inputAbsPath, outputAbsPath, profileId, sourceMetadata),
             outputAbsPath,
             profileId: profileId || "browser_compatibility",
             processPriority: ENCODER_FFMPEG_SAFETY.PROCESS_PRIORITY
         });
     }
 
-    async encodeFile({ inputAbsPath, outputAbsPath, profileId }) {
-        const handle = this.startEncodeFile({ inputAbsPath, outputAbsPath, profileId });
+    async encodeFile({ inputAbsPath, outputAbsPath, profileId, sourceMetadata = null }) {
+        const handle = this.startEncodeFile({ inputAbsPath, outputAbsPath, profileId, sourceMetadata });
         return handle.done;
     }
 
-    _buildArgs(inputAbsPath, _outputAbsPath, profileId) {
+    _buildArgs(inputAbsPath, _outputAbsPath, profileId, sourceMetadata = null) {
         const profile = encodingProfiles.getProfileById(profileId) || encodingProfiles.getProfileById("browser_compatibility");
         if (!profile) {
             throw new Error(`Encoding profile not found: ${profileId}`);
@@ -53,7 +53,7 @@ module.exports = class FfmpegService {
             "-filter_threads", String(ENCODER_FFMPEG_SAFETY.FILTER_THREADS),
             "-filter_complex_threads", String(ENCODER_FFMPEG_SAFETY.FILTER_THREADS),
             "-i", inputAbsPath
-        ].concat(buildProfileArgs(profile));
+        ].concat(buildProfileArgs(profile, sourceMetadata));
     }
 };
 
@@ -142,15 +142,16 @@ class EncodingProcessHandle extends EventEmitter {
     }
 }
 
-function buildProfileArgs(profile) {
+function buildProfileArgs(profile, sourceMetadata) {
     const args = [];
 
     const videoCodec = profile.videoCodec && profile.videoCodec.ffmpeg ? profile.videoCodec.ffmpeg : null;
     const audioCodec = profile.audioCodec && profile.audioCodec.ffmpeg ? profile.audioCodec.ffmpeg : null;
+    const scalePlan = resolveScalePlan(profile, sourceMetadata || {});
     const videoFilter = videoCodec && videoCodec !== "copy"
         ? buildSafeScaleFilter({
-            targetWidth: profile && profile.resolution ? profile.resolution.width : null,
-            targetHeight: profile && profile.resolution ? profile.resolution.height : null,
+            targetWidth: scalePlan.targetWidth,
+            targetHeight: scalePlan.targetHeight,
             scalingAlgorithm: profile.scaling && profile.scaling.id ? profile.scaling.id : null,
             pixelFormatId: profile.pixelFormat && profile.pixelFormat.id ? profile.pixelFormat.id : null
         })
