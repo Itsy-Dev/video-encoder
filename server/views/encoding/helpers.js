@@ -217,6 +217,27 @@ function formatDateTime(value) {
     return date.toLocaleString();
 }
 
+function formatAspectRatio(widthOrMetadata, height) {
+    const metadata = widthOrMetadata && typeof widthOrMetadata === "object" && height == null
+        ? widthOrMetadata
+        : null;
+    const displayAspectRatio = getDisplayAspectRatio(metadata);
+    if (displayAspectRatio) {
+        return displayAspectRatio;
+    }
+
+    const safeWidth = Number(metadata ? metadata.width : widthOrMetadata || 0);
+    const safeHeight = Number(metadata ? metadata.height : height || 0);
+    if (!Number.isFinite(safeWidth) || !Number.isFinite(safeHeight) || safeWidth <= 0 || safeHeight <= 0) {
+        return "—";
+    }
+
+    const wholeWidth = Math.round(safeWidth);
+    const wholeHeight = Math.round(safeHeight);
+    const divisor = gcd(wholeWidth, wholeHeight);
+    return `${wholeWidth / divisor}:${wholeHeight / divisor}`;
+}
+
 function buildColumnClassName(options = {}) {
     const classes = [];
 
@@ -252,10 +273,32 @@ function statusPillColor(value) {
     }[status] || "grey";
 }
 
+function gcd(left, right) {
+    let a = Math.abs(Math.round(left));
+    let b = Math.abs(Math.round(right));
+
+    while (b !== 0) {
+        const next = a % b;
+        a = b;
+        b = next;
+    }
+
+    return a || 1;
+}
+
+function getDisplayAspectRatio(metadata) {
+    const probeJson = metadata && metadata.probeJson ? metadata.probeJson : null;
+    const streams = Array.isArray(probeJson && probeJson.streams) ? probeJson.streams : [];
+    const videoStream = streams.find(stream => stream.codec_type === "video") || null;
+    const value = videoStream && videoStream.display_aspect_ratio ? String(videoStream.display_aspect_ratio).trim() : "";
+    return value && value !== "0:1" ? value : null;
+}
+
 module.exports = {
     buildOutboxDisplayPath,
     canDiscardItem,
     escapeHtml,
+    formatAspectRatio,
     formatBitrate,
     formatBytes,
     formatDateTime,

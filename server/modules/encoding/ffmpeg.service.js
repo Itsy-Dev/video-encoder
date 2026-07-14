@@ -4,6 +4,7 @@ const path = require("path");
 const EventEmitter = require("events");
 const { spawn, spawnSync } = require("child_process");
 const encodingProfiles = require("./encoding-profiles");
+const { buildSafeScaleFilter } = require("./scale-policy");
 
 const FFMPEG_BIN = process.env.ENCODER_FFMPEG_BIN || "ffmpeg";
 const ENCODER_FFMPEG_SAFETY = Object.freeze({
@@ -146,11 +147,14 @@ function buildProfileArgs(profile) {
 
     const videoCodec = profile.videoCodec && profile.videoCodec.ffmpeg ? profile.videoCodec.ffmpeg : null;
     const audioCodec = profile.audioCodec && profile.audioCodec.ffmpeg ? profile.audioCodec.ffmpeg : null;
-    const shouldScale = Boolean(
-        profile.resolution &&
-        profile.resolution.width &&
-        profile.resolution.height
-    );
+    const videoFilter = videoCodec && videoCodec !== "copy"
+        ? buildSafeScaleFilter({
+            targetWidth: profile && profile.resolution ? profile.resolution.width : null,
+            targetHeight: profile && profile.resolution ? profile.resolution.height : null,
+            scalingAlgorithm: profile.scaling && profile.scaling.id ? profile.scaling.id : null,
+            pixelFormatId: profile.pixelFormat && profile.pixelFormat.id ? profile.pixelFormat.id : null
+        })
+        : null;
 
     if (videoCodec) {
         args.push("-c:v", videoCodec);
@@ -184,14 +188,10 @@ function buildProfileArgs(profile) {
         args.push("-level:v", String(profile.level.id));
     }
 
-    if (shouldScale) {
+    if (videoFilter) {
         args.push(
             "-vf",
-            buildScaleFilter(
-                Number(profile.resolution.width),
-                Number(profile.resolution.height),
-                profile.scaling && profile.scaling.id ? profile.scaling.id : null
-            )
+            videoFilter
         );
     }
 
@@ -229,12 +229,6 @@ function buildProfileArgs(profile) {
 
     return args;
 }
-
-function buildScaleFilter(targetWidth, targetHeight, scalingAlgorithm) {
-    const scaler = scalingAlgorithm || "lanczos";
-    return `scale=w='min(${targetWidth},iw)':h='min(${targetHeight},ih)':force_original_aspect_ratio=decrease:flags=${scaler}`;
-}
-
 function createEncodingHandle({ command, args, outputAbsPath, profileId, processPriority = null }) {
     const tempOutputAbsPath = buildTempOutputAbsPath(outputAbsPath);
     fs.mkdirSync(path.dirname(outputAbsPath), { recursive: true });

@@ -1,10 +1,15 @@
 const {
+    formatAspectRatio,
     escapeHtml,
     formatBitrate,
     formatBytes,
     formatDuration,
     renderDiscardButton
 } = require("./helpers");
+const {
+    describeScalePolicy,
+    estimateFittedDimensions
+} = require("../../modules/encoding/scale-policy");
 
 module.exports = function renderSetup(item, profiles, { selectedProfileId, sourcePreviewUrl } = {}) {
     if (!item) {
@@ -46,6 +51,7 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
               ${renderMetric("Pixel Format", getPixelFormat(source))}
               ${renderMetric("Size", formatBytes(source.fileSizeBytes))}
               ${renderMetric("Resolution", formatResolution(source.width, source.height))}
+              ${renderMetric("Aspect Ratio", formatAspectRatio(source))}
               ${renderMetric("FPS", formatFps(source.frameRate))}
               ${renderMetric("Bit Rate", formatBitrate(source.bitRate))}
             </div>
@@ -95,6 +101,12 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
             ${renderDisabledField("Channels", selectedProfile && selectedProfile.audioChannels ? selectedProfile.audioChannels.label : "Stereo")}
             ${renderDisabledField("Sample Rate", selectedProfile && selectedProfile.sampleRate ? selectedProfile.sampleRate.label : "48 kHz")}
           </div>
+          <div class="four fields">
+            ${renderDisabledField("Level", selectedProfile && selectedProfile.level ? selectedProfile.level.label : "Auto")}
+            ${renderDisabledField("Fast Start", selectedProfile && selectedProfile.fastStart ? selectedProfile.fastStart.label : "Auto")}
+            ${renderDisabledField("Subtitles", selectedProfile && selectedProfile.subtitleMode ? selectedProfile.subtitleMode.label : "—")}
+            ${renderDisabledField("Scale Policy", describeScalePolicy(selectedProfile))}
+          </div>
         </form>
       </div>
 
@@ -105,6 +117,7 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
         <div class="ui seven column stackable inverted compact grid">
           ${renderOutcomeMetric("Size", formatBytes(source.fileSizeBytes), formatBytes(estimate.sizeBytes), estimate.sizeDeltaBytes <= 0 ? "green" : "yellow", formatSizeChange(estimate.sizeDeltaBytes, source.fileSizeBytes))}
           ${renderOutcomeMetric("Resolution", formatResolution(source.width, source.height), formatResolution(estimate.width, estimate.height))}
+          ${renderOutcomeMetric("Aspect Ratio", formatAspectRatio(source), formatAspectRatio(estimate.width, estimate.height))}
           ${renderOutcomeMetric("FPS", formatFps(source.frameRate), formatFps(estimate.fps))}
           ${renderOutcomeMetric("Bitrate", formatBitrate(source.bitRate), formatBitrate(estimate.videoBitrateBps), null, formatBitrateChange(estimate.videoBitrateBps, source.bitRate))}
           ${renderOutcomeMetric("Container", source.container || "—", estimate.container)}
@@ -206,21 +219,13 @@ function buildEstimate(source, profile) {
 }
 
 function estimatedDimensions(source, profile) {
-    const sourceWidth = Number(source && source.width || 0);
-    const sourceHeight = Number(source && source.height || 0);
-    const targetWidth = profile && profile.resolution ? profile.resolution.width : null;
-    const targetHeight = profile && profile.resolution ? profile.resolution.height : null;
-
-    if (!sourceWidth || !sourceHeight || !targetWidth || !targetHeight) {
-        return { width: sourceWidth || null, height: sourceHeight || null };
-    }
-
-    const ratio = Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight, 1);
-
-    return {
-        width: Math.round(sourceWidth * ratio / 2) * 2,
-        height: Math.round(sourceHeight * ratio / 2) * 2
-    };
+    return estimateFittedDimensions(
+        source && source.width,
+        source && source.height,
+        profile && profile.resolution ? profile.resolution.width : null,
+        profile && profile.resolution ? profile.resolution.height : null,
+        profile && profile.pixelFormat ? profile.pixelFormat.id : null
+    );
 }
 
 function estimatedBitrate(source, profile, dimensions) {

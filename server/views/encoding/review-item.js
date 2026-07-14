@@ -1,4 +1,5 @@
 const {
+    formatAspectRatio,
     escapeHtml,
     formatBitrate,
     formatBytes,
@@ -65,6 +66,7 @@ function renderData(item, source, encoded) {
           ${renderOutcomeMetric("Size", formatBytes(encoded.fileSizeBytes), formatBytes(source.fileSizeBytes), formatSizeDiff(encoded.fileSizeBytes, source.fileSizeBytes))}
           ${renderOutcomeMetric("Bit Rate", formatBitrate(encoded.bitRate), formatBitrate(source.bitRate), formatPercentDiff(encoded.bitRate, source.bitRate))}
           ${renderOutcomeMetric("Resolution", formatResolution(encoded.width, encoded.height), formatResolution(source.width, source.height), formatResolutionDiff(encoded, source))}
+          ${renderOutcomeMetric("Aspect Ratio", formatAspectRatio(encoded), formatAspectRatio(source))}
           ${renderOutcomeMetric("FPS", formatFps(encoded.frameRate), formatFps(source.frameRate), formatPercentDiff(encoded.frameRate, source.frameRate))}
           ${renderOutcomeMetric("Duration", formatDuration(encoded.durationMs), formatDuration(source.durationMs))}
           ${renderOutcomeMetric("Container", encoded.container || "—", source.container || "—")}
