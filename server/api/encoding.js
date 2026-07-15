@@ -1,6 +1,5 @@
 const path = require("path");
 const fs = require("fs");
-const os = require("os");
 const multer = require("multer");
 
 const EncodingService = require("../modules/encoding/encoding.service");
@@ -9,19 +8,33 @@ const { getEncoderPaths } = require("../modules/filesystem/handoff-paths");
 
 const VIEW_ROOT_ABS = path.resolve(__dirname, "..", "views", "encoding");
 const IS_DEV_VIEW_HOT_RELOAD = process.env.NODE_ENV !== "production";
-const upload = multer({
-    dest: path.join(os.tmpdir(), "encoder-pending-intake"),
-    limits: {
-        files: 25
-    }
-});
 const asyncRoute = handler => function wrappedRoute(req, res, next) {
     Promise.resolve(handler(req, res, next)).catch(next);
 };
 
-module.exports = function encodingApi(app, database) {
+module.exports = function encodingApi(app, database, fileIntake) {
     const encodingService = new EncodingService(database);
     const settingsService = new SettingsService(database);
+    const upload = multer({
+        dest: fileIntake.tempRootAbsPath,
+        limits: {
+            files: 25
+        }
+    });
+
+    fileIntake.registerProcessor("encoder_pending", async function processEncoderPendingIntake({ files, metadata, updateProgress }) {
+        const result = await encodingService.ingestUploadedFiles(files, {
+            inboxRelativeDir: metadata && metadata.inboxRelativeDir,
+            onProgress: updateProgress
+        });
+
+        return {
+            processedFiles: result.processed,
+            importedFiles: result.imported,
+            duplicateFiles: result.duplicates,
+            invalidFiles: result.invalid
+        };
+    });
 
     app.get("/", function (_req, res) {
         res.redirect("/encoding/pending");
@@ -67,17 +80,84 @@ module.exports = function encodingApi(app, database) {
         });
     }));
 
-    app.post("/encoding/pending/import", upload.array("files"), asyncRoute(async function (req, res) {
+    app.post("/api/encoding/pending/preflight", asyncRoute(async function (req, res) {
+        const body = req.body && typeof req.body === "object" ? req.body : {};
+        const filenames = Array.isArray(body.filenames) ? body.filenames : [];
+        const inboxRelativeDir = body.inboxRelativeDir || "";
+        const files = filenames.map(name => ({ name }));
+        const result = await encodingService.checkUploadedFileDuplicates(files, {
+            inboxRelativeDir
+        });
+
+        res.json({
+            ok: true,
+            result
+        });
+    }));
+
+    app.post("/api/encoding/pending/import", function attachPendingImportCleanup(req, _res, next) {
+        req.on("aborted", function onAborted() {
+            fileIntake.cleanupStagedFiles(req.files).catch(() => {});
+            fileIntake.cleanupStaleTempFiles().catch(() => {});
+        });
+        next();
+    }, upload.array("files"), asyncRoute(async function (req, res) {
         const files = Array.isArray(req.files) ? req.files : [];
         const inboxRelativeDir = req.body && typeof req.body === "object"
             ? req.body.inboxRelativeDir
             : "";
 
-        await encodingService.ingestUploadedFiles(files, {
-            inboxRelativeDir
-        });
+        if (!files.length) {
+            res.status(400).json({
+                ok: false,
+                error: "No files were uploaded."
+            });
+            return;
+        }
 
-        res.redirect("/encoding/pending");
+        if (req.aborted) {
+            await fileIntake.cleanupStagedFiles(files);
+            res.status(499).json({
+                ok: false,
+                error: "Upload was aborted."
+            });
+            return;
+        }
+
+        try {
+            const job = await fileIntake.enqueue({
+                kind: "encoder_pending",
+                files,
+                metadata: {
+                    inboxRelativeDir
+                }
+            });
+
+            res.status(202).json({
+                ok: true,
+                job
+            });
+        }
+        catch (error) {
+            await fileIntake.cleanupStagedFiles(files).catch(() => {});
+            throw error;
+        }
+    }));
+
+    app.get("/api/encoding/pending/import/:jobId", asyncRoute(async function (req, res) {
+        const job = fileIntake.getJob(req.params.jobId);
+        if (!job) {
+            res.status(404).json({
+                ok: false,
+                error: "Import job not found."
+            });
+            return;
+        }
+
+        res.json({
+            ok: true,
+            job
+        });
     }));
 
     app.post("/api/encoding/items/:id/queue", asyncRoute(async function (req, res) {

@@ -129,14 +129,16 @@ module.exports = class EncodingService {
         return this._scanInboxInternal();
     }
 
-    async ingestUploadedFiles(files, { inboxRelativeDir = "" } = {}) {
+    async ingestUploadedFiles(files, { inboxRelativeDir = "", onProgress = null } = {}) {
         await this.ready;
+        await this._refreshRuntimeSettings().catch(() => this.runtimeSettings);
         const paths = getEncoderPaths();
         await this._ensureManagedDirectories(paths);
 
         const uploads = Array.isArray(files) ? files.filter(Boolean) : [];
         const normalizedInboxRelativeDir = normalizeRelativeDir(inboxRelativeDir, "");
         const results = {
+            processed: 0,
             imported: 0,
             duplicates: 0,
             invalid: 0,
@@ -148,6 +150,8 @@ module.exports = class EncodingService {
                 const originalFilename = String(file.originalname || path.basename(file.path || "")).trim();
                 if (!originalFilename || !isSupportedVideoFile(originalFilename)) {
                     results.invalid += 1;
+                    results.processed += 1;
+                    emitUploadProgress(onProgress, uploads.length, results);
                     continue;
                 }
 
@@ -158,6 +162,8 @@ module.exports = class EncodingService {
                 const existing = await this.repository.get(itemId);
                 if (existing) {
                     results.duplicates += 1;
+                    results.processed += 1;
+                    emitUploadProgress(onProgress, uploads.length, results);
                     continue;
                 }
 
@@ -175,15 +181,55 @@ module.exports = class EncodingService {
                     results.imported += 1;
                     results.items.push(item);
                 }
+                results.processed += 1;
+                emitUploadProgress(onProgress, uploads.length, results);
             }
             catch (_error) {
                 results.invalid += 1;
+                results.processed += 1;
+                emitUploadProgress(onProgress, uploads.length, results);
             }
             finally {
                 if (file && file.path) {
                     await removeIfExists(file.path);
                 }
             }
+        }
+
+        return results;
+    }
+
+    async checkUploadedFileDuplicates(files, { inboxRelativeDir = "" } = {}) {
+        await this.ready;
+
+        const uploads = Array.isArray(files) ? files.filter(Boolean) : [];
+        const normalizedInboxRelativeDir = normalizeRelativeDir(inboxRelativeDir, "");
+        const results = {
+            total: uploads.length,
+            duplicates: [],
+            uploadable: [],
+            invalid: []
+        };
+
+        for (const file of uploads) {
+            const originalFilename = String(file && (file.name || file.originalname || path.basename(file.path || "")) || "").trim();
+            if (!originalFilename || !isSupportedVideoFile(originalFilename)) {
+                results.invalid.push(originalFilename || "(unknown)");
+                continue;
+            }
+
+            const inboxRelativePath = normalizedInboxRelativeDir
+                ? `${normalizedInboxRelativeDir}/${originalFilename}`
+                : originalFilename;
+            const itemId = buildItemId(inboxRelativePath);
+            const existing = await this.repository.get(itemId);
+
+            if (existing) {
+                results.duplicates.push(originalFilename);
+                continue;
+            }
+
+            results.uploadable.push(originalFilename);
         }
 
         return results;
@@ -1360,6 +1406,20 @@ function buildFfmpegRuntimeOptions(settings = DEFAULT_RUNTIME_SETTINGS) {
 
 function cloneSettings(settings) {
     return JSON.parse(JSON.stringify(settings || DEFAULT_RUNTIME_SETTINGS));
+}
+
+function emitUploadProgress(onProgress, totalFiles, results) {
+    if (typeof onProgress !== "function") {
+        return;
+    }
+
+    onProgress({
+        totalFiles: Math.max(0, Number(totalFiles) || 0),
+        processedFiles: Math.max(0, Number(results && results.processed) || 0),
+        importedFiles: Math.max(0, Number(results && results.imported) || 0),
+        duplicateFiles: Math.max(0, Number(results && results.duplicates) || 0),
+        invalidFiles: Math.max(0, Number(results && results.invalid) || 0)
+    });
 }
 
 function sleep(ms) {

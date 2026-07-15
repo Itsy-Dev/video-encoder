@@ -6,6 +6,7 @@ const { createDatabase } = require("./modules/database/mysql");
 const { runMigrations } = require("./modules/database/migrate");
 const { getEncoderPaths } = require("./modules/filesystem/handoff-paths");
 const { initFileLogger } = require("./modules/filesystem/logger");
+const FileIntakeService = require("./modules/file-intake/file-intake.service");
 
 require("dotenv").config({
     path: path.join(__dirname, "..", ".env")
@@ -23,6 +24,9 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
     const encoderPaths = getEncoderPaths();
     const desktopAssetsAbs = path.join(__dirname, "..", "desktop", "assets");
     const semanticRootAbs = path.join(path.dirname(require.resolve("fomantic-ui/package.json")), "dist");
+    const fileIntake = new FileIntakeService({
+        tempRootAbsPath: path.join(encoderPaths.internalRoot, "uploads")
+    });
 
     app.use(express.json({ limit: "2mb" }));
     app.use(express.urlencoded({ extended: true }));
@@ -38,9 +42,10 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
     await runMigrations(database);
 
     app.locals.database = database;
+    app.locals.fileIntake = fileIntake;
 
     require("./api/health")(app, database);
-    require("./api/encoding")(app, database);
+    require("./api/encoding")(app, database, fileIntake);
 
     const server = await new Promise((resolve, reject) => {
         const nextServer = app.listen(port, function onListen() {
