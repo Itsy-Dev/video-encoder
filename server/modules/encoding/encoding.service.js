@@ -880,7 +880,6 @@ module.exports = class EncodingService {
         const encodedItemRoot = getEncodedItemRoot(paths, item);
         const workingItemRoot = getWorkingItemRoot(paths, item.id);
 
-        await this._cleanupTemporaryArtifacts(paths);
         await removeIfExists(pendingItemRoot);
         await removeIfExists(encodedItemRoot);
         await removeIfExists(workingItemRoot);
@@ -890,7 +889,6 @@ module.exports = class EncodingService {
         const encodedItemRoot = getEncodedItemRoot(paths, item);
         const workingItemRoot = getWorkingItemRoot(paths, item.id);
 
-        await this._cleanupTemporaryArtifacts(paths);
         await removeIfExists(encodedItemRoot);
         await removeIfExists(workingItemRoot);
     }
