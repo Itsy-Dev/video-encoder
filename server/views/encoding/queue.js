@@ -50,10 +50,10 @@ function renderActiveQueuePanel(state, activeItem, showForceWakeButton) {
       </div>
 
       <div class="ui middle aligned grid">
-        <div class="two wide middle aligned column">
+        <div class="one wide middle aligned column">
           ${pill(statusDetail ? `${statusState} ${statusDetail}` : statusState)}
         </div>
-        <div class="fourteen wide middle aligned column">
+        <div class="fifteen wide middle aligned column">
           <div class="ui ${escapeHtml(progressColor(statusState))} inverted small progress" style="margin: 0;" data-percent="${escapeHtml(String(Math.round(progressPercent)))}">
             <div class="bar" style="width: ${escapeHtml(String(Math.max(0, Math.min(100, progressPercent))))}%;">
               <div class="progress">${escapeHtml(progressPercent ? `${Math.round(progressPercent)}%` : "")}</div>
