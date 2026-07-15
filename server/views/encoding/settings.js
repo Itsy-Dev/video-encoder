@@ -56,7 +56,7 @@ module.exports = function renderSettings(profiles, settings) {
 
           <div class="column">
             ${renderSettingsSection("Automation", "Control background polling and automatic recovery behavior.", [
-                renderNumberField("Inbox Scan Interval", "discovery.scanIntervalSeconds", current.discovery.scanIntervalSeconds, "seconds"),
+                renderNumberField("Inbox Scan Interval", "discovery.scanIntervalMinutes", current.discovery.scanIntervalMinutes, "minutes"),
                 renderToggleField("Requeue Interrupted Items", "recovery.requeueInterruptedItems", current.recovery.requeueInterruptedItems),
                 renderToggleField("Auto-Prune Empty Directories", "recovery.autoPruneEmptyDirectories", current.recovery.autoPruneEmptyDirectories)
             ])}
@@ -277,7 +277,7 @@ function normalizeSettings(settings, profiles) {
             defaultProfileId: String(source.performance && source.performance.defaultProfileId || defaultProfileId)
         },
         discovery: {
-            scanIntervalSeconds: safeNumber(source.discovery && source.discovery.scanIntervalSeconds, 30),
+            scanIntervalMinutes: safeNumber(source.discovery && source.discovery.scanIntervalMinutes, 1),
             watchFolders: Array.isArray(source.discovery && source.discovery.watchFolders)
                 ? source.discovery.watchFolders.map(folder => ({
                     path: String(folder && folder.path || ""),

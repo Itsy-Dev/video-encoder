@@ -53,7 +53,7 @@ const DEFAULT_RUNTIME_SETTINGS = Object.freeze({
         defaultProfileId: "browser_compatibility"
     },
     discovery: {
-        scanIntervalSeconds: Number(process.env.ENCODER_INBOX_SCAN_INTERVAL_MS || 30000) / 1000,
+        scanIntervalMinutes: Math.max(1, Math.round(Number(process.env.ENCODER_INBOX_SCAN_INTERVAL_MS || 30000) / 60000)),
         watchFolders: []
     },
     recovery: {
@@ -1070,7 +1070,7 @@ module.exports = class EncodingService {
     }
 
     _getScanIntervalMs(settings = this.runtimeSettings) {
-        return Math.max(0, Math.round(Number(settings && settings.discovery && settings.discovery.scanIntervalSeconds || 0) * 1000));
+        return Math.max(0, Math.round(Number(settings && settings.discovery && settings.discovery.scanIntervalMinutes || 0) * 60 * 1000));
     }
 
     _getDefaultProfileId(settings = this.runtimeSettings) {
