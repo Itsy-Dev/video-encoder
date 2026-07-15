@@ -85,9 +85,56 @@ module.exports = function renderSettings(profiles, settings) {
           const root = document.currentScript && document.currentScript.parentElement;
           if (!root) return;
 
+          const form = root.querySelector("form");
           const addButton = root.querySelector("[data-add-watch-folder]");
           const tableBody = root.querySelector("[data-watch-folder-body]");
           const template = root.querySelector("#watch-folder-row-template");
+          const initialValues = new Map();
+
+          function getTrackedInputs() {
+            if (!form) return [];
+            return Array.from(form.querySelectorAll("input[name], select[name], textarea[name]"));
+          }
+
+          function getInputValue(input) {
+            if (!(input instanceof HTMLElement)) return "";
+            if (input instanceof HTMLInputElement && input.type === "checkbox") {
+              return input.checked ? "true" : "false";
+            }
+            return input.value;
+          }
+
+          function fieldForInput(input) {
+            return input && input.closest ? input.closest("[data-settings-field]") : null;
+          }
+
+          function controlForInput(input) {
+            const field = fieldForInput(input);
+            return field ? field.querySelector("[data-settings-control]") : null;
+          }
+
+          function rememberInitialValue(input) {
+            if (!input || !input.name || initialValues.has(input)) return;
+            initialValues.set(input, getInputValue(input));
+          }
+
+          function syncDirtyState(input) {
+            if (!input || !input.name) return;
+            const control = controlForInput(input);
+            if (!control) return;
+
+            rememberInitialValue(input);
+            const initialValue = initialValues.get(input);
+            const currentValue = getInputValue(input);
+            control.classList.toggle("encoder-setting-dirty", currentValue !== initialValue);
+          }
+
+          function trackAllInputs() {
+            getTrackedInputs().forEach(function (input) {
+              rememberInitialValue(input);
+              syncDirtyState(input);
+            });
+          }
 
           function syncRowIndices() {
             if (!tableBody) return;
@@ -108,6 +155,11 @@ module.exports = function renderSettings(profiles, settings) {
               if (!row) return;
               tableBody.appendChild(row);
               syncRowIndices();
+              Array.from(row.querySelectorAll("input[name], select[name], textarea[name]")).forEach(function (input) {
+                rememberInitialValue(input);
+                initialValues.set(input, "");
+                syncDirtyState(input);
+              });
             });
 
             tableBody.addEventListener("click", function (event) {
@@ -120,6 +172,18 @@ module.exports = function renderSettings(profiles, settings) {
             });
 
             syncRowIndices();
+          }
+
+          if (form) {
+            form.addEventListener("input", function (event) {
+              syncDirtyState(event.target);
+            });
+
+            form.addEventListener("change", function (event) {
+              syncDirtyState(event.target);
+            });
+
+            trackAllInputs();
           }
         })();
       </script>
@@ -138,12 +202,12 @@ function renderSettingsSection(title, description, fields) {
 }
 
 function renderNumberField(label, name, value, unit) {
-    return `<div class="field">
+    return `<div class="field" data-settings-field>
       <div class="ui stackable middle aligned grid">
         <div class="${escapeHtml(SETTINGS_LAYOUT.labelColumnClass)} column">
           <div class="${escapeHtml(SETTINGS_LAYOUT.fieldHeaderClass)}" style="${escapeHtml(SETTINGS_LAYOUT.fieldHeaderStyle)}">${escapeHtml(label)}:</div>
         </div>
-        <div class="${escapeHtml(SETTINGS_LAYOUT.controlColumnClass)} column">
+        <div class="${escapeHtml(SETTINGS_LAYOUT.controlColumnClass)} column" data-settings-control>
           <div class="ui fluid small right labeled input">
             <input type="number" name="${escapeHtml(name)}" value="${escapeHtml(String(value))}" />
             <div class="ui basic label">${escapeHtml(unit)}</div>
@@ -154,12 +218,12 @@ function renderNumberField(label, name, value, unit) {
 }
 
 function renderToggleField(label, name, enabled) {
-    return `<div class="field">
+    return `<div class="field" data-settings-field>
       <div class="ui stackable middle aligned grid">
         <div class="${escapeHtml(SETTINGS_LAYOUT.labelColumnClass)} column">
           <div class="${escapeHtml(SETTINGS_LAYOUT.fieldHeaderClass)}" style="${escapeHtml(SETTINGS_LAYOUT.fieldHeaderStyle)}">${escapeHtml(label)}:</div>
         </div>
-        <div class="${escapeHtml(SETTINGS_LAYOUT.controlColumnClass)} column">
+        <div class="${escapeHtml(SETTINGS_LAYOUT.controlColumnClass)} column" data-settings-control>
           <input type="hidden" name="${escapeHtml(name)}" value="false" />
           <div class="ui fitted toggle checkbox">
             <input type="checkbox" name="${escapeHtml(name)}" value="true"${enabled ? " checked" : ""} />
@@ -171,12 +235,12 @@ function renderToggleField(label, name, enabled) {
 }
 
 function renderSelectField(label, name, selectedValue, options) {
-    return `<div class="field">
+    return `<div class="field" data-settings-field>
       <div class="ui stackable middle aligned grid">
         <div class="${escapeHtml(SETTINGS_LAYOUT.labelColumnClass)} column">
           <div class="${escapeHtml(SETTINGS_LAYOUT.fieldHeaderClass)}" style="${escapeHtml(SETTINGS_LAYOUT.fieldHeaderStyle)}">${escapeHtml(label)}:</div>
         </div>
-        <div class="${escapeHtml(SETTINGS_LAYOUT.controlColumnClass)} column">
+        <div class="${escapeHtml(SETTINGS_LAYOUT.controlColumnClass)} column" data-settings-control>
           <select class="ui fluid dropdown" name="${escapeHtml(name)}">
             ${options.map(option => `
               <option value="${escapeHtml(option.value)}"${option.value === selectedValue ? " selected" : ""}>${escapeHtml(option.label)}</option>
@@ -190,9 +254,9 @@ function renderSelectField(label, name, selectedValue, options) {
 function renderFolderList(folders) {
     const list = Array.isArray(folders) ? folders : [];
 
-    return `<div class="field">
+    return `<div class="field" data-settings-field>
       <div class="ui stackable grid">
-        <div class="sixteen wide right aligned middle aligned column">
+        <div class="sixteen wide right aligned middle aligned column" data-settings-control>
           <button type="button" class="ui small basic inverted black button" data-add-watch-folder>
             <i class="plus icon"></i>
             Add Watch Folder

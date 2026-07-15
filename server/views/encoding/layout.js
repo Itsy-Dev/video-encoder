@@ -98,6 +98,16 @@ module.exports = function renderPage({ title, heading, description, state, body,
       border-color: rgba(255, 255, 255, 0.16) !important;
     }
 
+    .encoder-settings-panel [data-settings-control] {
+      border-radius: 0.28571429rem;
+      transition: background-color 120ms ease, box-shadow 120ms ease;
+    }
+
+    .encoder-settings-panel [data-settings-control].encoder-setting-dirty {
+      background: rgba(242, 113, 28, 0.08);
+      box-shadow: inset 0 0 0 1px rgba(242, 113, 28, 0.45);
+    }
+
 
 
    .video-box {

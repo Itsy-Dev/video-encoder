@@ -1,6 +1,8 @@
 const encodingProfiles = require("../encoding/encoding-profiles");
 const SettingsRepository = require("./settings.repository");
 
+const SCAN_INTERVAL_MINUTES_KEY = "discovery.scanIntervalMinutes";
+
 const DEFAULTS = Object.freeze({
     continuousRunLimitMinutes: Number(process.env.ENCODER_CONTINUOUS_RUN_LIMIT_MS || 20 * 60 * 1000) / 60000,
     breakDurationMinutes: Number(process.env.ENCODER_PROCESS_REST_MS || 5 * 60 * 1000) / 60000,
@@ -10,7 +12,7 @@ const DEFAULTS = Object.freeze({
     filterThreads: Number(process.env.ENCODER_FILTER_THREADS || 2),
     processPriority: Number(process.env.ENCODER_CPU_NICE || 15),
     defaultProfileId: "browser_compatibility",
-    scanIntervalSeconds: Number(process.env.ENCODER_INBOX_SCAN_INTERVAL_MS || 30000) / 1000,
+    scanIntervalMinutes: Math.max(1, Math.round(Number(process.env.ENCODER_INBOX_SCAN_INTERVAL_MS || 30000) / 60000)),
     requeueInterruptedItems: false,
     autoPruneEmptyDirectories: true,
     autoResumeAfterBreak: true,
@@ -57,7 +59,7 @@ const SETTINGS_DEFINITIONS = Object.freeze([
     defineSetting("performance.defaultProfileId", DEFAULTS.defaultProfileId, {
         type: "profile_id"
     }),
-    defineSetting("discovery.scanIntervalSeconds", DEFAULTS.scanIntervalSeconds, {
+    defineSetting(SCAN_INTERVAL_MINUTES_KEY, DEFAULTS.scanIntervalMinutes, {
         type: "integer",
         min: 1
     }),
@@ -101,6 +103,7 @@ module.exports = class SettingsService {
             const nextValue = savedMap.has(definition.key)
                 ? normalizeValue(savedMap.get(definition.key), definition)
                 : cloneValue(definition.defaultValue);
+
             setNestedValue(effective, definition.key, nextValue);
         }
 
