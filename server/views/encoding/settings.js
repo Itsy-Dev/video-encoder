@@ -57,6 +57,12 @@ module.exports = function renderSettings(profiles, settings) {
           </div>
 
           <div class="column">
+            ${renderSettingsSection("Watch Folders", "Manage external folders the app is allowed to scan for videos.", [
+                renderDisabledNotice("Not implemented yet. Watch folders are planned, but discovery still only uses the primary inbox folder.")
+            ])}
+          </div>
+
+          <div class="column">
             ${renderSettingsSection("Automation", "Control background polling and automatic recovery behavior.", [
                 renderNumberField("Inbox Scan Interval", "discovery.scanIntervalMinutes", current.discovery.scanIntervalMinutes, "minutes"),
                 renderToggleField("Requeue Interrupted Items", "recovery.requeueInterruptedItems", current.recovery.requeueInterruptedItems),
@@ -64,11 +70,6 @@ module.exports = function renderSettings(profiles, settings) {
             ])}
           </div>
 
-          <div class="column">
-            ${renderSettingsSection("Watch Folders", "Manage external folders the app is allowed to scan for videos.", [
-                renderFolderList(current.discovery.watchFolders)
-            ])}
-          </div>
         </div>
 
 
@@ -77,20 +78,12 @@ module.exports = function renderSettings(profiles, settings) {
           <button type="submit" class="ui primary button">Save Changes</button>
         </div>
       </form>
-
-      <template id="watch-folder-row-template">
-        ${renderFolderRow({ path: "", enabled: true }, "__INDEX__")}
-      </template>
-
       <script>
         (function () {
           const root = document.currentScript && document.currentScript.parentElement;
           if (!root) return;
 
           const form = root.querySelector("form");
-          const addButton = root.querySelector("[data-add-watch-folder]");
-          const tableBody = root.querySelector("[data-watch-folder-body]");
-          const template = root.querySelector("#watch-folder-row-template");
           const initialValues = new Map();
 
           function getTrackedInputs() {
@@ -136,44 +129,6 @@ module.exports = function renderSettings(profiles, settings) {
               rememberInitialValue(input);
               syncDirtyState(input);
             });
-          }
-
-          function syncRowIndices() {
-            if (!tableBody) return;
-            Array.from(tableBody.querySelectorAll("[data-watch-folder-row]")).forEach(function (row, index) {
-              Array.from(row.querySelectorAll("[data-setting-name]")).forEach(function (input) {
-                const nameTemplate = input.getAttribute("data-setting-name");
-                if (!nameTemplate) return;
-                input.setAttribute("name", nameTemplate.replace(/__INDEX__/g, String(index)));
-              });
-            });
-          }
-
-          if (addButton && tableBody && template) {
-            addButton.addEventListener("click", function () {
-              const wrapper = document.createElement("tbody");
-              wrapper.innerHTML = template.innerHTML.trim();
-              const row = wrapper.firstElementChild;
-              if (!row) return;
-              tableBody.appendChild(row);
-              syncRowIndices();
-              Array.from(row.querySelectorAll("input[name], select[name], textarea[name]")).forEach(function (input) {
-                rememberInitialValue(input);
-                initialValues.set(input, "");
-                syncDirtyState(input);
-              });
-            });
-
-            tableBody.addEventListener("click", function (event) {
-              const button = event.target.closest("[data-remove-watch-folder]");
-              if (!button) return;
-              const row = button.closest("[data-watch-folder-row]");
-              if (!row) return;
-              row.remove();
-              syncRowIndices();
-            });
-
-            syncRowIndices();
           }
 
           if (form) {
@@ -268,69 +223,13 @@ function renderTextField(label, name, value) {
     </div>`;
 }
 
-function renderFolderList(folders) {
-    const list = Array.isArray(folders) ? folders : [];
-
+function renderDisabledNotice(message) {
     return `<div class="field" data-settings-field>
-      <div class="ui stackable grid">
-        <div class="sixteen wide right aligned middle aligned column" data-settings-control>
-          <button type="button" class="ui small basic inverted black button" data-add-watch-folder>
-            <i class="plus icon"></i>
-            Add Watch Folder
-          </button>
-        </div>
+      <div class="ui yellow message" data-settings-control style="opacity: 0.35; margin-bottom: 0;">
+        <div class="header">Not Implemented Yet</div>
+        <p>${escapeHtml(message)}</p>
       </div>
-      <table class="ui very compact celled striped inverted small table">
-        <thead>
-          <tr>
-            <th>Path</th>
-            <th class="center aligned">On</th>
-            <th class="center aligned">Action</th>
-          </tr>
-        </thead>
-        <tbody data-watch-folder-body>
-          ${list.map((folder, index) => renderFolderRow(folder, index)).join("")}
-        </tbody>
-      </table>
     </div>`;
-}
-
-function renderFolderRow(folder, index) {
-    const safePath = folder && folder.path ? folder.path : "";
-    const enabled = Boolean(folder && folder.enabled);
-
-    return `<tr data-watch-folder-row>
-      <td>
-        <div class="ui fluid input">
-          <input
-            type="text"
-            value="${escapeHtml(safePath)}"
-            data-setting-name="discovery.watchFolders.__INDEX__.path"
-            name="discovery.watchFolders.${escapeHtml(String(index))}.path"
-          />
-        </div>
-      </td>
-      <td class="center aligned">
-        <input type="hidden" value="false" data-setting-name="discovery.watchFolders.__INDEX__.enabled" name="discovery.watchFolders.${escapeHtml(String(index))}.enabled" />
-        <div class="ui fitted toggle checkbox">
-          <input
-            type="checkbox"
-            value="true"
-            data-setting-name="discovery.watchFolders.__INDEX__.enabled"
-            name="discovery.watchFolders.${escapeHtml(String(index))}.enabled"
-            ${enabled ? "checked" : ""}
-          />
-          <label></label>
-        </div>
-      </td>
-      <td class="center aligned">
-        <div class="ui mini compact basic icon buttons">
-          <button type="button" class="ui button" data-remove-watch-folder title="Remove folder">
-            <i class="fitted red trash icon"></i>
-          </button>
-        </div>
-      </td>
-    </tr>`;
 }
 
 function joinWithDividers(items) {
