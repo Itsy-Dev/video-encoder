@@ -7,7 +7,7 @@ const encodingProfiles = require("./encoding-profiles");
 const { buildSafeScaleFilter, resolveScalePlan } = require("./scale-policy");
 
 const FFMPEG_BIN = process.env.ENCODER_FFMPEG_BIN || "ffmpeg";
-const ENCODER_FFMPEG_SAFETY = Object.freeze({
+const DEFAULT_FFMPEG_RUNTIME = Object.freeze({
     PROCESS_PRIORITY: parseOptionalNumber(process.env.ENCODER_CPU_NICE, 15),
     THREADS: parseOptionalNumber(process.env.ENCODER_THREADS, 1),
     FILTER_THREADS: parseOptionalNumber(process.env.ENCODER_FILTER_THREADS, 2)
@@ -21,25 +21,26 @@ const ENCODER_FFMPEG_SAFETY = Object.freeze({
 })();
 
 module.exports = class FfmpegService {
-    startEncodeFile({ inputAbsPath, outputAbsPath, profileId, sourceMetadata = null }) {
+    startEncodeFile({ inputAbsPath, outputAbsPath, profileId, sourceMetadata = null, runtimeOptions = null }) {
         if (!inputAbsPath) throw new Error("FfmpegService.startEncodeFile: inputAbsPath is required");
         if (!outputAbsPath) throw new Error("FfmpegService.startEncodeFile: outputAbsPath is required");
+        const runtime = normalizeRuntimeOptions(runtimeOptions);
 
         return createEncodingHandle({
             command: FFMPEG_BIN,
-            args: this._buildArgs(inputAbsPath, outputAbsPath, profileId, sourceMetadata),
+            args: this._buildArgs(inputAbsPath, outputAbsPath, profileId, sourceMetadata, runtime),
             outputAbsPath,
             profileId: profileId || "browser_compatibility",
-            processPriority: ENCODER_FFMPEG_SAFETY.PROCESS_PRIORITY
+            processPriority: runtime.PROCESS_PRIORITY
         });
     }
 
-    async encodeFile({ inputAbsPath, outputAbsPath, profileId, sourceMetadata = null }) {
-        const handle = this.startEncodeFile({ inputAbsPath, outputAbsPath, profileId, sourceMetadata });
+    async encodeFile({ inputAbsPath, outputAbsPath, profileId, sourceMetadata = null, runtimeOptions = null }) {
+        const handle = this.startEncodeFile({ inputAbsPath, outputAbsPath, profileId, sourceMetadata, runtimeOptions });
         return handle.done;
     }
 
-    _buildArgs(inputAbsPath, _outputAbsPath, profileId, sourceMetadata = null) {
+    _buildArgs(inputAbsPath, _outputAbsPath, profileId, sourceMetadata = null, runtime = DEFAULT_FFMPEG_RUNTIME) {
         const profile = encodingProfiles.getProfileById(profileId) || encodingProfiles.getProfileById("browser_compatibility");
         if (!profile) {
             throw new Error(`Encoding profile not found: ${profileId}`);
@@ -50,10 +51,10 @@ module.exports = class FfmpegService {
             "-y",
             "-v", "error",
             "-nostats",
-            "-filter_threads", String(ENCODER_FFMPEG_SAFETY.FILTER_THREADS),
-            "-filter_complex_threads", String(ENCODER_FFMPEG_SAFETY.FILTER_THREADS),
+            "-filter_threads", String(runtime.FILTER_THREADS),
+            "-filter_complex_threads", String(runtime.FILTER_THREADS),
             "-i", inputAbsPath
-        ].concat(buildProfileArgs(profile, sourceMetadata));
+        ].concat(buildProfileArgs(profile, sourceMetadata, runtime));
     }
 };
 
@@ -142,7 +143,7 @@ class EncodingProcessHandle extends EventEmitter {
     }
 }
 
-function buildProfileArgs(profile, sourceMetadata) {
+function buildProfileArgs(profile, sourceMetadata, runtime = DEFAULT_FFMPEG_RUNTIME) {
     const args = [];
 
     const videoCodec = profile.videoCodec && profile.videoCodec.ffmpeg ? profile.videoCodec.ffmpeg : null;
@@ -162,7 +163,7 @@ function buildProfileArgs(profile, sourceMetadata) {
     }
 
     if (videoCodec && videoCodec !== "copy") {
-        args.push("-threads", String(ENCODER_FFMPEG_SAFETY.THREADS));
+        args.push("-threads", String(runtime.THREADS));
     }
 
     if (profile.preset && profile.preset.id && videoCodec && videoCodec !== "copy") {
@@ -229,6 +230,23 @@ function buildProfileArgs(profile, sourceMetadata) {
     }
 
     return args;
+}
+
+function normalizeRuntimeOptions(runtimeOptions = null) {
+    return {
+        PROCESS_PRIORITY: parseOptionalNumber(
+            runtimeOptions && runtimeOptions.processPriority,
+            DEFAULT_FFMPEG_RUNTIME.PROCESS_PRIORITY
+        ),
+        THREADS: parseOptionalNumber(
+            runtimeOptions && runtimeOptions.threads,
+            DEFAULT_FFMPEG_RUNTIME.THREADS
+        ),
+        FILTER_THREADS: parseOptionalNumber(
+            runtimeOptions && runtimeOptions.filterThreads,
+            DEFAULT_FFMPEG_RUNTIME.FILTER_THREADS
+        )
+    };
 }
 function createEncodingHandle({ command, args, outputAbsPath, profileId, processPriority = null }) {
     const tempOutputAbsPath = buildTempOutputAbsPath(outputAbsPath);

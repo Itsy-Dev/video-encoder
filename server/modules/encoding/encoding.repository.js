@@ -85,6 +85,35 @@ class EncodingRepository {
         };
     }
 
+    async requeueInterrupted(message) {
+        const interruptedStates = ["encoding", "paused"];
+        const placeholders = interruptedStates.map(() => "?").join(", ");
+        const now = new Date().toISOString();
+
+        const { results } = await this.database.query(`
+            UPDATE encoding_item
+            SET
+                status = 'queued',
+                last_error = ?,
+                queued_at = COALESCE(queued_at, ?),
+                queue_position = NULL,
+                encoding_started_at = NULL,
+                paused_at = NULL,
+                completed_at = NULL,
+                updated_at = ?
+            WHERE status IN (${placeholders})
+        `, [
+            message,
+            toSqlDatetime(now),
+            toSqlDatetime(now),
+            ...interruptedStates
+        ]);
+
+        return {
+            count: Number(results && typeof results.affectedRows === "number" ? results.affectedRows : 0)
+        };
+    }
+
     async list() {
         const { results } = await this.database.query(`
             SELECT

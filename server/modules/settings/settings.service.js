@@ -1,56 +1,73 @@
 const encodingProfiles = require("../encoding/encoding-profiles");
 const SettingsRepository = require("./settings.repository");
 
+const DEFAULTS = Object.freeze({
+    continuousRunLimitMinutes: Number(process.env.ENCODER_CONTINUOUS_RUN_LIMIT_MS || 20 * 60 * 1000) / 60000,
+    breakDurationMinutes: Number(process.env.ENCODER_PROCESS_REST_MS || 5 * 60 * 1000) / 60000,
+    postItemCooldownMinutes: Number(process.env.ENCODER_POST_ITEM_COOLDOWN_MS || 20 * 60 * 1000) / 60000,
+    monitorIntervalSeconds: Number(process.env.ENCODER_MONITOR_INTERVAL_MS || 30 * 1000) / 1000,
+    ffmpegThreads: Number(process.env.ENCODER_THREADS || 1),
+    filterThreads: Number(process.env.ENCODER_FILTER_THREADS || 2),
+    processPriority: Number(process.env.ENCODER_CPU_NICE || 15),
+    defaultProfileId: "browser_compatibility",
+    scanIntervalSeconds: Number(process.env.ENCODER_INBOX_SCAN_INTERVAL_MS || 30000) / 1000,
+    requeueInterruptedItems: false,
+    autoPruneEmptyDirectories: true,
+    autoResumeAfterBreak: true,
+    autoStartQueueOnLaunch: true,
+    watchFolders: []
+});
+
 const SETTINGS_DEFINITIONS = Object.freeze([
-    defineSetting("worker.continuousRunLimitMinutes", 20, {
+    defineSetting("worker.continuousRunLimitMinutes", DEFAULTS.continuousRunLimitMinutes, {
         type: "integer",
         min: 1
     }),
-    defineSetting("worker.breakDurationMinutes", 5, {
+    defineSetting("worker.breakDurationMinutes", DEFAULTS.breakDurationMinutes, {
         type: "integer",
         min: 0
     }),
-    defineSetting("worker.postItemCooldownMinutes", 20, {
+    defineSetting("worker.postItemCooldownMinutes", DEFAULTS.postItemCooldownMinutes, {
         type: "integer",
         min: 0
     }),
-    defineSetting("worker.monitorIntervalSeconds", 30, {
+    defineSetting("worker.monitorIntervalSeconds", DEFAULTS.monitorIntervalSeconds, {
         type: "integer",
         min: 1
     }),
-    defineSetting("worker.autoResumeAfterBreak", true, {
+    defineSetting("worker.autoResumeAfterBreak", DEFAULTS.autoResumeAfterBreak, {
         type: "boolean"
     }),
-    defineSetting("worker.autoStartQueueOnLaunch", true, {
+    defineSetting("worker.autoStartQueueOnLaunch", DEFAULTS.autoStartQueueOnLaunch, {
         type: "boolean"
     }),
-    defineSetting("performance.ffmpegThreads", 1, {
+    defineSetting("performance.ffmpegThreads", DEFAULTS.ffmpegThreads, {
         type: "integer",
         min: 0
     }),
-    defineSetting("performance.filterThreads", 2, {
+    defineSetting("performance.filterThreads", DEFAULTS.filterThreads, {
         type: "integer",
         min: 0
     }),
-    defineSetting("performance.processPriority", 15, {
+    defineSetting("performance.processPriority", DEFAULTS.processPriority, {
         type: "integer",
         min: -20,
         max: 20
     }),
-    defineSetting("performance.defaultProfileId", "browser_compatibility", {
+    defineSetting("performance.defaultProfileId", DEFAULTS.defaultProfileId, {
         type: "profile_id"
     }),
-    defineSetting("discovery.scanIntervalSeconds", 30, {
+    defineSetting("discovery.scanIntervalSeconds", DEFAULTS.scanIntervalSeconds, {
         type: "integer",
         min: 1
     }),
-    defineSetting("discovery.watchFolders", [], {
+    defineSetting("discovery.watchFolders", DEFAULTS.watchFolders, {
         type: "watch_folders"
     }),
-    defineSetting("recovery.requeueInterruptedItems", true, {
+    defineSetting("recovery.requeueInterruptedItems", DEFAULTS.requeueInterruptedItems, {
         type: "boolean"
     }),
-    defineSetting("recovery.autoPruneEmptyDirectories", true, {
+    defineSetting("recovery.autoPruneEmptyDirectories", DEFAULTS.autoPruneEmptyDirectories, {
         type: "boolean"
     })
 ]);

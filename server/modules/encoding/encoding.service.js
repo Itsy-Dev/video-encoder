@@ -13,6 +13,7 @@ const {
     reorderQueueItems
 } = require("./queue-ordering");
 const { getEncoderPaths } = require("../filesystem/handoff-paths");
+const SettingsService = require("../settings/settings.service");
 
 const PENDING_STATES = new Set(["pending"]);
 const ACTIONABLE_STATES = new Set(["pending", "rejected", "failed", "cancelled"]);
@@ -36,17 +37,35 @@ const VIDEO_EXTENSIONS = new Set([
 ]);
 const STABILITY_WINDOW_MS = Number(process.env.ENCODER_INBOX_STABILITY_WINDOW_MS || 30000);
 const SIZE_RECHECK_DELAY_MS = Number(process.env.ENCODER_INBOX_RECHECK_DELAY_MS || 1500);
-const INBOX_SCAN_INTERVAL_MS = Number(process.env.ENCODER_INBOX_SCAN_INTERVAL_MS || 30000);
-const ENCODING_JOB_SAFETY = Object.freeze({
-    POST_ITEM_COOLDOWN_MS: Number(process.env.ENCODER_POST_ITEM_COOLDOWN_MS || 20 * 60 * 1000),
-    CONTINUOUS_RUN_LIMIT_MS: Number(process.env.ENCODER_CONTINUOUS_RUN_LIMIT_MS || 20 * 60 * 1000),
-    PROCESS_REST_MS: Number(process.env.ENCODER_PROCESS_REST_MS || 5 * 60 * 1000),
-    MONITOR_INTERVAL_MS: Number(process.env.ENCODER_MONITOR_INTERVAL_MS || 30 * 1000)
+const DEFAULT_RUNTIME_SETTINGS = Object.freeze({
+    worker: {
+        continuousRunLimitMinutes: Number(process.env.ENCODER_CONTINUOUS_RUN_LIMIT_MS || 20 * 60 * 1000) / 60000,
+        breakDurationMinutes: Number(process.env.ENCODER_PROCESS_REST_MS || 5 * 60 * 1000) / 60000,
+        postItemCooldownMinutes: Number(process.env.ENCODER_POST_ITEM_COOLDOWN_MS || 20 * 60 * 1000) / 60000,
+        monitorIntervalSeconds: Number(process.env.ENCODER_MONITOR_INTERVAL_MS || 30 * 1000) / 1000,
+        autoResumeAfterBreak: true,
+        autoStartQueueOnLaunch: true
+    },
+    performance: {
+        ffmpegThreads: Number(process.env.ENCODER_THREADS || 1),
+        filterThreads: Number(process.env.ENCODER_FILTER_THREADS || 2),
+        processPriority: Number(process.env.ENCODER_CPU_NICE || 15),
+        defaultProfileId: "browser_compatibility"
+    },
+    discovery: {
+        scanIntervalSeconds: Number(process.env.ENCODER_INBOX_SCAN_INTERVAL_MS || 30000) / 1000,
+        watchFolders: []
+    },
+    recovery: {
+        requeueInterruptedItems: false,
+        autoPruneEmptyDirectories: true
+    }
 });
 
 module.exports = class EncodingService {
     constructor(database) {
         this.repository = new EncodingRepository(database);
+        this.settingsService = new SettingsService(database);
         this.ffmpegService = new FfmpegService();
         this.ffprobeService = new FfprobeService();
         this.activeHandle = null;
@@ -67,13 +86,15 @@ module.exports = class EncodingService {
             pausedStartedAt: null,
             totalPausedMs: 0,
             lastItemFinishedAt: null,
-            config: ENCODING_JOB_SAFETY
+            config: deriveSafetyConfig(DEFAULT_RUNTIME_SETTINGS)
         };
+        this.runtimeSettings = cloneSettings(DEFAULT_RUNTIME_SETTINGS);
         this.ready = this._initialize();
     }
 
     async getDashboardState() {
         await this.ready;
+        await this._refreshRuntimeSettings();
         const items = await this.repository.list();
         const worker = this.getWorkerStatus();
         const queuedItems = sortQueuedItems(items, worker.activeItemId);
@@ -109,9 +130,11 @@ module.exports = class EncodingService {
     }
 
     async _scanInboxInternal() {
+        const settings = await this._refreshRuntimeSettings();
         const paths = getEncoderPaths();
         await this._ensureManagedDirectories(paths);
-        const inboxFiles = await this._findInboxVideoFiles(paths.inbox);
+        const inboxRoots = this._getDiscoveryRoots(paths, settings);
+        const inboxFiles = await this._findDiscoveryVideoFiles(inboxRoots);
         console.log(`[encoder] Scan started. inbox=${paths.inbox} files=${inboxFiles.length}`);
         const results = {
             discovered: 0,
@@ -147,7 +170,8 @@ module.exports = class EncodingService {
                     inboxRelativeDir,
                     inboxRelativePath,
                     itemId,
-                    paths
+                    paths,
+                    defaultProfileId: this._getDefaultProfileId(settings)
                 });
                 if (item) results.discovered += 1;
                 if (item && item.managedInputAbsPath) results.ingested += 1;
@@ -476,20 +500,30 @@ module.exports = class EncodingService {
     }
 
     async _initialize() {
+        const settings = await this._refreshRuntimeSettings();
         const paths = getEncoderPaths();
         await this._ensureManagedDirectories(paths);
         await this._cleanupTemporaryArtifacts(paths);
-        await this._cleanupEmptyWorkingDirectories(paths);
-        await this.repository.failInterrupted(
-            "Encoding interrupted because the encoder service stopped before the job completed"
-        );
+        if (settings.recovery && settings.recovery.autoPruneEmptyDirectories) {
+            await this._cleanupEmptyWorkingDirectories(paths);
+        }
+        if (settings.recovery && settings.recovery.requeueInterruptedItems) {
+            await this.repository.requeueInterrupted(
+                "Encoding requeued because the encoder service stopped before the job completed"
+            );
+        }
+        else {
+            await this.repository.failInterrupted(
+                "Encoding interrupted because the encoder service stopped before the job completed"
+            );
+        }
         await this.repository.withTransaction(async repo => {
             await this._normalizeQueuedItemsWithRepository(repo);
         });
         console.log("[encoder] Startup recovery completed.");
 
         const nextQueued = await this.repository.getNextQueued();
-        if (nextQueued) {
+        if (nextQueued && settings.worker && settings.worker.autoStartQueueOnLaunch) {
             console.log(`[encoder] Resuming queued work on startup. nextItem=${nextQueued.id}`);
             this._ensureWorkerRunning();
         }
@@ -507,7 +541,7 @@ module.exports = class EncodingService {
     }
 
     _startInboxPolling() {
-        if (INBOX_SCAN_INTERVAL_MS <= 0 || this.scanLoopRunning || this.scanTimer) {
+        if (this.scanLoopRunning || this.scanTimer) {
             return;
         }
 
@@ -523,7 +557,11 @@ module.exports = class EncodingService {
             }
             finally {
                 this.scanLoopRunning = false;
-                this.scanTimer = setTimeout(runNext, INBOX_SCAN_INTERVAL_MS);
+                const settings = await this._refreshRuntimeSettings().catch(() => this.runtimeSettings);
+                const scanIntervalMs = this._getScanIntervalMs(settings);
+                if (scanIntervalMs > 0) {
+                    this.scanTimer = setTimeout(runNext, scanIntervalMs);
+                }
             }
         };
 
@@ -576,6 +614,7 @@ module.exports = class EncodingService {
     }
 
     async _processQueuedItem(item) {
+        const settings = await this._refreshRuntimeSettings();
         const paths = getEncoderPaths();
         await this._ensureManagedDirectories(paths);
 
@@ -618,7 +657,8 @@ module.exports = class EncodingService {
             inputAbsPath: encodingItem.inputAbsPath,
             outputAbsPath: workingOutputAbsPath,
             profileId,
-            sourceMetadata: encodingItem.sourceMetadata || null
+            sourceMetadata: encodingItem.sourceMetadata || null,
+            runtimeOptions: buildFfmpegRuntimeOptions(settings)
         });
 
         this.activeHandle.on("progress", progress => {
@@ -689,7 +729,9 @@ module.exports = class EncodingService {
 
     async _runRestLoop(itemId, handle) {
         while (this.activeHandle === handle && handle.child && handle.child.exitCode == null) {
-            await sleep(ENCODING_JOB_SAFETY.MONITOR_INTERVAL_MS);
+            const settings = await this._refreshRuntimeSettings().catch(() => this.runtimeSettings);
+            const safetyConfig = deriveSafetyConfig(settings);
+            await sleep(safetyConfig.MONITOR_INTERVAL_MS);
 
             if (this.activeHandle !== handle || !this.activeRunStartedAt || handle.state !== "running") {
                 continue;
@@ -702,7 +744,7 @@ module.exports = class EncodingService {
             }
 
             const continuousMs = Date.now() - activeRunStartedAtMs;
-            if (continuousMs < ENCODING_JOB_SAFETY.CONTINUOUS_RUN_LIMIT_MS) {
+            if (continuousMs < safetyConfig.CONTINUOUS_RUN_LIMIT_MS) {
                 continue;
             }
 
@@ -713,7 +755,7 @@ module.exports = class EncodingService {
 
             this.safety.resting = true;
             this.safety.restReason = "rest-cycle";
-            this.safety.restUntil = new Date(Date.now() + ENCODING_JOB_SAFETY.PROCESS_REST_MS).toISOString();
+            this.safety.restUntil = new Date(Date.now() + safetyConfig.PROCESS_REST_MS).toISOString();
 
             await this._waitForRestToFinish();
 
@@ -721,15 +763,20 @@ module.exports = class EncodingService {
                 return;
             }
 
-            await this.resumeActive();
+            const latestSettings = await this._refreshRuntimeSettings().catch(() => this.runtimeSettings);
+            if (latestSettings.worker && latestSettings.worker.autoResumeAfterBreak) {
+                await this.resumeActive();
+            }
         }
     }
 
     async _cooldown(reason) {
+        const settings = await this._refreshRuntimeSettings().catch(() => this.runtimeSettings);
+        const safetyConfig = deriveSafetyConfig(settings);
         this.safety.coolingDown = true;
         this.safety.cooldownReason = reason;
-        this.safety.cooldownUntil = new Date(Date.now() + ENCODING_JOB_SAFETY.POST_ITEM_COOLDOWN_MS).toISOString();
-        console.log(`[encoder] Worker cooldown started. reason=${reason} ms=${ENCODING_JOB_SAFETY.POST_ITEM_COOLDOWN_MS}`);
+        this.safety.cooldownUntil = new Date(Date.now() + safetyConfig.POST_ITEM_COOLDOWN_MS).toISOString();
+        console.log(`[encoder] Worker cooldown started. reason=${reason} ms=${safetyConfig.POST_ITEM_COOLDOWN_MS}`);
         await this._waitForCooldownToFinish();
         console.log("[encoder] Worker cooldown finished.");
     }
@@ -852,7 +899,8 @@ module.exports = class EncodingService {
         inboxRelativeDir,
         inboxRelativePath,
         itemId,
-        paths
+        paths,
+        defaultProfileId
     }) {
         const inputStat = await fsp.stat(inboxInputAbsPath);
         if (!inputStat.isFile()) {
@@ -871,7 +919,8 @@ module.exports = class EncodingService {
             inboxRelativePath,
             inboxInputAbsPath,
             managedInputAbsPath,
-            fileSizeBytes: inputStat.size
+            fileSizeBytes: inputStat.size,
+            defaultProfileId
         });
         const sourceMetadata = await this.ffprobeService.probeFile(managedInputAbsPath, inputStat);
         console.log(`[encoder] Ingested inbox file. id=${itemId} source=${managedInputAbsPath}`);
@@ -942,7 +991,8 @@ module.exports = class EncodingService {
         inboxRelativePath,
         inboxInputAbsPath,
         managedInputAbsPath,
-        fileSizeBytes
+        fileSizeBytes,
+        defaultProfileId = "browser_compatibility"
     }) {
         const now = new Date().toISOString();
         const inputAbsPath = inboxInputAbsPath;
@@ -955,7 +1005,7 @@ module.exports = class EncodingService {
             requestedAt: now,
             requestedBy: null,
             originalFilename: path.basename(inputAbsPath),
-            requestedProfileId: "browser_compatibility",
+            requestedProfileId: defaultProfileId,
             videoUuid: null,
             entityType: "video",
             entityId: null,
@@ -974,6 +1024,18 @@ module.exports = class EncodingService {
             if (!isSupportedVideoFile(fileAbs)) return;
             files.push(fileAbs);
         });
+        return files;
+    }
+
+    async _findDiscoveryVideoFiles(rootAbsPaths) {
+        const roots = Array.isArray(rootAbsPaths) ? rootAbsPaths : [];
+        const files = [];
+
+        for (const rootAbs of roots) {
+            const nextFiles = await this._findInboxVideoFiles(rootAbs);
+            files.push(...nextFiles);
+        }
+
         return files;
     }
 
@@ -998,6 +1060,26 @@ module.exports = class EncodingService {
         await pruneEmptyDirectories(paths.pending);
         await pruneEmptyDirectories(paths.working);
         await pruneEmptyDirectories(paths.encoded);
+    }
+
+    async _refreshRuntimeSettings() {
+        const settings = await this.settingsService.getSettings();
+        this.runtimeSettings = settings;
+        this.safety.config = deriveSafetyConfig(settings);
+        return settings;
+    }
+
+    _getScanIntervalMs(settings = this.runtimeSettings) {
+        return Math.max(0, Math.round(Number(settings && settings.discovery && settings.discovery.scanIntervalSeconds || 0) * 1000));
+    }
+
+    _getDefaultProfileId(settings = this.runtimeSettings) {
+        const profileId = settings && settings.performance && settings.performance.defaultProfileId;
+        return profiles.some(profile => profile.id === profileId) ? profileId : "browser_compatibility";
+    }
+
+    _getDiscoveryRoots(paths, settings = this.runtimeSettings) {
+        return [paths.inbox];
     }
 
     _assertWithinRoot(targetAbsPath, rootAbsPath, message) {
@@ -1094,6 +1176,31 @@ function normalizeRelativeDir(value, fallback = "") {
 
 function normalizeSourceAction(value) {
     return String(value || "").toLowerCase() === "delete" ? "delete" : "retain";
+}
+
+function deriveSafetyConfig(settings = DEFAULT_RUNTIME_SETTINGS) {
+    const worker = settings && settings.worker ? settings.worker : DEFAULT_RUNTIME_SETTINGS.worker;
+
+    return {
+        POST_ITEM_COOLDOWN_MS: Math.max(0, Math.round(Number(worker.postItemCooldownMinutes || 0) * 60 * 1000)),
+        CONTINUOUS_RUN_LIMIT_MS: Math.max(0, Math.round(Number(worker.continuousRunLimitMinutes || 0) * 60 * 1000)),
+        PROCESS_REST_MS: Math.max(0, Math.round(Number(worker.breakDurationMinutes || 0) * 60 * 1000)),
+        MONITOR_INTERVAL_MS: Math.max(1000, Math.round(Number(worker.monitorIntervalSeconds || 0) * 1000))
+    };
+}
+
+function buildFfmpegRuntimeOptions(settings = DEFAULT_RUNTIME_SETTINGS) {
+    const performance = settings && settings.performance ? settings.performance : DEFAULT_RUNTIME_SETTINGS.performance;
+
+    return {
+        threads: Number(performance.ffmpegThreads),
+        filterThreads: Number(performance.filterThreads),
+        processPriority: Number(performance.processPriority)
+    };
+}
+
+function cloneSettings(settings) {
+    return JSON.parse(JSON.stringify(settings || DEFAULT_RUNTIME_SETTINGS));
 }
 
 function sleep(ms) {
