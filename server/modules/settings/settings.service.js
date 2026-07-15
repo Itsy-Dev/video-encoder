@@ -20,6 +20,7 @@ const DEFAULTS = Object.freeze({
     outboxRoot: getDefaultOutboxRoot(),
     browserFileIntakeEnabled: false,
     scanIntervalMinutes: 1,
+    uploadTempMaxAgeHours: 2,
     requeueInterruptedItems: false,
     autoPruneEmptyDirectories: true,
     autoResumeAfterBreak: true,
@@ -76,6 +77,10 @@ const SETTINGS_DEFINITIONS = Object.freeze([
         type: "boolean"
     }),
     defineSetting(SCAN_INTERVAL_MINUTES_KEY, DEFAULTS.scanIntervalMinutes, {
+        type: "integer",
+        min: 1
+    }),
+    defineSetting("automation.uploadTempMaxAgeHours", DEFAULTS.uploadTempMaxAgeHours, {
         type: "integer",
         min: 1
     }),

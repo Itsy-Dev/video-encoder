@@ -17,6 +17,12 @@ module.exports = class FileIntakeService {
         this.ready = this._initialize();
     }
 
+    applySettings({ staleTempFileMs = null } = {}) {
+        if (staleTempFileMs != null) {
+            this.staleTempFileMs = Math.max(60 * 1000, Number(staleTempFileMs) || 0);
+        }
+    }
+
     registerProcessor(kind, processor) {
         const key = String(kind || "").trim();
         if (!key) {

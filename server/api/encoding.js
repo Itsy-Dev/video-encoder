@@ -40,6 +40,13 @@ module.exports = function encodingApi(app, database, fileIntake) {
         res.redirect("/encoding/pending");
     });
 
+    function applyFileIntakeSettings(settings) {
+        const automation = settings && settings.automation ? settings.automation : {};
+        fileIntake.applySettings({
+            staleTempFileMs: Math.max(1, Number(automation.uploadTempMaxAgeHours || 0)) * 60 * 60 * 1000
+        });
+    }
+
     async function requireBrowserFileIntakeEnabled() {
         const settings = await settingsService.getSettings();
         const enabled = Boolean(settings && settings.intake && settings.intake.browserFileIntakeEnabled);
@@ -74,6 +81,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
             : req.body;
         const values = await settingsService.updateSettings(payload || {});
         await encodingService.applyRuntimeSettings(values);
+        applyFileIntakeSettings(values);
         res.json({
             ok: true,
             definitions: settingsService.getDefinitions(),
@@ -401,6 +409,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
     app.get("/encoding/settings", asyncRoute(async function (_req, res) {
         const state = await encodingService.getDashboardState();
         const settings = await settingsService.getSettings();
+        applyFileIntakeSettings(settings);
         const { renderPage, renderSettings } = loadEncodingViews();
 
         res.send(renderPage({
@@ -411,6 +420,12 @@ module.exports = function encodingApi(app, database, fileIntake) {
             body: renderSettings(state.profiles, settings)
         }));
     }));
+
+    settingsService.getSettings()
+        .then(applyFileIntakeSettings)
+        .catch(error => {
+            console.error("[encoder] Failed to apply file intake settings on startup", error);
+        });
 };
 
 function loadEncodingViews() {

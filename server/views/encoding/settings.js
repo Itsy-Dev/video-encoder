@@ -64,8 +64,9 @@ module.exports = function renderSettings(profiles, settings) {
           </div>
 
           <div class="column">
-            ${renderSettingsSection("Automation", "Control background polling and automatic recovery behavior.", [
+            ${renderSettingsSection("Automation", "Control background polling and automatic cleanup and recovery behavior.", [
                 renderNumberField("Inbox Scan Interval", "discovery.scanIntervalMinutes", current.discovery.scanIntervalMinutes, "minutes"),
+                renderNumberField("Upload Temp Cleanup Age", "automation.uploadTempMaxAgeHours", current.automation.uploadTempMaxAgeHours, "hours"),
                 renderToggleField("Requeue Interrupted Items", "recovery.requeueInterruptedItems", current.recovery.requeueInterruptedItems),
                 renderToggleField("Auto-Prune Empty Directories", "recovery.autoPruneEmptyDirectories", current.recovery.autoPruneEmptyDirectories)
             ])}
@@ -263,6 +264,9 @@ function normalizeSettings(settings, profiles) {
         },
         intake: {
             browserFileIntakeEnabled: Boolean(source.intake && source.intake.browserFileIntakeEnabled)
+        },
+        automation: {
+            uploadTempMaxAgeHours: safeNumber(source.automation && source.automation.uploadTempMaxAgeHours, 2)
         },
         discovery: {
             scanIntervalMinutes: safeNumber(source.discovery && source.discovery.scanIntervalMinutes, 1),
