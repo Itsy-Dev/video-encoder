@@ -13,9 +13,10 @@ module.exports = function renderQueue(state) {
     const showForceWakeButton = !activeItem && (hasQueuedWork || isCoolingDown(worker) || isResting(worker));
 
     return `<section class="ui inverted segment">
-      ${renderActiveQueuePanel(state, activeItem, showForceWakeButton)}
-      <div class="ui hidden divider"></div>
-      <div class="ui inverted segment">
+      <div class="ui inverted fitted segment" style="position: sticky; top: 9.0rem; z-index: 15;">
+        ${renderActiveQueuePanel(state, activeItem, showForceWakeButton)}
+      </div>
+      <div class="ui inverted fitted segment">
         <h3 class="ui inverted small header">Queued Table</h3>
         ${renderQueuedTable(queueRows)}
       </div>
@@ -123,7 +124,7 @@ function renderQueuedTable(items) {
     return `<table class="ui striped celled inverted compact small table">
       <thead>
         <tr>
-          <th class="one wide center aligned"></th>
+          <th class="one wide center aligned">Queue</th>
           <th class="one wide">Status</th>
           <th class="five wide">File</th>
           <th class="one wide">Source</th>
