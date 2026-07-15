@@ -123,8 +123,9 @@ function renderQueuedTable(items) {
     return `<table class="ui striped celled inverted compact small table">
       <thead>
         <tr>
+          <th class="one wide center aligned"></th>
           <th class="one wide">Status</th>
-          <th class="six wide">File</th>
+          <th class="five wide">File</th>
           <th class="one wide">Source</th>
           <th class="two wide">Profile</th>
           <th class="two wide right aligned">Requested</th>
@@ -133,13 +134,14 @@ function renderQueuedTable(items) {
         </tr>
       </thead>
       <tbody>
-        ${items.map(renderQueuedRow).join("")}
+        ${items.map(item => renderQueuedRow(item, items)).join("")}
       </tbody>
     </table>`;
 }
 
-function renderQueuedRow(item) {
+function renderQueuedRow(item, items) {
     return `<tr>
+      <td class="center aligned" style="padding:0px;">${renderQueuePosition(item, items)}</td>
       <td>${pill(item.status)}</td>
       <td title="${escapeHtml(item.inputAbsPath || "")}">
         <div>${escapeHtml(item.originalFilename)}</div>
@@ -158,6 +160,35 @@ function renderSourceLabel(item) {
     return `<span class="ui grey small label">${escapeHtml(value)}</span>`;
 }
 
+function renderQueuePosition(item, items) {
+    const status = String(item && item.status || "").toLowerCase();
+
+    if (status === "queued") {
+        const queuedItems = Array.isArray(items)
+            ? items.filter(entry => String(entry && entry.status || "").toLowerCase() === "queued")
+            : [];
+        const firstQueuedId = queuedItems.length ? queuedItems[0].id : null;
+        const lastQueuedId = queuedItems.length ? queuedItems[queuedItems.length - 1].id : null;
+        const disableUp = item && item.id === firstQueuedId;
+        const disableDown = item && item.id === lastQueuedId;
+
+        return `<div>
+          <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/queue/move-front" data-api-form style="display: inline-block;">
+            <button type="submit" class="ui mini basic compact icon button${disableUp ? " disabled" : ""}" title="Move to front" aria-label="Move to front"${disableUp ? " disabled" : ""}>
+              <i class="inverted large fitted angle up icon ${disableUp ? "black" : "grey"}"></i>
+            </button>
+          </form>
+          <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/queue/move-back" data-api-form style="display: inline-block;">
+            <button type="submit" class="ui mini basic compact icon button${disableDown ? " disabled" : ""}" title="Move to back" aria-label="Move to back"${disableDown ? " disabled" : ""}>
+              <i class="inverted large fitted angle down icon ${disableDown ? "black" : "grey"}"></i>
+            </button>
+          </form>
+        </div>`;
+    }
+
+    return "";
+}
+
 function renderQueueRowActions(item) {
     const status = String(item && item.status || "").toLowerCase();
 
@@ -165,14 +196,27 @@ function renderQueueRowActions(item) {
         return "—";
     }
 
-    if (["queued", "failed", "cancelled"].includes(status)) {
+    if (status === "queued") {
         return `<div class="ui compact basic icon buttons">
           <a class="ui button" href="/encoding/setup?id=${encodeURIComponent(item.id)}" title="Update queue item" aria-label="Update queue item">
             <i class="fitted orange cog icon"></i>
           </a>
           <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/unqueue" data-api-form data-confirm="Remove this item from the queue and return it to pending setup?" style="display: inline-block;">
             <button type="submit" class="ui button" title="Remove from queue" aria-label="Remove from queue">
-              <i class="fitted red ${status === "queued" ? "close" : "trash"} icon"></i>
+              <i class="fitted red close icon"></i>
+            </button>
+          </form>
+        </div>`;
+    }
+
+    if (["failed", "cancelled"].includes(status)) {
+        return `<div class="ui compact basic icon buttons">
+          <a class="ui button" href="/encoding/setup?id=${encodeURIComponent(item.id)}" title="Update queue item" aria-label="Update queue item">
+            <i class="fitted orange cog icon"></i>
+          </a>
+          <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/unqueue" data-api-form data-confirm="Remove this item from the queue and return it to pending setup?" style="display: inline-block;">
+            <button type="submit" class="ui button" title="Remove from queue" aria-label="Remove from queue">
+              <i class="fitted red trash icon"></i>
             </button>
           </form>
         </div>`;
@@ -195,6 +239,19 @@ function compareQueueRows(left, right, activeItemId) {
     const rightPriority = queuePriority(right);
     if (leftPriority !== rightPriority) {
         return leftPriority - rightPriority;
+    }
+
+    if (leftPriority === queuePriority({ status: "queued" })) {
+        const leftPosition = Number.isFinite(Number(left && left.queuePosition))
+            ? Number(left.queuePosition)
+            : Number.MAX_SAFE_INTEGER;
+        const rightPosition = Number.isFinite(Number(right && right.queuePosition))
+            ? Number(right.queuePosition)
+            : Number.MAX_SAFE_INTEGER;
+
+        if (leftPosition !== rightPosition) {
+            return leftPosition - rightPosition;
+        }
     }
 
     return compareDates(left.queuedAt || left.requestedAt || left.createdAt, right.queuedAt || right.requestedAt || right.createdAt)
