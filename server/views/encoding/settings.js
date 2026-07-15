@@ -50,6 +50,13 @@ module.exports = function renderSettings(profiles, settings) {
           </div>
 
           <div class="column">
+            ${renderSettingsSection("Storage", "Choose the user-facing folders for imports and exports.", [
+                renderTextField("Inbox Folder", "storage.inboxRoot", current.storage.inboxRoot),
+                renderTextField("Outbox Folder", "storage.outboxRoot", current.storage.outboxRoot)
+            ])}
+          </div>
+
+          <div class="column">
             ${renderSettingsSection("Automation", "Control background polling and automatic recovery behavior.", [
                 renderNumberField("Inbox Scan Interval", "discovery.scanIntervalMinutes", current.discovery.scanIntervalMinutes, "minutes"),
                 renderToggleField("Requeue Interrupted Items", "recovery.requeueInterruptedItems", current.recovery.requeueInterruptedItems),
@@ -246,6 +253,21 @@ function renderSelectField(label, name, selectedValue, options) {
     </div>`;
 }
 
+function renderTextField(label, name, value) {
+    return `<div class="field" data-settings-field>
+      <div class="ui stackable middle aligned grid">
+        <div class="${escapeHtml(SETTINGS_LAYOUT.labelColumnClass)} column">
+          <div class="${escapeHtml(SETTINGS_LAYOUT.fieldHeaderClass)}" style="${escapeHtml(SETTINGS_LAYOUT.fieldHeaderStyle)}">${escapeHtml(label)}:</div>
+        </div>
+        <div class="${escapeHtml(SETTINGS_LAYOUT.controlColumnClass)} column" data-settings-control>
+          <div class="ui fluid small input">
+            <input type="text" name="${escapeHtml(name)}" value="${escapeHtml(String(value || ""))}" />
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
 function renderFolderList(folders) {
     const list = Array.isArray(folders) ? folders : [];
 
@@ -334,6 +356,10 @@ function normalizeSettings(settings, profiles) {
             filterThreads: safeNumber(source.performance && source.performance.filterThreads, 2),
             processPriority: safeNumber(source.performance && source.performance.processPriority, 15),
             defaultProfileId: String(source.performance && source.performance.defaultProfileId || defaultProfileId)
+        },
+        storage: {
+            inboxRoot: String(source.storage && source.storage.inboxRoot || ""),
+            outboxRoot: String(source.storage && source.storage.outboxRoot || "")
         },
         discovery: {
             scanIntervalMinutes: safeNumber(source.discovery && source.discovery.scanIntervalMinutes, 1),

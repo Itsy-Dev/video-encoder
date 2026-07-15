@@ -1,5 +1,9 @@
 const encodingProfiles = require("../encoding/encoding-profiles");
 const SettingsRepository = require("./settings.repository");
+const {
+    getDefaultInboxRoot,
+    getDefaultOutboxRoot
+} = require("../filesystem/handoff-paths");
 
 const SCAN_INTERVAL_MINUTES_KEY = "discovery.scanIntervalMinutes";
 
@@ -12,6 +16,8 @@ const DEFAULTS = Object.freeze({
     filterThreads: Number(process.env.ENCODER_FILTER_THREADS || 2),
     processPriority: Number(process.env.ENCODER_CPU_NICE || 15),
     defaultProfileId: "browser_compatibility",
+    inboxRoot: getDefaultInboxRoot(),
+    outboxRoot: getDefaultOutboxRoot(),
     scanIntervalMinutes: Math.max(1, Math.round(Number(process.env.ENCODER_INBOX_SCAN_INTERVAL_MS || 30000) / 60000)),
     requeueInterruptedItems: false,
     autoPruneEmptyDirectories: true,
@@ -58,6 +64,12 @@ const SETTINGS_DEFINITIONS = Object.freeze([
     }),
     defineSetting("performance.defaultProfileId", DEFAULTS.defaultProfileId, {
         type: "profile_id"
+    }),
+    defineSetting("storage.inboxRoot", DEFAULTS.inboxRoot, {
+        type: "path"
+    }),
+    defineSetting("storage.outboxRoot", DEFAULTS.outboxRoot, {
+        type: "path"
     }),
     defineSetting(SCAN_INTERVAL_MINUTES_KEY, DEFAULTS.scanIntervalMinutes, {
         type: "integer",
@@ -191,6 +203,8 @@ function normalizeValue(value, definition) {
             return normalizeInteger(value, definition);
         case "profile_id":
             return normalizeProfileId(value, definition.defaultValue);
+        case "path":
+            return normalizePathString(value, definition.defaultValue);
         case "watch_folders":
             return normalizeWatchFolders(value);
         default:
@@ -251,6 +265,11 @@ function normalizeWatchFolders(value) {
             enabled: normalizeBoolean(entry && entry.enabled, true)
         }))
         .filter(entry => entry.path);
+}
+
+function normalizePathString(value, fallback) {
+    const nextValue = String(value == null ? fallback : value).trim();
+    return nextValue || String(fallback || "").trim();
 }
 
 function setNestedValue(target, dottedKey, value) {

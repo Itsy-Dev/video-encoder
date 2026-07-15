@@ -52,6 +52,10 @@ const DEFAULT_RUNTIME_SETTINGS = Object.freeze({
         processPriority: Number(process.env.ENCODER_CPU_NICE || 15),
         defaultProfileId: "browser_compatibility"
     },
+    storage: {
+        inboxRoot: getEncoderPaths().inbox,
+        outboxRoot: getEncoderPaths().outbox
+    },
     discovery: {
         scanIntervalMinutes: Math.max(1, Math.round(Number(process.env.ENCODER_INBOX_SCAN_INTERVAL_MS || 30000) / 60000)),
         watchFolders: []
@@ -132,7 +136,7 @@ module.exports = class EncodingService {
     async ingestUploadedFiles(files, { inboxRelativeDir = "", onProgress = null } = {}) {
         await this.ready;
         await this._refreshRuntimeSettings().catch(() => this.runtimeSettings);
-        const paths = getEncoderPaths();
+        const paths = this._getEncoderPaths();
         await this._ensureManagedDirectories(paths);
 
         const uploads = Array.isArray(files) ? files.filter(Boolean) : [];
@@ -237,7 +241,7 @@ module.exports = class EncodingService {
 
     async _scanInboxInternal() {
         const settings = await this._refreshRuntimeSettings();
-        const paths = getEncoderPaths();
+        const paths = this._getEncoderPaths();
         await this._ensureManagedDirectories(paths);
         const inboxRoots = this._getDiscoveryRoots(paths, settings);
         const inboxFiles = await this._findDiscoveryVideoFiles(inboxRoots);
@@ -355,7 +359,7 @@ module.exports = class EncodingService {
     async approveItem(id, { reviewer, sourceAction } = {}) {
         await this.ready;
         const item = await this._requireItem(id);
-        const paths = getEncoderPaths();
+        const paths = this._getEncoderPaths();
         await this._ensureManagedDirectories(paths);
         const normalizedSourceAction = normalizeSourceAction(sourceAction);
 
@@ -413,7 +417,7 @@ module.exports = class EncodingService {
     async discardItem(id, { reviewer } = {}) {
         await this.ready;
         const item = await this._requireItem(id);
-        const paths = getEncoderPaths();
+        const paths = this._getEncoderPaths();
         await this._ensureManagedDirectories(paths);
 
         if (!DISCARDABLE_STATES.has(item.status)) {
@@ -607,7 +611,7 @@ module.exports = class EncodingService {
 
     async _initialize() {
         const settings = await this._refreshRuntimeSettings();
-        const paths = getEncoderPaths();
+        const paths = this._getEncoderPaths();
         await this._ensureManagedDirectories(paths);
         await this._cleanupTemporaryArtifacts(paths);
         if (settings.recovery && settings.recovery.autoPruneEmptyDirectories) {
@@ -727,7 +731,7 @@ module.exports = class EncodingService {
 
     async _processQueuedItem(item) {
         const settings = await this._refreshRuntimeSettings();
-        const paths = getEncoderPaths();
+        const paths = this._getEncoderPaths();
         await this._ensureManagedDirectories(paths);
 
         const profileId = item.profileId || item.requestedProfileId || "browser_compatibility";
@@ -1087,7 +1091,7 @@ module.exports = class EncodingService {
         });
     }
 
-    async _cleanupItemFiles(item, paths = getEncoderPaths()) {
+    async _cleanupItemFiles(item, paths = this._getEncoderPaths()) {
         const pendingItemRoot = getPendingItemRoot(paths, item.id);
         const encodedItemRoot = getEncodedItemRoot(paths, item);
         const workingItemRoot = getWorkingItemRoot(paths, item.id);
@@ -1097,7 +1101,7 @@ module.exports = class EncodingService {
         await removeIfExists(workingItemRoot);
     }
 
-    async _cleanupEncodedFiles(item, paths = getEncoderPaths()) {
+    async _cleanupEncodedFiles(item, paths = this._getEncoderPaths()) {
         const encodedItemRoot = getEncodedItemRoot(paths, item);
         const workingItemRoot = getWorkingItemRoot(paths, item.id);
 
@@ -1105,7 +1109,7 @@ module.exports = class EncodingService {
         await removeIfExists(workingItemRoot);
     }
 
-    async _cleanupApprovedItemFiles(item, paths = getEncoderPaths(), { retainedSourceAbsPath = null } = {}) {
+    async _cleanupApprovedItemFiles(item, paths = this._getEncoderPaths(), { retainedSourceAbsPath = null } = {}) {
         const pendingItemRoot = getPendingItemRoot(paths, item.id);
 
         await this._cleanupEncodedFiles(item, paths);
@@ -1118,7 +1122,7 @@ module.exports = class EncodingService {
         await removeIfExists(pendingItemRoot);
     }
 
-    async _retainSourceFile(item, paths = getEncoderPaths()) {
+    async _retainSourceFile(item, paths = this._getEncoderPaths()) {
         if (!item.inputAbsPath) {
             return null;
         }
@@ -1136,7 +1140,7 @@ module.exports = class EncodingService {
         return retainedSourceAbsPath;
     }
 
-    async _cleanupTemporaryArtifacts(paths = getEncoderPaths()) {
+    async _cleanupTemporaryArtifacts(paths = this._getEncoderPaths()) {
         await removeTempArtifacts(paths.working);
         await removeTempArtifacts(paths.encoded);
     }
@@ -1212,7 +1216,7 @@ module.exports = class EncodingService {
         }
     }
 
-    async _cleanupEmptyWorkingDirectories(paths = getEncoderPaths()) {
+    async _cleanupEmptyWorkingDirectories(paths = this._getEncoderPaths()) {
         await pruneEmptyDirectories(paths.pending);
         await pruneEmptyDirectories(paths.working);
         await pruneEmptyDirectories(paths.encoded);
@@ -1281,6 +1285,14 @@ module.exports = class EncodingService {
     _getDefaultProfileId(settings = this.runtimeSettings) {
         const profileId = settings && settings.performance && settings.performance.defaultProfileId;
         return profiles.some(profile => profile.id === profileId) ? profileId : "browser_compatibility";
+    }
+
+    _getEncoderPaths(settings = this.runtimeSettings) {
+        const storage = settings && settings.storage ? settings.storage : {};
+        return getEncoderPaths({
+            inbox: storage.inboxRoot,
+            outbox: storage.outboxRoot
+        });
     }
 
     _getDiscoveryRoots(paths, settings = this.runtimeSettings) {
