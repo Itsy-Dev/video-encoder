@@ -194,6 +194,7 @@ module.exports = class EncodingService {
                 status: "queued",
                 queuedAt: nextQueuedAt,
                 queuePosition: queueRecord ? queueRecord.queuePosition : null,
+                encodingStartedAt: null,
                 pausedAt: null,
                 completedAt: null,
                 approvedAt: null,
@@ -584,7 +585,7 @@ module.exports = class EncodingService {
         const workingOutputAbsPath = path.join(workingDirAbs, outputFilename);
         const encodedDirAbs = getEncodedItemRoot(paths, item);
         const encodedOutputAbsPath = path.join(encodedDirAbs, outputFilename);
-        const encodingStartedAt = item.encodingStartedAt || new Date().toISOString();
+        const encodingStartedAt = new Date().toISOString();
         const nextAttemptCount = Number(item.attemptCount || 0) + 1;
         console.log(`[encoder] Worker picked up item. id=${item.id} profile=${profileId} attempt=${nextAttemptCount}`);
 
@@ -694,7 +695,13 @@ module.exports = class EncodingService {
                 continue;
             }
 
-            const continuousMs = Date.now() - new Date(this.activeRunStartedAt).getTime();
+            const activeRunStartedAtMs = new Date(this.activeRunStartedAt).getTime();
+            if (!Number.isFinite(activeRunStartedAtMs) || activeRunStartedAtMs > Date.now()) {
+                this.activeRunStartedAt = new Date().toISOString();
+                continue;
+            }
+
+            const continuousMs = Date.now() - activeRunStartedAtMs;
             if (continuousMs < ENCODING_JOB_SAFETY.CONTINUOUS_RUN_LIMIT_MS) {
                 continue;
             }
