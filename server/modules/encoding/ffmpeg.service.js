@@ -8,9 +8,9 @@ const { buildSafeScaleFilter, resolveScalePlan } = require("./scale-policy");
 
 const FFMPEG_BIN = process.env.ENCODER_FFMPEG_BIN || "ffmpeg";
 const DEFAULT_FFMPEG_RUNTIME = Object.freeze({
-    PROCESS_PRIORITY: parseOptionalNumber(process.env.ENCODER_CPU_NICE, 15),
-    THREADS: parseOptionalNumber(process.env.ENCODER_THREADS, 1),
-    FILTER_THREADS: parseOptionalNumber(process.env.ENCODER_FILTER_THREADS, 2)
+    PROCESS_PRIORITY: 15,
+    THREADS: 1,
+    FILTER_THREADS: 2
 });
 
 (function ensureFfmpeg() {

@@ -35,21 +35,21 @@ const VIDEO_EXTENSIONS = new Set([
     ".webm",
     ".wmv"
 ]);
-const STABILITY_WINDOW_MS = Number(process.env.ENCODER_INBOX_STABILITY_WINDOW_MS || 30000);
-const SIZE_RECHECK_DELAY_MS = Number(process.env.ENCODER_INBOX_RECHECK_DELAY_MS || 1500);
+const STABILITY_WINDOW_MS = 30000;
+const SIZE_RECHECK_DELAY_MS = 1500;
 const DEFAULT_RUNTIME_SETTINGS = Object.freeze({
     worker: {
-        continuousRunLimitMinutes: Number(process.env.ENCODER_CONTINUOUS_RUN_LIMIT_MS || 20 * 60 * 1000) / 60000,
-        breakDurationMinutes: Number(process.env.ENCODER_PROCESS_REST_MS || 5 * 60 * 1000) / 60000,
-        postItemCooldownMinutes: Number(process.env.ENCODER_POST_ITEM_COOLDOWN_MS || 20 * 60 * 1000) / 60000,
-        monitorIntervalSeconds: Number(process.env.ENCODER_MONITOR_INTERVAL_MS || 30 * 1000) / 1000,
+        continuousRunLimitMinutes: 20,
+        breakDurationMinutes: 5,
+        postItemCooldownMinutes: 20,
+        monitorIntervalSeconds: 30,
         autoResumeAfterBreak: true,
         autoStartQueueOnLaunch: true
     },
     performance: {
-        ffmpegThreads: Number(process.env.ENCODER_THREADS || 1),
-        filterThreads: Number(process.env.ENCODER_FILTER_THREADS || 2),
-        processPriority: Number(process.env.ENCODER_CPU_NICE || 15),
+        ffmpegThreads: 1,
+        filterThreads: 2,
+        processPriority: 15,
         defaultProfileId: "browser_compatibility"
     },
     storage: {
@@ -57,7 +57,7 @@ const DEFAULT_RUNTIME_SETTINGS = Object.freeze({
         outboxRoot: getEncoderPaths().outbox
     },
     discovery: {
-        scanIntervalMinutes: Math.max(1, Math.round(Number(process.env.ENCODER_INBOX_SCAN_INTERVAL_MS || 30000) / 60000)),
+        scanIntervalMinutes: 1,
         watchFolders: []
     },
     recovery: {

@@ -12,24 +12,15 @@ function getDefaultOutboxRoot() {
 }
 
 function getEncoderInboxRoot(overridePath = null) {
-    const fallback = process.env.ENCODER_HANDOFF_ROOT
-        ? path.join(resolveEncoderPath(process.env.ENCODER_HANDOFF_ROOT, path.join(ENCODER_SERVICE_ROOT, "handoff")), "inbox")
-        : getDefaultInboxRoot();
-
-    return resolveEncoderPath(overridePath, fallback);
+    return resolveEncoderPath(overridePath, getDefaultInboxRoot());
 }
 
 function getEncoderOutboxRoot(overridePath = null) {
-    const fallback = process.env.ENCODER_HANDOFF_ROOT
-        ? path.join(resolveEncoderPath(process.env.ENCODER_HANDOFF_ROOT, path.join(ENCODER_SERVICE_ROOT, "handoff")), "outbox")
-        : getDefaultOutboxRoot();
-
-    return resolveEncoderPath(overridePath, fallback);
+    return resolveEncoderPath(overridePath, getDefaultOutboxRoot());
 }
 
 function getEncoderInternalRoot() {
     return resolveEncoderPath(
-        process.env.ENCODER_INTERNAL_ROOT,
         path.join(ENCODER_SERVICE_ROOT, ".internal")
     );
 }
