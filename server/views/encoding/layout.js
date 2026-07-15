@@ -11,11 +11,11 @@ module.exports = function renderPage({ title, heading, description, state, body,
     ];
 
     const cards = [
-        ["Pending", state.counts.pending],
-        ["Encoding", state.counts.encoding],
-        ["Queued", state.counts.queued],
-        ["Review", state.counts.review],
-        ["Approved", state.counts.approved]
+        ["Pending", state.counts.pending, "/encoding/pending"],
+        ["Encoding", state.counts.encoding, "/encoding/queue"],
+        ["Queued", state.counts.queued, "/encoding/queue"],
+        ["Review", state.counts.review, "/encoding/review"],
+        ["Approved", state.counts.approved, "/encoding/history"]
     ];
 
     return `
@@ -95,16 +95,16 @@ module.exports = function renderPage({ title, heading, description, state, body,
     </section>
     <section class="ui segment">
       <div class="ui stackable five column grid">
-        ${cards.map(([label, value]) => `
+        ${cards.map(([label, value, href]) => `
           <div class="column">
-            <div class="ui inverted grey raised card">
-              <div class="content">
-                <h2 class="header">
-                  <div class="meta">${escapeHtml(label)}</div>
-                  <div>${escapeHtml(String(value))}</div>
-                </h2>
-              </div>
-            </div>
+              <a class="ui inverted grey raised card" href="${href}">
+                <div class="content">
+                  <h2 class="header">
+                    <div class="meta">${escapeHtml(label)}</div>
+                    <div>${escapeHtml(String(value))}</div>
+                  </h2>
+                </div>
+              </a>
           </div>
         `).join("")}
       </div>
