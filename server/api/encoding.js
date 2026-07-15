@@ -289,6 +289,7 @@ module.exports = function encodingApi(app, database) {
 
     app.get("/encoding/settings", async function (_req, res) {
         const state = await encodingService.getDashboardState();
+        const settings = await settingsService.getSettings();
         const { renderPage, renderSettings } = loadEncodingViews();
 
         res.send(renderPage({
@@ -296,7 +297,7 @@ module.exports = function encodingApi(app, database) {
             heading: "Settings",
             description: "Configured directories and profile options for the standalone encoder.",
             state,
-            body: renderSettings(state.profiles)
+            body: renderSettings(state.profiles, settings)
         }));
     });
 };

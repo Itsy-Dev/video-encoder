@@ -84,6 +84,7 @@ module.exports = function renderPage({ title, heading, description, state, body,
 
 
     .encoder-settings-panel input[type="number"],
+    .encoder-settings-panel input[type="text"],
     .encoder-settings-panel select {
       background: rgba(255, 255, 255, 0.08) !important;
       color: #f5f7f6 !important;

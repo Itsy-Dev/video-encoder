@@ -91,7 +91,8 @@ module.exports = class SettingsService {
     }
 
     async updateSettings(input) {
-        const flattened = flattenInput(input);
+        const expandedInput = expandDottedInput(input);
+        const flattened = flattenInput(expandedInput);
         const updates = [];
 
         for (const [key, rawValue] of flattened.entries()) {
@@ -138,6 +139,28 @@ function flattenInput(input, prefix = "", entries = new Map()) {
     }
 
     return entries;
+}
+
+function expandDottedInput(input) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+        return input;
+    }
+
+    const expanded = {};
+
+    for (const [rawKey, value] of Object.entries(input)) {
+        const key = String(rawKey || "").trim();
+        if (!key) continue;
+
+        if (!key.includes(".")) {
+            expanded[key] = value;
+            continue;
+        }
+
+        setExpandedValue(expanded, key.split("."), value);
+    }
+
+    return expanded;
 }
 
 function normalizeValue(value, definition) {
@@ -224,6 +247,53 @@ function setNestedValue(target, dottedKey, value) {
     }
 
     current[parts[parts.length - 1]] = value;
+    return target;
+}
+
+function setExpandedValue(target, parts, value) {
+    if (!Array.isArray(parts) || !parts.length) {
+        return target;
+    }
+
+    let current = target;
+
+    for (let index = 0; index < parts.length; index += 1) {
+        const rawPart = String(parts[index] || "").trim();
+        const isLast = index === parts.length - 1;
+        const nextPart = parts[index + 1];
+        const nextIsIndex = /^\d+$/.test(String(nextPart || ""));
+
+        if (/^\d+$/.test(rawPart)) {
+            const numericIndex = Number(rawPart);
+            if (!Array.isArray(current)) {
+                return target;
+            }
+
+            if (isLast) {
+                current[numericIndex] = value;
+                return target;
+            }
+
+            if (current[numericIndex] == null) {
+                current[numericIndex] = nextIsIndex ? [] : {};
+            }
+
+            current = current[numericIndex];
+            continue;
+        }
+
+        if (isLast) {
+            current[rawPart] = value;
+            return target;
+        }
+
+        if (current[rawPart] == null) {
+            current[rawPart] = nextIsIndex ? [] : {};
+        }
+
+        current = current[rawPart];
+    }
+
     return target;
 }
 
