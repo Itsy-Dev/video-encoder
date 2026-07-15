@@ -83,6 +83,21 @@ module.exports = function renderPage({ title, heading, description, state, body,
     }
 
 
+    .encoder-settings-panel input[type="number"],
+    .encoder-settings-panel select {
+      background: rgba(255, 255, 255, 0.08) !important;
+      color: #f5f7f6 !important;
+      border: 1px solid rgba(255, 255, 255, 0.16) !important;
+      box-shadow: none !important;
+    }
+
+    .encoder-settings-panel .ui.basic.label {
+      background: rgba(255, 255, 255, 0.08) !important;
+      color: rgba(255, 255, 255, 0.8) !important;
+      border-color: rgba(255, 255, 255, 0.16) !important;
+    }
+
+
 
    .video-box {
       overflow: hidden;
