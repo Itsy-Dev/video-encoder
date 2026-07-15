@@ -1,5 +1,7 @@
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
+const multer = require("multer");
 
 const EncodingService = require("../modules/encoding/encoding.service");
 const SettingsService = require("../modules/settings/settings.service");
@@ -7,6 +9,15 @@ const { getEncoderPaths } = require("../modules/filesystem/handoff-paths");
 
 const VIEW_ROOT_ABS = path.resolve(__dirname, "..", "views", "encoding");
 const IS_DEV_VIEW_HOT_RELOAD = process.env.NODE_ENV !== "production";
+const upload = multer({
+    dest: path.join(os.tmpdir(), "encoder-pending-intake"),
+    limits: {
+        files: 25
+    }
+});
+const asyncRoute = handler => function wrappedRoute(req, res, next) {
+    Promise.resolve(handler(req, res, next)).catch(next);
+};
 
 module.exports = function encodingApi(app, database) {
     const encodingService = new EncodingService(database);
@@ -56,7 +67,20 @@ module.exports = function encodingApi(app, database) {
         });
     }));
 
-    app.post("/encoding/pending/import", asyncRoute(async function (req, res) {
+    app.post("/encoding/pending/import", upload.array("files"), asyncRoute(async function (req, res) {
+        const files = Array.isArray(req.files) ? req.files : [];
+        const inboxRelativeDir = req.body && typeof req.body === "object"
+            ? req.body.inboxRelativeDir
+            : "";
+
+        await encodingService.ingestUploadedFiles(files, {
+            inboxRelativeDir
+        });
+
+        res.redirect("/encoding/pending");
+    }));
+
+    app.post("/api/encoding/items/:id/queue", asyncRoute(async function (req, res) {
         const item = await encodingService.queueItem(req.params.id, {
             profileId: req.body.profileId,
             inboxRelativeDir: req.body.inboxRelativeDir

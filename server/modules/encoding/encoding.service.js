@@ -129,6 +129,66 @@ module.exports = class EncodingService {
         return this._scanInboxInternal();
     }
 
+    async ingestUploadedFiles(files, { inboxRelativeDir = "" } = {}) {
+        await this.ready;
+        const paths = getEncoderPaths();
+        await this._ensureManagedDirectories(paths);
+
+        const uploads = Array.isArray(files) ? files.filter(Boolean) : [];
+        const normalizedInboxRelativeDir = normalizeRelativeDir(inboxRelativeDir, "");
+        const results = {
+            imported: 0,
+            duplicates: 0,
+            invalid: 0,
+            items: []
+        };
+
+        for (const file of uploads) {
+            try {
+                const originalFilename = String(file.originalname || path.basename(file.path || "")).trim();
+                if (!originalFilename || !isSupportedVideoFile(originalFilename)) {
+                    results.invalid += 1;
+                    continue;
+                }
+
+                const inboxRelativePath = normalizedInboxRelativeDir
+                    ? `${normalizedInboxRelativeDir}/${originalFilename}`
+                    : originalFilename;
+                const itemId = buildItemId(inboxRelativePath);
+                const existing = await this.repository.get(itemId);
+                if (existing) {
+                    results.duplicates += 1;
+                    continue;
+                }
+
+                const item = await this._ingestUploadedFile({
+                    uploadedFile: file,
+                    itemId,
+                    inboxRelativeDir: normalizedInboxRelativeDir,
+                    inboxRelativePath,
+                    originalFilename,
+                    paths,
+                    defaultProfileId: this._getDefaultProfileId(this.runtimeSettings)
+                });
+
+                if (item) {
+                    results.imported += 1;
+                    results.items.push(item);
+                }
+            }
+            catch (_error) {
+                results.invalid += 1;
+            }
+            finally {
+                if (file && file.path) {
+                    await removeIfExists(file.path);
+                }
+            }
+        }
+
+        return results;
+    }
+
     async _scanInboxInternal() {
         const settings = await this._refreshRuntimeSettings();
         const paths = getEncoderPaths();
@@ -933,6 +993,50 @@ module.exports = class EncodingService {
 
         return this.repository.upsert({
             ...item,
+            sourceMetadata
+        });
+    }
+
+    async _ingestUploadedFile({
+        uploadedFile,
+        itemId,
+        inboxRelativeDir,
+        inboxRelativePath,
+        originalFilename,
+        paths,
+        defaultProfileId
+    }) {
+        const uploadAbsPath = uploadedFile && uploadedFile.path ? String(uploadedFile.path) : "";
+        if (!uploadAbsPath) {
+            throw new Error("Uploaded file is missing a temporary path.");
+        }
+
+        const uploadStat = await fsp.stat(uploadAbsPath);
+        if (!uploadStat.isFile()) {
+            throw new Error(`Uploaded file missing: ${uploadAbsPath}`);
+        }
+
+        const pendingItemRoot = path.join(paths.pending, sanitizeSegment(itemId));
+        const managedInputAbsPath = path.join(pendingItemRoot, originalFilename);
+
+        await fsp.mkdir(pendingItemRoot, { recursive: true });
+        await moveFileIntoPlace(uploadAbsPath, managedInputAbsPath);
+
+        const item = this._buildDiscoveredItem({
+            id: itemId,
+            inboxRelativeDir,
+            inboxRelativePath,
+            inboxInputAbsPath: managedInputAbsPath,
+            managedInputAbsPath,
+            fileSizeBytes: uploadStat.size,
+            defaultProfileId
+        });
+        const sourceMetadata = await this.ffprobeService.probeFile(managedInputAbsPath, uploadStat);
+        console.log(`[encoder] Ingested uploaded file. id=${itemId} source=${managedInputAbsPath}`);
+
+        return this.repository.upsert({
+            ...item,
+            originalFilename,
             sourceMetadata
         });
     }
