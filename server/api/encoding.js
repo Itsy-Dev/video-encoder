@@ -2,6 +2,7 @@ const path = require("path");
 const fs = require("fs");
 
 const EncodingService = require("../modules/encoding/encoding.service");
+const SettingsService = require("../modules/settings/settings.service");
 const { getEncoderPaths } = require("../modules/filesystem/handoff-paths");
 
 const VIEW_ROOT_ABS = path.resolve(__dirname, "..", "views", "encoding");
@@ -9,6 +10,7 @@ const IS_DEV_VIEW_HOT_RELOAD = process.env.NODE_ENV !== "production";
 
 module.exports = function encodingApi(app, database) {
     const encodingService = new EncodingService(database);
+    const settingsService = new SettingsService(database);
 
     app.get("/", function (_req, res) {
         res.redirect("/encoding/pending");
@@ -19,6 +21,27 @@ module.exports = function encodingApi(app, database) {
         res.json({
             ok: true,
             ...state
+        });
+    });
+
+    app.get("/api/encoding/settings", async function (_req, res) {
+        const values = await settingsService.getSettings();
+        res.json({
+            ok: true,
+            definitions: settingsService.getDefinitions(),
+            values
+        });
+    });
+
+    app.post("/api/encoding/settings", async function (req, res) {
+        const payload = req.body && typeof req.body === "object" && req.body.settings
+            ? req.body.settings
+            : req.body;
+        const values = await settingsService.updateSettings(payload || {});
+        res.json({
+            ok: true,
+            definitions: settingsService.getDefinitions(),
+            values
         });
     });
 
