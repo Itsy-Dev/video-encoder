@@ -16,24 +16,24 @@ module.exports = function encodingApi(app, database) {
         res.redirect("/encoding/pending");
     });
 
-    app.get("/api/encoding/summary", async function (_req, res) {
+    app.get("/api/encoding/summary", asyncRoute(async function (_req, res) {
         const state = await encodingService.getDashboardState();
         res.json({
             ok: true,
             ...state
         });
-    });
+    }));
 
-    app.get("/api/encoding/settings", async function (_req, res) {
+    app.get("/api/encoding/settings", asyncRoute(async function (_req, res) {
         const values = await settingsService.getSettings();
         res.json({
             ok: true,
             definitions: settingsService.getDefinitions(),
             values
         });
-    });
+    }));
 
-    app.post("/api/encoding/settings", async function (req, res) {
+    app.post("/api/encoding/settings", asyncRoute(async function (req, res) {
         const payload = req.body && typeof req.body === "object" && req.body.settings
             ? req.body.settings
             : req.body;
@@ -44,9 +44,9 @@ module.exports = function encodingApi(app, database) {
             definitions: settingsService.getDefinitions(),
             values
         });
-    });
+    }));
 
-    app.post("/api/encoding/scan", async function (_req, res) {
+    app.post("/api/encoding/scan", asyncRoute(async function (_req, res) {
         const result = await encodingService.scanInbox();
         const state = await encodingService.getDashboardState();
         res.json({
@@ -54,143 +54,133 @@ module.exports = function encodingApi(app, database) {
             result,
             ...state
         });
-    });
+    }));
 
-    app.post("/api/encoding/items/:id/queue", async function (req, res) {
+    app.post("/encoding/pending/import", asyncRoute(async function (req, res) {
         const item = await encodingService.queueItem(req.params.id, {
             profileId: req.body.profileId,
             inboxRelativeDir: req.body.inboxRelativeDir
         });
         res.json({ ok: true, item });
-    });
+    }));
 
-    app.post("/api/encoding/items/:id/complete", async function (req, res) {
+    app.post("/api/encoding/items/:id/complete", asyncRoute(async function (req, res) {
         const item = await encodingService.completeItem(req.params.id, {
             reviewer: req.body.reviewer || "operator"
         });
         res.json({ ok: true, item });
-    });
+    }));
 
-    app.post("/api/encoding/control/pause", async function (_req, res) {
+    app.post("/api/encoding/control/pause", asyncRoute(async function (_req, res) {
         const paused = await encodingService.pauseActive("manual");
         res.json({
             ok: true,
             paused,
             worker: encodingService.getWorkerStatus()
         });
-    });
+    }));
 
-    app.post("/api/encoding/control/resume", async function (_req, res) {
+    app.post("/api/encoding/control/resume", asyncRoute(async function (_req, res) {
         const resumed = await encodingService.resumeActive();
         res.json({
             ok: true,
             resumed,
             worker: encodingService.getWorkerStatus()
         });
-    });
+    }));
 
-    app.post("/api/encoding/control/stop", async function (_req, res) {
+    app.post("/api/encoding/control/stop", asyncRoute(async function (_req, res) {
         const stopped = await encodingService.stopActive();
         res.json({
             ok: true,
             stopped,
             worker: encodingService.getWorkerStatus()
         });
-    });
+    }));
 
-    app.post("/api/encoding/control/wake", async function (_req, res) {
+    app.post("/api/encoding/control/wake", asyncRoute(async function (_req, res) {
         const worker = await encodingService.wakeQueue();
         res.json({
             ok: true,
             worker
         });
-    });
+    }));
 
-    app.post("/api/encoding/items/:id/approve", async function (req, res) {
+    app.post("/api/encoding/items/:id/approve", asyncRoute(async function (req, res) {
         const item = await encodingService.approveItem(req.params.id, {
             reviewer: req.body.reviewer || "operator",
             sourceAction: req.body.sourceAction || "retain"
         });
         res.json({ ok: true, item });
-    });
+    }));
 
-    app.post("/api/encoding/items/:id/reject", async function (req, res) {
+    app.post("/api/encoding/items/:id/reject", asyncRoute(async function (req, res) {
         const item = await encodingService.rejectItem(req.params.id, {
             reviewer: req.body.reviewer || "operator",
             notes: req.body.notes || null
         });
         res.json({ ok: true, item });
-    });
+    }));
 
-    app.post("/api/encoding/items/:id/discard", async function (req, res) {
+    app.post("/api/encoding/items/:id/discard", asyncRoute(async function (req, res) {
         const item = await encodingService.discardItem(req.params.id, {
             reviewer: req.body.reviewer || "operator"
         });
         res.json({ ok: true, item });
-    });
+    }));
 
-    app.post("/api/encoding/items/:id/unqueue", async function (req, res) {
+    app.post("/api/encoding/items/:id/unqueue", asyncRoute(async function (req, res) {
         const item = await encodingService.unqueueItem(req.params.id, {
             reviewer: req.body.reviewer || "operator"
         });
         res.json({ ok: true, item });
-    });
+    }));
 
-    app.post("/api/encoding/items/:id/queue/move-up", async function (req, res) {
+    app.post("/api/encoding/items/:id/queue/move-up", asyncRoute(async function (req, res) {
         const item = await encodingService.moveQueueItem(req.params.id, "up");
         res.json({ ok: true, item });
-    });
+    }));
 
-    app.post("/api/encoding/items/:id/queue/move-down", async function (req, res) {
+    app.post("/api/encoding/items/:id/queue/move-down", asyncRoute(async function (req, res) {
         const item = await encodingService.moveQueueItem(req.params.id, "down");
         res.json({ ok: true, item });
-    });
+    }));
 
-    app.post("/api/encoding/items/:id/queue/move-front", async function (req, res) {
+    app.post("/api/encoding/items/:id/queue/move-front", asyncRoute(async function (req, res) {
         const item = await encodingService.moveQueueItem(req.params.id, "front");
         res.json({ ok: true, item });
-    });
+    }));
 
-    app.post("/api/encoding/items/:id/queue/move-back", async function (req, res) {
+    app.post("/api/encoding/items/:id/queue/move-back", asyncRoute(async function (req, res) {
         const item = await encodingService.moveQueueItem(req.params.id, "back");
         res.json({ ok: true, item });
-    });
+    }));
 
-    app.get("/api/encoding/items/:id/source", async function (req, res, next) {
-        try {
-            const item = await encodingService.getItem(req.params.id);
-            const sourceAbsPath = item && item.inputAbsPath ? item.inputAbsPath : null;
+    app.get("/api/encoding/items/:id/source", asyncRoute(async function (req, res) {
+        const item = await encodingService.getItem(req.params.id);
+        const sourceAbsPath = item && item.inputAbsPath ? item.inputAbsPath : null;
 
-            if (!sourceAbsPath || !fs.existsSync(sourceAbsPath)) {
-                res.status(404).send("Source video not found.");
-                return;
-            }
-
-            res.sendFile(sourceAbsPath);
+        if (!sourceAbsPath || !fs.existsSync(sourceAbsPath)) {
+            res.status(404).send("Source video not found.");
+            return;
         }
-        catch (error) {
-            next(error);
+
+        res.sendFile(sourceAbsPath);
+    }));
+
+    app.get("/api/encoding/items/:id/encoded", asyncRoute(async function (req, res) {
+        const item = await encodingService.getItem(req.params.id);
+        const encodedAbsPath = item && item.encodedOutputAbsPath ? item.encodedOutputAbsPath : null;
+
+        if (!encodedAbsPath || !fs.existsSync(encodedAbsPath)) {
+            res.status(404).send("Encoded video not found.");
+            return;
         }
-    });
 
-    app.get("/api/encoding/items/:id/encoded", async function (req, res, next) {
-        try {
-            const item = await encodingService.getItem(req.params.id);
-            const encodedAbsPath = item && item.encodedOutputAbsPath ? item.encodedOutputAbsPath : null;
+        res.sendFile(encodedAbsPath);
+    }));
 
-            if (!encodedAbsPath || !fs.existsSync(encodedAbsPath)) {
-                res.status(404).send("Encoded video not found.");
-                return;
-            }
-
-            res.sendFile(encodedAbsPath);
-        }
-        catch (error) {
-            next(error);
-        }
-    });
-
-    app.get("/encoding/pending", async function (_req, res) {
+    app.get("/encoding/pending", asyncRoute(async function (req, res) {
         const state = await encodingService.getDashboardState();
         const { renderPage, renderPending } = loadEncodingViews();
         res.send(renderPage({
@@ -200,9 +190,9 @@ module.exports = function encodingApi(app, database) {
             state,
             body: renderPending(state.actionableItems)
         }));
-    });
+    }));
 
-    app.get("/encoding/setup", async function (req, res) {
+    app.get("/encoding/setup", asyncRoute(async function (req, res) {
         const state = await encodingService.getDashboardState();
         const selectedId = String(req.query.id || "");
         const selected = state.items.find(item => item.id === selectedId) || state.actionableItems[0] || null;
@@ -219,9 +209,9 @@ module.exports = function encodingApi(app, database) {
                 sourcePreviewUrl: buildPendingSourceUrl(selected)
             })
         }));
-    });
+    }));
 
-    app.get("/encoding/setup/fragment", async function (req, res) {
+    app.get("/encoding/setup/fragment", asyncRoute(async function (req, res) {
         const state = await encodingService.getDashboardState();
         const selectedId = String(req.query.id || "");
         const selected = state.items.find(item => item.id === selectedId) || state.actionableItems[0] || null;
@@ -232,9 +222,9 @@ module.exports = function encodingApi(app, database) {
             selectedProfileId,
             sourcePreviewUrl: buildPendingSourceUrl(selected)
         }));
-    });
+    }));
 
-    app.get("/encoding/queue", async function (_req, res) {
+    app.get("/encoding/queue", asyncRoute(async function (_req, res) {
         const state = await encodingService.getDashboardState();
         const { renderPage, renderQueue } = loadEncodingViews();
         res.send(renderPage({
@@ -245,9 +235,9 @@ module.exports = function encodingApi(app, database) {
             body: renderQueue(state),
             autoRefreshMs: 5000
         }));
-    });
+    }));
 
-    app.get("/encoding/review", async function (_req, res) {
+    app.get("/encoding/review", asyncRoute(async function (_req, res) {
         const state = await encodingService.getDashboardState();
         const { renderPage, renderReview } = loadEncodingViews();
         res.send(renderPage({
@@ -257,9 +247,9 @@ module.exports = function encodingApi(app, database) {
             state,
             body: renderReview(state.reviewItems)
         }));
-    });
+    }));
 
-    app.get("/encoding/review/item", async function (req, res) {
+    app.get("/encoding/review/item", asyncRoute(async function (req, res) {
         const state = await encodingService.getDashboardState();
         const selectedId = String(req.query.id || "");
         const selected = state.reviewItems.find(item => item.id === selectedId) || state.reviewItems[0] || null;
@@ -274,9 +264,9 @@ module.exports = function encodingApi(app, database) {
                 encodedPreviewUrl: selected ? `/api/encoding/items/${encodeURIComponent(selected.id)}/encoded` : null
             })
         }));
-    });
+    }));
 
-    app.get("/encoding/history", async function (_req, res) {
+    app.get("/encoding/history", asyncRoute(async function (_req, res) {
         const state = await encodingService.getDashboardState();
         const { renderPage, renderHistory } = loadEncodingViews();
         res.send(renderPage({
@@ -286,9 +276,9 @@ module.exports = function encodingApi(app, database) {
             state,
             body: renderHistory(state.historyItems)
         }));
-    });
+    }));
 
-    app.get("/encoding/settings", async function (_req, res) {
+    app.get("/encoding/settings", asyncRoute(async function (_req, res) {
         const state = await encodingService.getDashboardState();
         const settings = await settingsService.getSettings();
         const { renderPage, renderSettings } = loadEncodingViews();
@@ -300,7 +290,7 @@ module.exports = function encodingApi(app, database) {
             state,
             body: renderSettings(state.profiles, settings)
         }));
-    });
+    }));
 };
 
 function loadEncodingViews() {
