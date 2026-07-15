@@ -40,6 +40,17 @@ module.exports = function encodingApi(app, database, fileIntake) {
         res.redirect("/encoding/pending");
     });
 
+    async function requireBrowserFileIntakeEnabled() {
+        const settings = await settingsService.getSettings();
+        const enabled = Boolean(settings && settings.intake && settings.intake.browserFileIntakeEnabled);
+        if (!enabled) {
+            const error = new Error("Browser file intake is disabled.");
+            error.statusCode = 403;
+            throw error;
+        }
+        return settings;
+    }
+
     app.get("/api/encoding/summary", asyncRoute(async function (_req, res) {
         const state = await encodingService.getDashboardState();
         res.json({
@@ -81,6 +92,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
     }));
 
     app.post("/api/encoding/pending/preflight", asyncRoute(async function (req, res) {
+        await requireBrowserFileIntakeEnabled();
         const body = req.body && typeof req.body === "object" ? req.body : {};
         const filenames = Array.isArray(body.filenames) ? body.filenames : [];
         const inboxRelativeDir = body.inboxRelativeDir || "";
@@ -102,6 +114,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
         });
         next();
     }, upload.array("files"), asyncRoute(async function (req, res) {
+        await requireBrowserFileIntakeEnabled();
         const files = Array.isArray(req.files) ? req.files : [];
         const inboxRelativeDir = req.body && typeof req.body === "object"
             ? req.body.inboxRelativeDir
@@ -286,13 +299,16 @@ module.exports = function encodingApi(app, database, fileIntake) {
 
     app.get("/encoding/pending", asyncRoute(async function (req, res) {
         const state = await encodingService.getDashboardState();
+        const settings = await settingsService.getSettings();
         const { renderPage, renderPending } = loadEncodingViews();
         res.send(renderPage({
             title: "Pending",
             heading: "Pending Items",
             description: "Discovered, stopped, failed, and rejected items awaiting profile selection and queue decisions.",
             state,
-            body: renderPending(state.actionableItems)
+            body: renderPending(state.actionableItems, {
+                enabled: Boolean(settings && settings.intake && settings.intake.browserFileIntakeEnabled)
+            })
         }));
     }));
 

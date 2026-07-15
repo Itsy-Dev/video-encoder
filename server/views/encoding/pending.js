@@ -4,7 +4,7 @@ module.exports = function renderPending(items, options = {}) {
   const intake = normalizeIntakeOptions(options);
 
   return `<section class="ui segment">
-      <div class="ui inverted charcoal segment">
+      ${intake.enabled ? `<div class="ui inverted charcoal segment">
         <div>
           <h3 class="ui inverted header" style="margin-bottom: 0.35rem;">Add Files To Pending</h3>
         </div>
@@ -54,7 +54,7 @@ module.exports = function renderPending(items, options = {}) {
             </div>
           </div>
         </form>
-      </div>
+      </div>` : ""}
 
       <div class="ui inverted divider"></div>
       <div class="ui stackable middle aligned grid">
@@ -545,6 +545,7 @@ function normalizeIntakeOptions(options) {
   const source = options && typeof options === "object" ? options : {};
 
   return {
+    enabled: Boolean(source.enabled),
     inboxRelativeDir: String(source.inboxRelativeDir || "library")
   };
 }

@@ -52,7 +52,8 @@ module.exports = function renderSettings(profiles, settings) {
           <div class="column">
             ${renderSettingsSection("Storage", "Choose the user-facing folders for imports and exports.", [
                 renderTextField("Inbox Folder", "storage.inboxRoot", current.storage.inboxRoot),
-                renderTextField("Outbox Folder", "storage.outboxRoot", current.storage.outboxRoot)
+                renderTextField("Outbox Folder", "storage.outboxRoot", current.storage.outboxRoot),
+                renderToggleField("Enable Browser File Intake", "intake.browserFileIntakeEnabled", current.intake.browserFileIntakeEnabled)
             ])}
           </div>
 
@@ -259,6 +260,9 @@ function normalizeSettings(settings, profiles) {
         storage: {
             inboxRoot: String(source.storage && source.storage.inboxRoot || ""),
             outboxRoot: String(source.storage && source.storage.outboxRoot || "")
+        },
+        intake: {
+            browserFileIntakeEnabled: Boolean(source.intake && source.intake.browserFileIntakeEnabled)
         },
         discovery: {
             scanIntervalMinutes: safeNumber(source.discovery && source.discovery.scanIntervalMinutes, 1),

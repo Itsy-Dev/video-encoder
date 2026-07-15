@@ -18,6 +18,7 @@ const DEFAULTS = Object.freeze({
     defaultProfileId: "browser_compatibility",
     inboxRoot: getDefaultInboxRoot(),
     outboxRoot: getDefaultOutboxRoot(),
+    browserFileIntakeEnabled: false,
     scanIntervalMinutes: 1,
     requeueInterruptedItems: false,
     autoPruneEmptyDirectories: true,
@@ -70,6 +71,9 @@ const SETTINGS_DEFINITIONS = Object.freeze([
     }),
     defineSetting("storage.outboxRoot", DEFAULTS.outboxRoot, {
         type: "path"
+    }),
+    defineSetting("intake.browserFileIntakeEnabled", DEFAULTS.browserFileIntakeEnabled, {
+        type: "boolean"
     }),
     defineSetting(SCAN_INTERVAL_MINUTES_KEY, DEFAULTS.scanIntervalMinutes, {
         type: "integer",
