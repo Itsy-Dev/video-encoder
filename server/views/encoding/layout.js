@@ -42,8 +42,31 @@ module.exports = function renderPage({ title, heading, description, state, body,
       position: relative;
       min-height: 100%;
       background-image: linear-gradient(160deg, var(--secondary-bg-color), var(--main-bg-color));
-      padding-bottom: 44px;
       padding-top: 8px;
+    }
+
+    .ui.segment.encoder-sticky-header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(27, 28, 29, 0.96);
+      padding-bottom: 0 !important;
+    }
+
+    .ui.menu.encoder-fixed-nav {
+      color: rgba(255, 255, 255, 0.9) !important;
+      background: transparent !important;
+      backdrop-filter: blur(4px);
+      margin: 0 !important;
+    }
+
+    .ui.inverted.secondary.menu.encoder-fixed-nav .item {
+      color: rgba(255, 255, 255, 0.9) !important;
+    }
+
+    .ui.inverted.secondary.menu.encoder-fixed-nav .item:hover,
+    .ui.inverted.secondary.menu.encoder-fixed-nav .active.item {
+      color: #ffffff !important;
     }
 
     .segment.inverted.charcoal {
@@ -82,14 +105,14 @@ module.exports = function renderPage({ title, heading, description, state, body,
 <body>
 <div id="main">
   <div class="ui inverted segments container">
-    <section class="ui segment">
+    <section class="ui segment encoder-sticky-header">
       <h1 class="ui header">
         <i class="file video icon"></i>
         <div class="content">${escapeHtml(heading)}
           <p class="sub header">${escapeHtml(description)}</p>
         </div>
       </h1>
-      <div class="ui inverted secondary menu">
+      <div class="ui inverted secondary pointing menu encoder-fixed-nav">
         ${nav.map(([label, href]) => `<a class="item" href="${href}">${escapeHtml(label)}</a>`).join("")}
       </div>
     </section>
