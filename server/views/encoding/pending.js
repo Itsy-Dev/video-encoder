@@ -265,6 +265,19 @@ module.exports = function renderPending(items, options = {}) {
             renderSelectedFiles();
           }
 
+          function buildConfirmationMessage(files) {
+            const list = Array.isArray(files) ? files : [];
+            const totalBytes = totalSelectedBytes(list);
+            const tag = currentTagValue() || "root";
+
+            return [
+              "Add " + list.length + " file(s) to pending?",
+              "",
+              "Tag: " + tag,
+              "Total size: " + formatBytes(totalBytes)
+            ].join("\\n");
+          }
+
           if (fileInput) {
             fileInput.addEventListener("change", renderSelectedFiles);
             renderSelectedFiles();
@@ -309,6 +322,10 @@ module.exports = function renderPending(items, options = {}) {
               event.preventDefault();
               let files = currentBatchFiles();
               if (busy || !files.length) {
+                return;
+              }
+
+              if (!window.confirm(buildConfirmationMessage(files))) {
                 return;
               }
 
