@@ -62,7 +62,7 @@ function renderActiveQueuePanel(state, activeItem, showForceWakeButton) {
       </div>
 
       <div class="ui eight column inverted stackable compact grid" style="margin-top: 4px;">
-        ${renderMetric("Active Time", formatElapsed(worker.activeStartedAt || (activeItem && activeItem.encodingStartedAt)))}
+        ${renderMetric("Active Time", formatElapsedMs(calculateActiveTimeMs(activeItem, worker)))}
         ${renderMetric("Paused Time", formatRemaining(pausedTimeMs))}
         ${renderMetric("Remaining", formatRemaining(calculateRemainingProcessingMs(activeItem, progress)))}
         ${renderMetric("Speed", progress.speed || "—")}
@@ -281,9 +281,15 @@ function formatRemaining(ms) {
 
 function formatElapsed(iso) {
     if (!iso) return "—";
-    const ms = Date.now() - new Date(iso).getTime();
+    const ms = Date.now() - normalizeDisplayTimestamp(iso);
     if (!Number.isFinite(ms) || ms < 0) return "—";
     return formatDuration(ms);
+}
+
+function formatElapsedMs(ms) {
+    const value = Number(ms || 0);
+    if (!Number.isFinite(value) || value < 0) return "—";
+    return formatDuration(value);
 }
 
 function formatDateTime(value) {
@@ -331,11 +337,30 @@ function calculatePausedTimeMs(activeItem, worker) {
     }
 
     if (activeItem && activeItem.pausedAt) {
-        const ms = Date.now() - new Date(activeItem.pausedAt).getTime();
+        const ms = Date.now() - normalizeDisplayTimestamp(activeItem.pausedAt);
         return Number.isFinite(ms) && ms > 0 ? ms : 0;
     }
 
     return 0;
+}
+
+function calculateActiveTimeMs(activeItem, worker) {
+    const startedAt = resolveActiveStartedAt(activeItem, worker);
+    if (!startedAt) {
+        return 0;
+    }
+
+    const startedMs = normalizeDisplayTimestamp(startedAt);
+    if (!Number.isFinite(startedMs)) {
+        return 0;
+    }
+
+    const elapsedMs = Date.now() - startedMs;
+    if (!Number.isFinite(elapsedMs) || elapsedMs < 0) {
+        return 0;
+    }
+
+    return Math.max(0, elapsedMs - calculatePausedTimeMs(activeItem, worker));
 }
 
 function formatEstimatedSize(progressPercent, totalSizeBytes) {
@@ -361,4 +386,40 @@ function parseSpeedMultiplier(value) {
 
     const parsed = Number(match[1]);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function resolveActiveStartedAt(activeItem, worker) {
+    const workerStartedAt = worker && worker.activeStartedAt ? String(worker.activeStartedAt) : null;
+    const itemStartedAt = activeItem && activeItem.encodingStartedAt ? String(activeItem.encodingStartedAt) : null;
+
+    if (isUsablePastTimestamp(workerStartedAt)) {
+        return workerStartedAt;
+    }
+
+    if (isUsablePastTimestamp(itemStartedAt)) {
+        return itemStartedAt;
+    }
+
+    return workerStartedAt || itemStartedAt || null;
+}
+
+function isUsablePastTimestamp(value) {
+    if (!value) return false;
+    const ms = normalizeDisplayTimestamp(value);
+    return Number.isFinite(ms) && ms <= Date.now();
+}
+
+function normalizeDisplayTimestamp(value) {
+    const parsedMs = new Date(value).getTime();
+    if (!Number.isFinite(parsedMs)) {
+        return NaN;
+    }
+
+    if (parsedMs <= Date.now()) {
+        return parsedMs;
+    }
+
+    const timezoneOffsetMs = new Date().getTimezoneOffset() * 60 * 1000;
+    const shiftedMs = parsedMs - timezoneOffsetMs;
+    return shiftedMs <= Date.now() ? shiftedMs : parsedMs;
 }
