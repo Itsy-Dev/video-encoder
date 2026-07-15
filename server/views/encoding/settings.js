@@ -11,11 +11,6 @@ module.exports = function renderSettings(profiles, settings) {
     const current = normalizeSettings(settings, profiles);
 
     return `<section class="ui inverted segment encoder-settings-panel">
-      <div class="ui warning inverted message">
-        <div class="header">Runtime Wiring In Progress</div>
-        <p>Settings now save to the database. Live worker behavior will be wired to these values in the next step.</p>
-      </div>
-
       <form method="post" action="/api/encoding/settings" data-api-form>
         <div class="ui inverted charcoal segment">
           <div class="ui stackable grid">

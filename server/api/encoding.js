@@ -38,6 +38,7 @@ module.exports = function encodingApi(app, database) {
             ? req.body.settings
             : req.body;
         const values = await settingsService.updateSettings(payload || {});
+        await encodingService.applyRuntimeSettings(values);
         res.json({
             ok: true,
             definitions: settingsService.getDefinitions(),

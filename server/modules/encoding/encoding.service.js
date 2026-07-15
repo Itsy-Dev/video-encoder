@@ -540,6 +540,15 @@ module.exports = class EncodingService {
         return this.getWorkerStatus();
     }
 
+    async applyRuntimeSettings(settings = null) {
+        await this.ready;
+        const nextSettings = settings || await this.settingsService.getSettings();
+        this.runtimeSettings = nextSettings;
+        this.safety.config = deriveSafetyConfig(nextSettings);
+        this._rescheduleInboxPolling(nextSettings);
+        return nextSettings;
+    }
+
     _startInboxPolling() {
         if (this.scanLoopRunning || this.scanTimer) {
             return;
@@ -558,10 +567,7 @@ module.exports = class EncodingService {
             finally {
                 this.scanLoopRunning = false;
                 const settings = await this._refreshRuntimeSettings().catch(() => this.runtimeSettings);
-                const scanIntervalMs = this._getScanIntervalMs(settings);
-                if (scanIntervalMs > 0) {
-                    this.scanTimer = setTimeout(runNext, scanIntervalMs);
-                }
+                this._scheduleInboxPoll(runNext, this._getScanIntervalMs(settings));
             }
         };
 
@@ -1067,6 +1073,55 @@ module.exports = class EncodingService {
         this.runtimeSettings = settings;
         this.safety.config = deriveSafetyConfig(settings);
         return settings;
+    }
+
+    _scheduleInboxPoll(runNext, delayMs) {
+        if (typeof runNext !== "function") {
+            return false;
+        }
+
+        const nextDelayMs = Math.max(0, Math.round(Number(delayMs) || 0));
+        if (nextDelayMs <= 0) {
+            return false;
+        }
+
+        this.scanTimer = setTimeout(runNext, nextDelayMs);
+        return true;
+    }
+
+    _rescheduleInboxPolling(settings = this.runtimeSettings) {
+        if (this.scanLoopRunning) {
+            return false;
+        }
+
+        const scanIntervalMs = this._getScanIntervalMs(settings);
+        if (this.scanTimer) {
+            clearTimeout(this.scanTimer);
+            this.scanTimer = null;
+        }
+
+        if (scanIntervalMs <= 0) {
+            return false;
+        }
+
+        const runNext = async () => {
+            this.scanTimer = null;
+            this.scanLoopRunning = true;
+
+            try {
+                await this._scanInboxInternal();
+            }
+            catch (error) {
+                console.error("[encoder] Inbox polling scan failed", error);
+            }
+            finally {
+                this.scanLoopRunning = false;
+                const latestSettings = await this._refreshRuntimeSettings().catch(() => this.runtimeSettings);
+                this._scheduleInboxPoll(runNext, this._getScanIntervalMs(latestSettings));
+            }
+        };
+
+        return this._scheduleInboxPoll(runNext, scanIntervalMs);
     }
 
     _getScanIntervalMs(settings = this.runtimeSettings) {
