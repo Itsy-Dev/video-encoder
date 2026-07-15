@@ -161,6 +161,8 @@ module.exports = function renderPage({ title, heading, description, state, body,
     ${body}
   </div>
 
+  <script src="/shared/jquery/jquery.js"></script>
+  <script src="/shared/semantic/semantic.min.js"></script>
   <script>
     const AUTO_REFRESH_MS = ${Number(autoRefreshMs || 0)};
     if (AUTO_REFRESH_MS > 0) {
