@@ -5,13 +5,14 @@ Standalone video encoder scaffold.
 ## Start
 
 ```bash
-npm run start --workspace @services/encoder
+npm install
+npm run start
 ```
 
 ## Migrations
 
 ```bash
-npm run migrate --workspace @services/encoder
+npm run migrate
 ```
 
 The server also runs pending SQL migrations automatically at startup.

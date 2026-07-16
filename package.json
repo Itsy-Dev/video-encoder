@@ -10,5 +10,14 @@
   },
   "devDependencies": {
     "electron": "31.7.7"
+  },
+  "dependencies": {
+    "colors": "^1.4.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "fomantic-ui": "^2.9.4",
+    "jquery": "^3.7.1",
+    "multer": "^1.4.5-lts.1",
+    "mysql": "^2.18.1"
   }
 }
