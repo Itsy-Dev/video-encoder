@@ -250,7 +250,7 @@ module.exports = class EncodingService {
         await this._ensureManagedDirectories(paths);
         const inboxRoots = this._getDiscoveryRoots(paths, settings);
         const inboxFiles = await this._findDiscoveryVideoFiles(inboxRoots);
-        console.log(`[encoder] Scan started. inbox=${paths.inbox} files=${inboxFiles.length}`);
+        console.log(`[SCAN] Scan started. inbox=${paths.inbox} files=${inboxFiles.length}`);
         const results = {
             discovered: 0,
             duplicates: 0,
@@ -297,7 +297,7 @@ module.exports = class EncodingService {
             }
         }
 
-        console.log("[encoder] Scan finished.", results);
+        console.log("[SCAN] Scan finished.", results);
         return results;
     }
 
@@ -349,7 +349,7 @@ module.exports = class EncodingService {
                 outputFilename: buildOutputFilename(item.originalFilename, selectedProfileId)
             });
         });
-        console.log(`[encoder] Item queued. id=${queued.id} profile=${queued.profileId || "browser_compatibility"} inboxDir=${queued.inboxRelativeDir || "/"} placement=${String(queuePlacement || "back").toLowerCase() === "front" ? "front" : "back"}`);
+        console.log(`[QUEUE] Item queued. id=${queued.id} profile=${queued.profileId || "browser_compatibility"} inboxDir=${queued.inboxRelativeDir || "/"} placement=${String(queuePlacement || "back").toLowerCase() === "front" ? "front" : "back"}`);
         this._ensureWorkerRunning();
         return queued;
     }
@@ -404,7 +404,7 @@ module.exports = class EncodingService {
         });
 
         await this._cleanupApprovedItemFiles(exported, paths, { retainedSourceAbsPath });
-        console.log(`[encoder] Item approved and exported. id=${exported.id} outbox=${outboxOutputAbsPath} sourceAction=${normalizedSourceAction}`);
+        console.log(`[REVIEW] Item approved and exported. id=${exported.id} outbox=${outboxOutputAbsPath} sourceAction=${normalizedSourceAction}`);
         return exported;
     }
 
@@ -421,7 +421,7 @@ module.exports = class EncodingService {
             lastError: notes || `Rejected by ${reviewer || "operator"}`,
             rejectedAt: new Date().toISOString()
         });
-        console.log(`[encoder] Item rejected. id=${rejected.id}`);
+        console.log(`[REVIEW] Item rejected. id=${rejected.id}`);
         return rejected;
     }
 
@@ -476,7 +476,7 @@ module.exports = class EncodingService {
             return discardedItem;
         });
 
-        console.log(`[encoder] Item discarded. id=${discarded.id} destination=${discardedSourceAbsPath}`);
+        console.log(`[REVIEW] Item discarded. id=${discarded.id} destination=${discardedSourceAbsPath}`);
         return discarded;
     }
 
@@ -513,7 +513,7 @@ module.exports = class EncodingService {
             return pendingItem;
         });
 
-        console.log(`[encoder] Item removed from queue. id=${pending.id}`);
+        console.log(`[QUEUE] Item removed from queue. id=${pending.id}`);
         return pending;
     }
 
@@ -583,7 +583,7 @@ module.exports = class EncodingService {
         this.safety.pausedStartedAt = new Date().toISOString();
         this.safety.resting = reason !== "manual";
         this.safety.restReason = reason;
-        console.log(`[encoder] Active item paused. id=${item.id} reason=${reason}`);
+        console.log(`[WORKER] Active item paused. id=${item.id} reason=${reason}`);
         return true;
     }
 
@@ -606,7 +606,7 @@ module.exports = class EncodingService {
         this.safety.resting = false;
         this.safety.restUntil = null;
         this.safety.restReason = null;
-        console.log(`[encoder] Active item resumed. id=${item.id}`);
+        console.log(`[WORKER] Active item resumed. id=${item.id}`);
         return true;
     }
 
@@ -615,7 +615,7 @@ module.exports = class EncodingService {
         if (!this.activeHandle) return false;
         const stopped = this.activeHandle.stop();
         if (stopped && this.activeItemId) {
-            console.log(`[encoder] Active item stop requested. id=${this.activeItemId}`);
+            console.log(`[WORKER] Active item stop requested. id=${this.activeItemId}`);
         }
         return stopped;
     }
@@ -641,11 +641,11 @@ module.exports = class EncodingService {
         await this.repository.withTransaction(async repo => {
             await this._normalizeQueuedItemsWithRepository(repo);
         });
-        console.log("[encoder] Startup recovery completed.");
+        console.log("[RECOVERY] Startup recovery completed.");
 
         const nextQueued = await this.repository.getNextQueued();
         if (nextQueued && settings.worker && settings.worker.autoStartQueueOnLaunch) {
-            console.log(`[encoder] Resuming queued work on startup. nextItem=${nextQueued.id}`);
+            console.log(`[RECOVERY] Resuming queued work on startup. nextItem=${nextQueued.id}`);
             this._ensureWorkerRunning();
         }
 
@@ -656,7 +656,7 @@ module.exports = class EncodingService {
         await this.ready;
         const forcedCooldown = this._clearCooldownState();
         const forcedRest = this._clearRestState();
-        console.log(`[encoder] Manual queue wake requested. forcedCooldown=${forcedCooldown} forcedRest=${forcedRest}`);
+        console.log(`[QUEUE] Manual queue wake requested. forcedCooldown=${forcedCooldown} forcedRest=${forcedRest}`);
         this._ensureWorkerRunning();
         return this.getWorkerStatus();
     }
@@ -683,7 +683,7 @@ module.exports = class EncodingService {
                 await this._scanInboxInternal();
             }
             catch (error) {
-                console.error("[encoder] Inbox polling scan failed", error);
+                console.error("[POLLER] Inbox polling scan failed", error);
             }
             finally {
                 this.scanLoopRunning = false;
@@ -693,7 +693,7 @@ module.exports = class EncodingService {
         };
 
         runNext().catch(error => {
-            console.error("[encoder] Inbox polling loop failed", error);
+            console.error("[POLLER] Inbox polling loop failed", error);
         });
     }
 
@@ -727,7 +727,7 @@ module.exports = class EncodingService {
 
             const item = await this._claimNextQueuedItem();
             if (!item) {
-                console.log("[encoder] Worker idle. No queued items remain.");
+                console.log("[WORKER] Worker idle. No queued items remain.");
                 return;
             }
 
@@ -753,7 +753,7 @@ module.exports = class EncodingService {
         const encodedOutputAbsPath = path.join(encodedDirAbs, outputFilename);
         const encodingStartedAt = new Date().toISOString();
         const nextAttemptCount = Number(item.attemptCount || 0) + 1;
-        console.log(`[encoder] Worker picked up item. id=${item.id} profile=${profileId} attempt=${nextAttemptCount}`);
+        console.log(`[WORKER] Worker picked up item. id=${item.id} profile=${profileId} attempt=${nextAttemptCount}`);
 
         await removeIfExists(workingDirAbs);
         await fsp.mkdir(encodedDirAbs, { recursive: true });
@@ -793,7 +793,7 @@ module.exports = class EncodingService {
         });
 
         const restLoop = this._runRestLoop(encodingItem.id, this.activeHandle).catch(error => {
-            console.error("[encoder] Rest loop failed", error);
+            console.error("[WORKER] Rest loop failed", error);
         });
 
         try {
@@ -836,7 +836,7 @@ module.exports = class EncodingService {
             }));
 
             this.safety.lastItemFinishedAt = new Date().toISOString();
-            console.log(`[encoder] Worker completed item. id=${encodingItem.id} encoded=${encodedOutputAbsPath}`);
+            console.log(`[WORKER] Worker completed item. id=${encodingItem.id} encoded=${encodedOutputAbsPath}`);
         }
         catch (error) {
             const latest = await this._requireItem(encodingItem.id);
@@ -854,7 +854,7 @@ module.exports = class EncodingService {
                 attemptCount: nextAttemptCount,
                 lastError: error.message
             });
-            console.error(`[encoder] Worker failed item. id=${encodingItem.id} stopped=${Boolean(stopped)}`, error);
+            console.error(`[WORKER] Worker failed item. id=${encodingItem.id} stopped=${Boolean(stopped)}`, error);
         }
         finally {
             this.activeHandle = null;
@@ -921,9 +921,9 @@ module.exports = class EncodingService {
         this.safety.coolingDown = true;
         this.safety.cooldownReason = reason;
         this.safety.cooldownUntil = new Date(Date.now() + safetyConfig.POST_ITEM_COOLDOWN_MS).toISOString();
-        console.log(`[encoder] Worker cooldown started. reason=${reason} ms=${safetyConfig.POST_ITEM_COOLDOWN_MS}`);
+        console.log(`[WORKER] Worker cooldown started. reason=${reason} ms=${safetyConfig.POST_ITEM_COOLDOWN_MS}`);
         await this._waitForCooldownToFinish();
-        console.log("[encoder] Worker cooldown finished.");
+        console.log("[WORKER] Worker cooldown finished.");
     }
 
     async _waitForCooldownToFinish() {
@@ -1082,7 +1082,7 @@ module.exports = class EncodingService {
             defaultProfileId
         });
         const sourceMetadata = await this.ffprobeService.probeFile(managedInputAbsPath, inputStat);
-        console.log(`[encoder] Ingested inbox file. id=${itemId} source=${managedInputAbsPath}`);
+        console.log(`[SCAN] Ingested inbox file. id=${itemId} source=${managedInputAbsPath}`);
 
         if (this._canReingestScannedItem(existingItem)) {
             await this.repository.deleteMetadata(itemId, "encoded");
@@ -1129,7 +1129,7 @@ module.exports = class EncodingService {
             defaultProfileId
         });
         const sourceMetadata = await this.ffprobeService.probeFile(managedInputAbsPath, uploadStat);
-        console.log(`[encoder] Ingested uploaded file. id=${itemId} source=${managedInputAbsPath}`);
+        console.log(`[INTAKE] Ingested uploaded file. id=${itemId} source=${managedInputAbsPath}`);
 
         return this.repository.upsert({
             ...item,
@@ -1317,7 +1317,7 @@ module.exports = class EncodingService {
                 await this._scanInboxInternal();
             }
             catch (error) {
-                console.error("[encoder] Inbox polling scan failed", error);
+                console.error("[POLLER] Inbox polling scan failed", error);
             }
             finally {
                 this.scanLoopRunning = false;

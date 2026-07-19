@@ -471,7 +471,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
     settingsService.getSettings()
         .then(applyFileIntakeSettings)
         .catch(error => {
-            console.error("[encoder] Failed to apply file intake settings on startup", error);
+            console.error("[SETTINGS] Failed to apply file intake settings on startup", error);
         });
 };
 

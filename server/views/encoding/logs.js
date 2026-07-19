@@ -83,7 +83,8 @@ function renderFeedEvent(entry) {
         INFO: "teal"
     }[level] || "grey");
     const timestamp = formatDateTime(entry && entry.timestamp);
-    const message = formatLogMessage(String(entry && entry.message || entry && entry.raw || "—"));
+    const parts = splitSubsystemMessage(String(entry && entry.message || entry && entry.raw || "—"));
+    const subsystemColor = "grey";
 
     return `<div class="item" style="padding: 0.9rem 0;">
       <div class="content">
@@ -93,14 +94,26 @@ function renderFeedEvent(entry) {
         <div style="border-left: 2px solid rgba(255, 255, 255, 0.14); padding-left: 0.9rem;">
           <div style="display: flex; align-items: flex-start; gap: 0.65rem;">
             <span class="ui tiny ${escapeHtml(levelColor)} label" style="margin-top: 0.1rem;">${escapeHtml(level)}</span>
-            <pre style="white-space: pre-wrap; word-break: break-word; margin: 0; color: rgba(255, 255, 255, 0.96); font: 0.95rem/1.45 Menlo, Monaco, Consolas, monospace; flex: 1;">${escapeHtml(message)}</pre>
+            ${parts.subsystem ? `<span class="ui tiny ${escapeHtml(subsystemColor)} label" style="margin-top: 0.1rem;">${escapeHtml(parts.subsystem)}</span>` : ""}
+            <pre style="white-space: pre-wrap; word-break: break-word; margin: 0; color: rgba(255, 255, 255, 0.96); font: 0.95rem/1.45 Menlo, Monaco, Consolas, monospace; flex: 1;">${escapeHtml(parts.message)}</pre>
           </div>
         </div>
       </div>
     </div>`;
 }
 
-function formatLogMessage(message) {
+function splitSubsystemMessage(message) {
     const text = String(message || "—");
-    return text.replace(/^\[encoder\]\s*/i, "[ENCODER] ");
+    const match = /^\[([A-Z_]+)\]\s*(.*)$/i.exec(text);
+    if (!match) {
+        return {
+            subsystem: "",
+            message: text
+        };
+    }
+
+    return {
+        subsystem: String(match[1] || "").toUpperCase(),
+        message: match[2] || ""
+    };
 }
