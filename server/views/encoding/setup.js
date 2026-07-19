@@ -139,11 +139,25 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
 
       <div class="ui inverted segment charcoal">
         <div class="ui stackable middle aligned right aligned grid">
-          <div class="fourteen wide column">
+          <div class="seven wide left aligned column">
+            <div class="ui form">
+              <div class="inline field" style="display: flex; align-items: center; gap: 12px;">
+                <label style="margin: 0; color: rgba(255, 255, 255, 0.9);">Queue to Front:</label>
+                <div class="ui fitted toggle checkbox">
+                  <input
+                    type="checkbox"
+                    name="queueToFront"
+                    value="true"
+                    form="setup-queue-form"
+                  />
+                  <label></label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="nine wide right aligned column">
             <span class="ui small text" style="margin-top: 6px;">Status: ${escapeHtml(String(item.status || "unknown"))}</span>
             <span class="ui small grey text">${escapeHtml(formatResponseTimestamp(responseAt))}</span>
-          </div>
-          <div class="two wide right aligned column">
             <button
               type="submit"
               form="setup-queue-form"

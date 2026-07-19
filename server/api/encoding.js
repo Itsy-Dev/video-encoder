@@ -184,7 +184,8 @@ module.exports = function encodingApi(app, database, fileIntake) {
     app.post("/api/encoding/items/:id/queue", asyncRoute(async function (req, res) {
         const item = await encodingService.queueItem(req.params.id, {
             profileId: req.body.profileId,
-            inboxRelativeDir: req.body.inboxRelativeDir
+            inboxRelativeDir: req.body.inboxRelativeDir,
+            queuePlacement: req.body.queueToFront ? "front" : "back"
         });
         res.json({ ok: true, item });
     }));

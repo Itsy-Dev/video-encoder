@@ -295,7 +295,7 @@ module.exports = class EncodingService {
         return results;
     }
 
-    async queueItem(id, { profileId, inboxRelativeDir } = {}) {
+    async queueItem(id, { profileId, inboxRelativeDir, queuePlacement = "back" } = {}) {
         await this.ready;
         const queued = await this.repository.withTransaction(async repo => {
             const item = await this._requireItemWithRepository(repo, id);
@@ -316,7 +316,12 @@ module.exports = class EncodingService {
                 reordered.push(item);
             }
 
-            const normalizedQueue = applyQueuePositionStrategy(reordered);
+            const placement = String(queuePlacement || "").toLowerCase() === "front"
+                ? "front"
+                : "back";
+            const reorderedQueue = reorderQueueItems(reordered, item.id, placement);
+
+            const normalizedQueue = applyQueuePositionStrategy(reorderedQueue);
             await repo.replaceQueuePositions(normalizedQueue);
 
             const queueRecord = normalizedQueue.find(queueItem => queueItem.id === item.id);
@@ -338,7 +343,7 @@ module.exports = class EncodingService {
                 outputFilename: buildOutputFilename(item.originalFilename, selectedProfileId)
             });
         });
-        console.log(`[encoder] Item queued. id=${queued.id} profile=${queued.profileId || "browser_compatibility"} inboxDir=${queued.inboxRelativeDir || "/"}`);
+        console.log(`[encoder] Item queued. id=${queued.id} profile=${queued.profileId || "browser_compatibility"} inboxDir=${queued.inboxRelativeDir || "/"} placement=${String(queuePlacement || "back").toLowerCase() === "front" ? "front" : "back"}`);
         this._ensureWorkerRunning();
         return queued;
     }
