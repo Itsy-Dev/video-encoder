@@ -31,10 +31,11 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
         : "Confirm the selected profile and send this item to the queue.";
 
     return `<section id="encoding-setup-root" class="ui inverted segment">
+      ${renderExpandedSourceVideo(item, sourcePreviewUrl)}
       <div class="ui inverted segment charcoal">
         <div class="ui stackable grid">
           <div class="four wide column">
-            ${renderSourceThumbnail(item, sourcePreviewUrl)}
+            ${renderCompactSourceVideo(item, sourcePreviewUrl)}
           </div>
           <div class="twelve wide column">
             <h3 class="ui inverted header">
@@ -174,23 +175,48 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
     </section>`;
 };
 
-function renderSourceThumbnail(item, sourcePreviewUrl) {
-  const previewUrl = sourcePreviewUrl || `/api/encoding/items/${encodeURIComponent(item.id)}/source`;
+function renderExpandedSourceVideo(item, sourcePreviewUrl) {
+    const previewUrl = sourcePreviewUrl || `/api/encoding/items/${encodeURIComponent(item.id)}/source`;
 
-  return `
-    <a class="ui rounded bordered image"
-      href="${escapeHtml(previewUrl)}"
-      target="_blank"
-      rel="noopener noreferrer"
-      class="ui rounded bordered image"
-      title="Open source video in new tab"
-      aria-label="Open source video in new tab"
-    >
-      <img class="" src="/assets/placeholder.png"/>
-      <div class="ui small top right attached basic black icon label">
-      <i class="external alternate icon"></i>
-      </div>
-    </a>`;
+    return `
+      <section class="encoder-setup-expanded-player" data-setup-expanded-player hidden>
+        <section class="video-box">
+          ${previewUrl
+              ? `<video controls preload="metadata" data-setup-expanded-video>
+                  <source src="${escapeHtml(previewUrl)}" />
+                </video>`
+              : `<div class="ui warning inverted message">Source video is not available for browser playback.</div>`
+          }
+        </section>
+        <div class="ui basic fitted segment" style="margin: 0;">
+          <button
+            type="button"
+            class="ui tiny basic inverted button"
+            onclick="window.collapseSetupSourcePlayer(this)"
+          >
+            Close Preview
+          </button>
+        </div>
+      </section>`;
+}
+
+function renderCompactSourceVideo(item, sourcePreviewUrl) {
+    const previewUrl = sourcePreviewUrl || `/api/encoding/items/${encodeURIComponent(item.id)}/source`;
+
+    return `
+      <section class="encoder-setup-compact-player">
+        ${previewUrl
+            ? `<video
+                controls
+                preload="metadata"
+                data-setup-compact-video
+                onplay="window.expandSetupSourcePlayer(this)"
+              >
+                <source src="${escapeHtml(previewUrl)}" />
+              </video>`
+            : `<div class="ui warning inverted message">Source video is not available for browser playback.</div>`
+        }
+      </section>`;
 }
 
 function renderMetric(label, value) {
