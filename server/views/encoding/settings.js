@@ -27,6 +27,23 @@ module.exports = function renderSettings(profiles, settings) {
 
         <div class="ui two column stackable stretched grid">
           <div class="column">
+            ${renderSettingsSection("Setup Defaults", "Choose how the Setup page should open once the default profile is loaded.", [
+              renderSelectField("Default Profile For Discovered Items", "performance.defaultProfileId", current.performance.defaultProfileId, profiles.map(profile => ({
+                value: profile.id,
+                label: profile.label || profile.id
+              }))),
+              renderToggleField("Show Setup Video Player By Default", "setup.showVideoPlayerByDefault", current.setup.showVideoPlayerByDefault),
+              renderToggleField("Queue To Front By Default", "setup.queueToFrontByDefault", current.setup.queueToFrontByDefault)
+            ])}
+          </div>
+
+          <div class="column">
+            ${renderSettingsSection("Review Defaults", "Choose how the Review page should behave when a completed encode is opened.", [
+              renderToggleField("Retain Source By Default", "review.retainSourceByDefault", current.review.retainSourceByDefault)
+            ])}
+          </div>
+          
+          <div class="column">
             ${renderSettingsSection("Worker Behavior", "Control when the encoder pauses, cools down, resumes, and begins work.", [
                 renderNumberField("Continuous Run Limit", "worker.continuousRunLimitMinutes", current.worker.continuousRunLimitMinutes, "minutes"),
                 renderNumberField("Break Duration", "worker.breakDurationMinutes", current.worker.breakDurationMinutes, "minutes"),
@@ -41,11 +58,7 @@ module.exports = function renderSettings(profiles, settings) {
             ${renderSettingsSection("Performance", "Controls that affect ffmpeg execution and defaults for newly discovered items.", [
                 renderNumberField("FFmpeg Threads", "performance.ffmpegThreads", current.performance.ffmpegThreads, "threads"),
                 renderNumberField("Filter Threads", "performance.filterThreads", current.performance.filterThreads, "threads"),
-                renderNumberField("Process Priority / Nice", "performance.processPriority", current.performance.processPriority, "nice"),
-                renderSelectField("Default Profile For Discovered Items", "performance.defaultProfileId", current.performance.defaultProfileId, profiles.map(profile => ({
-                    value: profile.id,
-                    label: profile.label || profile.id
-                })))
+                renderNumberField("Process Priority / Nice", "performance.processPriority", current.performance.processPriority, "nice")
             ])}
           </div>
 
@@ -257,6 +270,15 @@ function normalizeSettings(settings, profiles) {
             filterThreads: safeNumber(source.performance && source.performance.filterThreads, 2),
             processPriority: safeNumber(source.performance && source.performance.processPriority, 15),
             defaultProfileId: String(source.performance && source.performance.defaultProfileId || defaultProfileId)
+        },
+        setup: {
+            showVideoPlayerByDefault: Boolean(source.setup && source.setup.showVideoPlayerByDefault),
+            queueToFrontByDefault: Boolean(source.setup && source.setup.queueToFrontByDefault)
+        },
+        review: {
+            retainSourceByDefault: source.review && typeof source.review.retainSourceByDefault === "boolean"
+                ? source.review.retainSourceByDefault
+                : true
         },
         storage: {
             inboxRoot: String(source.storage && source.storage.inboxRoot || ""),

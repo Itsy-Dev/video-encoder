@@ -58,18 +58,22 @@ function renderSourceLabel(item) {
 }
 
 function renderAction(item, status) {
-    if (["rejected", "failed", "cancelled"].includes(status)) {
-        return `<a class="ui small basic compact icon button" href="/encoding/setup?id=${encodeURIComponent(item.id)}" title="Open setup" aria-label="Open setup">
-          <i class="teal redo icon"></i>
+    if (["review", "rejected", "exported", "approved"].includes(status)) {
+        return `<a class="ui small basic compact icon button" href="/encoding/review/item?id=${encodeURIComponent(item.id)}" title="Open detail" aria-label="Open detail">
+          <i class="blue eye icon"></i>
         </a>`;
+    }
+
+    if (["rejected", "failed", "cancelled"].includes(status)) {
+        return `<div class="ui mini basic buttons">
+          <a class="ui compact icon button" href="/encoding/setup?id=${encodeURIComponent(item.id)}" title="Open setup" aria-label="Open setup">
+            <i class="teal redo icon"></i>
+          </a>
+        </div>`;
     }
 
     if (status === "discarded") {
         return "—";
-    }
-
-    if (status === "exported" || status === "approved") {
-        return `<span class="ui grey text">Delivered</span>`;
     }
 
     return "—";

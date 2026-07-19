@@ -1,5 +1,4 @@
 const {
-    formatAspectRatio,
     escapeHtml,
     formatBitrate,
     formatBytes,
@@ -11,7 +10,7 @@ const {
     resolveScalePlan
 } = require("../../modules/encoding/scale-policy");
 
-module.exports = function renderSetup(item, profiles, { selectedProfileId, sourcePreviewUrl } = {}) {
+module.exports = function renderSetup(item, profiles, { selectedProfileId, sourcePreviewUrl, showVideoPlayerByDefault = false, queueToFrontByDefault = false } = {}) {
     if (!item) {
         return `<section class="ui segment encoder-panel"><div class="ui placeholder segment"><div class="ui header">No discovered item is available for setup yet.</div></div></section>`;
     }
@@ -31,10 +30,11 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
         : "Confirm the selected profile and send this item to the queue.";
 
     return `<section id="encoding-setup-root" class="ui inverted segment">
+      ${renderExpandedSourceVideo(item, sourcePreviewUrl, { visible: showVideoPlayerByDefault })}
       <div class="ui inverted segment charcoal">
         <div class="ui stackable grid">
           <div class="four wide column">
-            ${renderSourceThumbnail(item, sourcePreviewUrl)}
+            ${renderCompactSourceVideo(item, sourcePreviewUrl)}
           </div>
           <div class="twelve wide column">
             <h3 class="ui inverted header">
@@ -52,7 +52,6 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
               ${renderMetric("Pixel Format", getPixelFormat(source))}
               ${renderMetric("Size", formatBytes(source.fileSizeBytes))}
               ${renderMetric("Resolution", formatResolution(source.width, source.height))}
-              ${renderMetric("Aspect Ratio", formatAspectRatio(source))}
               ${renderMetric("Aspect Family", scalePlan.family ? scalePlan.family.label : "—")}
               ${renderMetric("FPS", formatFps(source.frameRate))}
               ${renderMetric("Bit Rate", formatBitrate(source.bitRate))}
@@ -68,6 +67,8 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
 
         <form method="get" action="/encoding/setup/fragment" class="ui inverted form">
           <input type="hidden" name="id" value="${escapeHtml(item.id)}" />
+          <input type="hidden" name="showVideoPlayer" value="${showVideoPlayerByDefault ? "true" : "false"}" data-setup-show-video-input />
+          <input type="hidden" name="queueToFront" value="${queueToFrontByDefault ? "true" : "false"}" data-setup-queue-front-input />
           <div class="fields">
             <div class="six wide field">
               <label>Profile</label>
@@ -122,14 +123,13 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
 
       <div class="ui inverted segment charcoal">
         <h3 class="ui inverted small header">Video Outcome</h3>
-        <div class="ui seven column stackable inverted compact grid">
-          ${renderOutcomeMetric("Size", formatBytes(source.fileSizeBytes), formatBytes(estimate.sizeBytes), estimate.sizeDeltaBytes <= 0 ? "green" : "yellow", formatSizeChange(estimate.sizeDeltaBytes, source.fileSizeBytes))}
+        <div class="ui four column stackable inverted compact grid">
+          ${renderOutcomeMetric(renderInfoLabel("Size", buildSizeEstimateHelpText(selectedProfile)), formatBytes(source.fileSizeBytes), formatBytes(estimate.sizeBytes), estimate.sizeDeltaBytes <= 0 ? "green" : "yellow", formatSizeChange(estimate.sizeDeltaBytes, source.fileSizeBytes))}
           ${renderOutcomeMetric("Resolution", formatResolution(source.width, source.height), formatResolution(estimate.width, estimate.height))}
-          ${renderOutcomeMetric("Aspect Ratio", formatAspectRatio(source), formatAspectRatio(estimate.width, estimate.height))}
           ${renderOutcomeMetric("Target Standard", scalePlan.family ? scalePlan.family.label : "—", estimate.targetStandardLabel)}
-          ${renderOutcomeMetric("FPS", formatFps(source.frameRate), formatFps(estimate.fps))}
-          ${renderOutcomeMetric("Bitrate", formatBitrate(source.bitRate), formatBitrate(estimate.videoBitrateBps), null, formatBitrateChange(estimate.videoBitrateBps, source.bitRate))}
           ${renderOutcomeMetric("Container", source.container || "—", estimate.container)}
+          ${renderOutcomeMetric(renderInfoLabel("Bitrate", buildBitrateEstimateHelpText(selectedProfile)), formatBitrate(source.bitRate), formatBitrate(estimate.totalBitrateBps), null, formatBitrateChange(estimate.totalBitrateBps, source.bitRate))}
+          ${renderOutcomeMetric("FPS", formatFps(source.frameRate), formatFps(estimate.fps))}
           ${renderOutcomeMetric("Codec", source.videoCodec || "—", estimate.videoCodec)}
           ${renderOutcomeMetric("Format", getPixelFormat(source), estimate.pixelFormat)}
         </div>
@@ -139,11 +139,27 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
 
       <div class="ui inverted segment charcoal">
         <div class="ui stackable middle aligned right aligned grid">
-          <div class="fourteen wide column">
+          <div class="seven wide left aligned column">
+            <div class="ui form">
+              <div class="inline field" style="display: flex; align-items: center; gap: 12px;">
+                <label style="margin: 0; color: rgba(255, 255, 255, 0.9);">Queue to Front:</label>
+                <div class="ui fitted toggle checkbox">
+                  <input
+                    type="checkbox"
+                    name="queueToFront"
+                    value="true"
+                    form="setup-queue-form"
+                    ${queueToFrontByDefault ? " checked" : ""}
+                    onchange="window.syncSetupQueueToFrontPreference(this)"
+                  />
+                  <label></label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="nine wide right aligned column">
             <span class="ui small text" style="margin-top: 6px;">Status: ${escapeHtml(String(item.status || "unknown"))}</span>
             <span class="ui small grey text">${escapeHtml(formatResponseTimestamp(responseAt))}</span>
-          </div>
-          <div class="two wide right aligned column">
             <button
               type="submit"
               form="setup-queue-form"
@@ -160,23 +176,48 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
     </section>`;
 };
 
-function renderSourceThumbnail(item, sourcePreviewUrl) {
-  const previewUrl = sourcePreviewUrl || `/api/encoding/items/${encodeURIComponent(item.id)}/source`;
+function renderExpandedSourceVideo(item, sourcePreviewUrl, { visible = false } = {}) {
+    const previewUrl = sourcePreviewUrl || `/api/encoding/items/${encodeURIComponent(item.id)}/source`;
 
-  return `
-    <a class="ui rounded bordered image"
-      href="${escapeHtml(previewUrl)}"
-      target="_blank"
-      rel="noopener noreferrer"
-      class="ui rounded bordered image"
-      title="Open source video in new tab"
-      aria-label="Open source video in new tab"
-    >
-      <img class="" src="/assets/placeholder.png"/>
-      <div class="ui small top right attached basic black icon label">
-      <i class="external alternate icon"></i>
-      </div>
-    </a>`;
+    return `
+      <section class="encoder-setup-expanded-player" data-setup-expanded-player${visible ? "" : " hidden"}>
+        <section class="video-box">
+          ${previewUrl
+              ? `<video controls preload="metadata" data-setup-expanded-video>
+                  <source src="${escapeHtml(previewUrl)}" />
+                </video>`
+              : `<div class="ui warning inverted message">Source video is not available for browser playback.</div>`
+          }
+        </section>
+        <div class="ui basic fitted segment" style="margin: 0;">
+          <button
+            type="button"
+            class="ui tiny basic inverted button"
+            onclick="window.collapseSetupSourcePlayer(this)"
+          >
+            Close Preview
+          </button>
+        </div>
+      </section>`;
+}
+
+function renderCompactSourceVideo(item, sourcePreviewUrl) {
+    const previewUrl = sourcePreviewUrl || `/api/encoding/items/${encodeURIComponent(item.id)}/source`;
+
+    return `
+      <section class="encoder-setup-compact-player">
+        ${previewUrl
+            ? `<video
+                controls
+                preload="metadata"
+                data-setup-compact-video
+                onplay="window.expandSetupSourcePlayer(this)"
+              >
+                <source src="${escapeHtml(previewUrl)}" />
+              </video>`
+            : `<div class="ui warning inverted message">Source video is not available for browser playback.</div>`
+        }
+      </section>`;
 }
 
 function renderMetric(label, value) {
@@ -198,20 +239,32 @@ function renderOutcomeMetric(label, before, after, color = null, change = null) 
     const current = before == null ? "—" : String(before);
     const output = after == null ? "—" : String(after);
     const comparison = change || (current !== output && current !== "—" ? current : "");
+    const labelMarkup = String(label || "");
+    const safeLabelMarkup = labelMarkup.includes("<")
+        ? labelMarkup
+        : escapeHtml(labelMarkup);
 
     return `<div class="column encoding-setup-change-row">
-      <div><span class="ui grey text">${escapeHtml(label)}</span></div>
+      <div><span class="ui grey text">${safeLabelMarkup}</span></div>
       <div><span class="${escapeHtml(afterClass)}">${escapeHtml(output)}</span></div>
       <div><span class="ui grey text">${escapeHtml(comparison)}</span></div>
     </div>`;
 }
 
+function renderInfoLabel(label, helpText) {
+    const safeHelpText = escapeHtml(helpText);
+
+    return `${escapeHtml(label)} <i class="info circle icon" title="${safeHelpText}" aria-label="${safeHelpText}" style="margin-left: 4px; opacity: 0.8; cursor: help;"></i>`;
+}
+
 function buildEstimate(source, profile, scalePlan) {
     const dimensions = estimatedDimensions(source, profile, scalePlan);
     const videoBitrateBps = estimatedBitrate(source, profile, dimensions);
+    const audioBitrateBps = estimatedAudioBitrate(source, profile);
+    const totalBitrateBps = Math.max(0, videoBitrateBps + audioBitrateBps);
     const durationSec = Math.max(0, Number(source && source.durationMs || 0) / 1000);
-    const sizeBytes = videoBitrateBps > 0 && durationSec > 0
-        ? Math.round((videoBitrateBps * durationSec) / 8)
+    const sizeBytes = totalBitrateBps > 0 && durationSec > 0
+        ? Math.round(((totalBitrateBps * durationSec) / 8) * 1.02)
         : Number(source && source.fileSizeBytes || 0);
 
     return {
@@ -223,6 +276,8 @@ function buildEstimate(source, profile, scalePlan) {
         pixelFormat: profile && profile.pixelFormat ? profile.pixelFormat.label : "—",
         targetStandardLabel: getScaleTargetLabel(scalePlan),
         videoBitrateBps,
+        audioBitrateBps,
+        totalBitrateBps,
         sizeBytes,
         sizeDeltaBytes: sizeBytes - Number(source && source.fileSizeBytes || 0)
     };
@@ -235,19 +290,46 @@ function estimatedDimensions(_source, _profile, scalePlan) {
 }
 
 function estimatedBitrate(source, profile, dimensions) {
-    const sourceBitrate = Number(source && source.bitRate || 0);
-    if (!sourceBitrate) return 0;
+    const sourceTotalBitrate = getSourceTotalBitrate(source);
+    const sourceAudioBitrate = getSourceAudioBitrate(source);
+    const sourceVideoBitrate = Math.max(0, getSourceVideoBitrate(source) || (sourceTotalBitrate - sourceAudioBitrate));
+    if (!sourceVideoBitrate) return 0;
 
     if (profile && profile.videoCodec && profile.videoCodec.id === "copy") {
-        return sourceBitrate;
+        return sourceVideoBitrate;
     }
 
     const sourcePixels = Math.max(1, Number(source && source.width || 0) * Number(source && source.height || 0));
     const outputPixels = Math.max(1, Number(dimensions.width || 0) * Number(dimensions.height || 0));
-    const scale = outputPixels / sourcePixels;
-    const crfFactor = Number(profile && profile.crf || 20) >= 24 ? 0.42 : 0.62;
+    const scale = clamp(outputPixels / sourcePixels, 0.2, 1.25);
+    const sourceFps = normalizeEstimatedFps(source && source.frameRate);
+    const outputFps = normalizeEstimatedFps(source && source.frameRate);
+    const fpsScale = clamp(outputFps / sourceFps, 0.7, 1.6);
+    const codecFactor = getCodecCompressionFactor(profile && profile.videoCodec && profile.videoCodec.id);
+    const crfFactor = getCrfCompressionFactor(profile && profile.crf, profile && profile.intent && profile.intent.id);
+    const estimated = sourceVideoBitrate * scale * fpsScale * codecFactor * crfFactor;
 
-    return Math.max(900000, Math.round(sourceBitrate * scale * crfFactor));
+    return Math.max(getMinimumVideoBitrate(outputPixels, outputFps), Math.round(estimated));
+}
+
+function estimatedAudioBitrate(source, profile) {
+    const audioCodecId = profile && profile.audioCodec && profile.audioCodec.id;
+    const sourceAudioBitrate = getSourceAudioBitrate(source);
+
+    if (!hasAudioStream(source)) {
+        return 0;
+    }
+
+    if (audioCodecId === "copy") {
+        return sourceAudioBitrate;
+    }
+
+    const configuredBitrate = Number(profile && profile.audioBitrate && profile.audioBitrate.id || 0);
+    if (configuredBitrate > 0) {
+        return configuredBitrate;
+    }
+
+    return sourceAudioBitrate;
 }
 
 function formatResolution(width, height) {
@@ -299,11 +381,23 @@ function buildScaleDecision(scalePlan) {
 function formatSizeChange(deltaBytes, sourceBytes) {
     const source = Number(sourceBytes || 0);
     const delta = Number(deltaBytes || 0);
-    const sign = delta > 0 ? "+" : "";
+    const sign = delta > 0 ? "+" : "-";
     const percent = source > 0 ? (delta / source) * 100 : null;
     const percentText = percent == null ? "" : `, ${percent > 0 ? "+" : ""}${percent.toFixed(1)}%`;
 
-    return `${sign}${formatBytes(Math.abs(delta))}${delta < 0 ? " smaller" : delta > 0 ? " larger" : ""}${percentText}`.trim();
+    return `${sign}${formatBytes(Math.abs(delta))}${percentText}`.trim();
+}
+
+function buildSizeEstimateHelpText(profile) {
+    const audioMode = profile && profile.audioCodec && profile.audioCodec.id === "copy"
+        ? "source audio bitrate when audio is copied"
+        : "profile audio bitrate when audio is re-encoded";
+
+    return `Estimate only. Based on the selected output settings, including resolution, compression quality, codec, and audio settings. Actual file size may vary.`;
+}
+
+function buildBitrateEstimateHelpText(_profile) {
+    return "Estimate only. Based on the selected output settings, including resolution, compression quality, codec, and audio settings. Actual bitrate may vary.";
 }
 
 function formatBitrateChange(outputBps, sourceBps) {
@@ -316,6 +410,119 @@ function formatBitrateChange(outputBps, sourceBps) {
     const deltaKbps = Math.round(Math.abs(delta) / 1000).toLocaleString();
 
     return `${delta > 0 ? "+" : "-"}${deltaKbps} kbps, ${percent > 0 ? "+" : ""}${percent.toFixed(1)}%`;
+}
+
+function getSourceTotalBitrate(source) {
+    const explicitBitrate = Number(source && source.bitRate || 0);
+    if (explicitBitrate > 0) {
+        return explicitBitrate;
+    }
+
+    const durationSec = Math.max(0, Number(source && source.durationMs || 0) / 1000);
+    const fileSizeBytes = Math.max(0, Number(source && source.fileSizeBytes || 0));
+    if (durationSec > 0 && fileSizeBytes > 0) {
+        return Math.round((fileSizeBytes * 8) / durationSec);
+    }
+
+    return 0;
+}
+
+function getSourceVideoBitrate(source) {
+    return getProbeStreamBitrate(source, "video");
+}
+
+function getSourceAudioBitrate(source) {
+    if (!hasAudioStream(source)) {
+        return 0;
+    }
+
+    const streamBitrate = getProbeStreamBitrate(source, "audio");
+    if (streamBitrate > 0) {
+        return streamBitrate;
+    }
+
+    return 160000;
+}
+
+function getProbeStreamBitrate(source, codecType) {
+    const probeJson = source && source.probeJson ? source.probeJson : null;
+    const streams = Array.isArray(probeJson && probeJson.streams) ? probeJson.streams : [];
+    const stream = streams.find(entry => entry && entry.codec_type === codecType) || null;
+    const bitRate = Number(stream && stream.bit_rate || 0);
+    return bitRate > 0 ? bitRate : 0;
+}
+
+function hasAudioStream(source) {
+    const probeJson = source && source.probeJson ? source.probeJson : null;
+    const streams = Array.isArray(probeJson && probeJson.streams) ? probeJson.streams : [];
+    return streams.some(stream => stream && stream.codec_type === "audio");
+}
+
+function getCrfCompressionFactor(crf, intentId) {
+    const safeCrf = Number(crf || 20);
+    const intentFactor = getProfileIntentBitrateFactor(intentId);
+
+    if (safeCrf <= 18) return 0.72 * intentFactor;
+    if (safeCrf <= 20) return 0.62 * intentFactor;
+    if (safeCrf <= 22) return 0.52 * intentFactor;
+    if (safeCrf <= 24) return 0.44 * intentFactor;
+    return 0.36 * intentFactor;
+}
+
+function getMinimumVideoBitrate(outputPixels, outputFps) {
+    const fpsFactor = clamp(normalizeEstimatedFps(outputFps) / 30, 0.85, 1.8);
+
+    if (outputPixels >= 2560 * 1440) return Math.round(1800000 * fpsFactor);
+    if (outputPixels >= 1920 * 1080) return Math.round(900000 * fpsFactor);
+    if (outputPixels >= 1280 * 720) return Math.round(550000 * fpsFactor);
+    return Math.round(350000 * fpsFactor);
+}
+
+function getCodecCompressionFactor(codecId) {
+    switch (String(codecId || "").toLowerCase()) {
+        case "h265":
+            return 0.72;
+        case "av1":
+            return 0.62;
+        case "vp9":
+            return 0.76;
+        case "h264":
+            return 1;
+        case "copy":
+            return 1;
+        default:
+            return 0.9;
+    }
+}
+
+function getProfileIntentBitrateFactor(intentId) {
+    switch (String(intentId || "").toLowerCase()) {
+        case "browser_compatibility":
+            return 1.04;
+        case "downscale":
+            return 0.96;
+        case "downscale_and_compress":
+            return 0.88;
+        case "recompress":
+            return 0.92;
+        case "remux":
+            return 1;
+        default:
+            return 1;
+    }
+}
+
+function normalizeEstimatedFps(value) {
+    const fps = Number(value || 0);
+    if (!Number.isFinite(fps) || fps <= 0) {
+        return 30;
+    }
+
+    return fps;
+}
+
+function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
 }
 
 function formatResponseTimestamp(value) {
