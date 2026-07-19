@@ -386,6 +386,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
 
     app.get("/encoding/review/item", asyncRoute(async function (req, res) {
         const state = await encodingService.getDashboardState();
+        const settings = await settingsService.getSettings();
         const selectedId = String(req.query.id || "");
         const selected = state.items.find(item => item.id === selectedId) || state.reviewItems[0] || null;
         const outcome = selected ? await encodingService.getLatestOutcome(selected.id) : null;
@@ -404,7 +405,8 @@ module.exports = function encodingApi(app, database, fileIntake) {
             state,
             body: renderReviewItem(selected, {
                 encodedPreviewUrl,
-                outcome
+                outcome,
+                retainSourceByDefault: Boolean(settings && settings.review && settings.review.retainSourceByDefault)
             })
         }));
     }));

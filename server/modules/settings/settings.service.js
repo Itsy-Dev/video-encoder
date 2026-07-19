@@ -18,6 +18,7 @@ const DEFAULTS = Object.freeze({
     defaultProfileId: "browser_compatibility",
     showSetupVideoPlayerByDefault: false,
     queueToFrontByDefault: false,
+    retainSourceByDefault: true,
     inboxRoot: getConfiguredDefaultInboxRoot(),
     outboxRoot: getConfiguredDefaultOutboxRoot(),
     browserFileIntakeEnabled: false,
@@ -73,6 +74,9 @@ const SETTINGS_DEFINITIONS = Object.freeze([
         type: "boolean"
     }),
     defineSetting("setup.queueToFrontByDefault", DEFAULTS.queueToFrontByDefault, {
+        type: "boolean"
+    }),
+    defineSetting("review.retainSourceByDefault", DEFAULTS.retainSourceByDefault, {
         type: "boolean"
     }),
     defineSetting("storage.inboxRoot", DEFAULTS.inboxRoot, {

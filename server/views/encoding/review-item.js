@@ -6,7 +6,11 @@ const {
     formatDuration
 } = require("./helpers");
 
-module.exports = function renderReviewItem(item, { encodedPreviewUrl, outcome = null } = {}) {
+module.exports = function renderReviewItem(item, {
+    encodedPreviewUrl,
+    outcome = null,
+    retainSourceByDefault = true
+} = {}) {
     if (!item) {
         return `<section class="ui inverted segment">
           <div class="ui placeholder segment">
@@ -33,7 +37,7 @@ module.exports = function renderReviewItem(item, { encodedPreviewUrl, outcome = 
         ? renderReviewData(item, outcome, source, encoded)
         : renderOutcomeData(item, outcome, source, encoded)
       }
-      ${renderActions(item, canReview)}
+      ${renderActions(item, canReview, retainSourceByDefault)}
     </section>`;
 };
 
@@ -126,12 +130,13 @@ function renderReceiptData(item, outcome) {
       </div>`;
 }
 
-function renderActions(item, canReview) {
+function renderActions(item, canReview, retainSourceByDefault) {
     if (!canReview) {
         return ``;
     }
 
     const disabledClass = "";
+    const sourceAction = retainSourceByDefault ? "retain" : "delete";
 
     return `<section class="ui inverted horizontally fitted segment">
       <div class="ui stackable bottom aligned grid">
@@ -145,7 +150,7 @@ function renderActions(item, canReview) {
                   type="checkbox"
                   name="retainSourceSwitch"
                   value="retain"
-                  checked
+                  ${retainSourceByDefault ? "checked" : ""}
                   ${canReview ? "" : "disabled"}
                   onchange="window.updateSourceActionSwitch(this)"
                 />
@@ -169,7 +174,7 @@ function renderActions(item, canReview) {
           </form>
           <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/approve" data-api-form data-confirm="Approve this encode and move it to outbox? This removes the encoder's internal working copy." style="display: inline-block;">
             <input type="hidden" name="reviewer" value="operator" />
-            <input type="hidden" name="sourceAction" value="retain" data-source-action-input />
+            <input type="hidden" name="sourceAction" value="${escapeHtml(sourceAction)}" data-source-action-input />
             <button type="submit" class="ui green ${disabledClass} button" ${canReview ? "" : "disabled"}>
               <i class="check icon"></i>
               Commit
