@@ -126,6 +126,23 @@ module.exports = function renderPage({ title, heading, description, state, body,
       padding-bottom: 8px;
    }
 
+   .encoder-setup-compact-player {
+      overflow: hidden;
+   }
+
+   .encoder-setup-compact-player video {
+      display: block;
+      width: 100%;
+   }
+
+   .encoder-setup-expanded-player {
+      margin-bottom: 1rem;
+   }
+
+   .encoder-setup-expanded-player[hidden] {
+      display: none !important;
+   }
+
   </style>
 </head>
 <body>
@@ -218,6 +235,74 @@ module.exports = function renderPage({ title, heading, description, state, body,
       const target = root ? root.querySelector("[data-source-action-input]") : document.querySelector("[data-source-action-input]");
       if (!target) return;
       target.value = checkbox && checkbox.checked ? "retain" : "delete";
+    };
+
+    window.expandSetupSourcePlayer = function (compactVideo) {
+      if (!(compactVideo instanceof HTMLVideoElement)) return;
+      const root = compactVideo.closest("#encoding-setup-root");
+      if (!root) return;
+
+      const expandedSection = root.querySelector("[data-setup-expanded-player]");
+      const expandedVideo = root.querySelector("[data-setup-expanded-video]");
+      if (!(expandedSection instanceof HTMLElement) || !(expandedVideo instanceof HTMLVideoElement)) {
+        return;
+      }
+
+      expandedSection.hidden = false;
+      window.setSetupVideoPlayerPreference(root, true);
+
+      try {
+        if (Number.isFinite(compactVideo.currentTime)) {
+          expandedVideo.currentTime = compactVideo.currentTime;
+        }
+      }
+      catch (_error) {}
+
+      compactVideo.pause();
+      const playPromise = expandedVideo.play();
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(function () {});
+      }
+
+      expandedSection.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest"
+      });
+    };
+
+    window.collapseSetupSourcePlayer = function (button) {
+      const root = button && button.closest ? button.closest("#encoding-setup-root") : document.getElementById("encoding-setup-root");
+      if (!root) return;
+
+      const expandedSection = root.querySelector("[data-setup-expanded-player]");
+      const expandedVideo = root.querySelector("[data-setup-expanded-video]");
+      if (expandedVideo instanceof HTMLVideoElement) {
+        expandedVideo.pause();
+      }
+      if (expandedSection instanceof HTMLElement) {
+        expandedSection.hidden = true;
+      }
+      window.setSetupVideoPlayerPreference(root, false);
+    };
+
+    window.setSetupVideoPlayerPreference = function (root, enabled) {
+      const setupRoot = root instanceof HTMLElement ? root : document.getElementById("encoding-setup-root");
+      if (!setupRoot) return;
+
+      const input = setupRoot.querySelector("[data-setup-show-video-input]");
+      if (input instanceof HTMLInputElement) {
+        input.value = enabled ? "true" : "false";
+      }
+    };
+
+    window.syncSetupQueueToFrontPreference = function (checkbox) {
+      const root = checkbox && checkbox.closest ? checkbox.closest("#encoding-setup-root") : document.getElementById("encoding-setup-root");
+      if (!root) return;
+
+      const input = root.querySelector("[data-setup-queue-front-input]");
+      if (input instanceof HTMLInputElement) {
+        input.value = checkbox && checkbox.checked ? "true" : "false";
+      }
     };
 
     document.addEventListener("submit", async function (event) {

@@ -1,5 +1,4 @@
 const {
-    formatAspectRatio,
     escapeHtml,
     formatBitrate,
     formatBytes,
@@ -7,7 +6,11 @@ const {
     formatDuration
 } = require("./helpers");
 
-module.exports = function renderReviewItem(item, { encodedPreviewUrl } = {}) {
+module.exports = function renderReviewItem(item, {
+    encodedPreviewUrl,
+    outcome = null,
+    retainSourceByDefault = true
+} = {}) {
     if (!item) {
         return `<section class="ui inverted segment">
           <div class="ui placeholder segment">
@@ -19,54 +22,59 @@ module.exports = function renderReviewItem(item, { encodedPreviewUrl } = {}) {
         </section>`;
     }
 
-    const source = item.sourceMetadata || {};
-    const encoded = item.encodedMetadata || {};
     const canReview = String(item.status || "").toLowerCase() === "review";
+    const source = canReview
+        ? (item.sourceMetadata || {})
+        : (outcome && outcome.sourceMetadata) || item.sourceMetadata || {};
+    const encoded = canReview
+        ? (item.encodedMetadata || {})
+        : (outcome && outcome.outputMetadata) || item.encodedMetadata || {};
 
     return `<section class="ui inverted segment">
-      ${renderVideo(item, encodedPreviewUrl)}
-      ${renderHeader(item)}
-      ${renderData(item, source, encoded)}
-      ${renderActions(item, canReview)}
+      ${renderVideo(encodedPreviewUrl)}
+      ${renderHeader(item, outcome, canReview)}
+      ${canReview
+        ? renderReviewData(item, outcome, source, encoded)
+        : renderOutcomeData(item, outcome, source, encoded)
+      }
+      ${renderActions(item, canReview, retainSourceByDefault)}
     </section>`;
 };
 
-function renderHeader(item) {
-    const status = String(item.status || "unknown").toLowerCase();
-
+function renderHeader(item, outcome, canReview) {
     return `
       <h3 class="ui inverted header">
-        <div class="content">${escapeHtml(item.originalFilename || "Encoded Output")}</div>
+        <div class="content">
+          ${escapeHtml(item.originalFilename || "Encoded Output")}
+          ${!canReview && outcome
+            ? `<span class="sub header">Attempt ${escapeHtml(String(outcome.attemptNumber || 1))} · ${escapeHtml(item.profileId || outcome.profileId || "—")}</span>`
+            : ""
+          }
+        </div>
       </h3>`;
 }
 
-function renderVideo(item, encodedPreviewUrl) {
+function renderVideo(encodedPreviewUrl) {
+    if (!encodedPreviewUrl) {
+        return "";
+    }
+
     return `
       <section class="video-box">
-        ${encodedPreviewUrl
-          ? `<video controls preload="metadata">
-              <source src="${escapeHtml(encodedPreviewUrl)}" />
-            </video>`
-          : `<div class="ui warning inverted message">Encoded output is not available for browser playback.</div>`
-        }
+        <video controls preload="metadata">
+          <source src="${escapeHtml(encodedPreviewUrl)}" />
+        </video>
     </section>`;
 }
 
-function renderData(item, source, encoded) {
+function renderReviewData(item, outcome, source, encoded) {
     return `<section class="">
-      <div class="ui four column stackable compact grid">
-        ${renderInlineMetric("Profile", item.profileId || "—")}
-        ${renderInlineMetric("Source", item.inboxRelativeDir ? `/${item.inboxRelativeDir}` : "/")}
-        ${renderInlineMetric("Requested", formatDateTime(item.queuedAt || item.requestedAt || item.createdAt))}
-        ${renderInlineMetric("Completed", formatDateTime(item.completedAt || item.updatedAt))}
-      </div>
-      <div class="ui hidden divider"></div>
+      ${renderReceiptData(item, outcome)}
       <div class="ui inverted charcoal segment">
         <div class="ui four column stackable compact grid">
-          ${renderOutcomeMetric("Size", formatBytes(encoded.fileSizeBytes), formatBytes(source.fileSizeBytes), formatSizeDiff(encoded.fileSizeBytes, source.fileSizeBytes))}
+          ${renderOutcomeMetric("Size", formatBytes(encoded.fileSizeBytes), formatBytes(source.fileSizeBytes), formatLiveSizeDiff(encoded.fileSizeBytes, source.fileSizeBytes))}
           ${renderOutcomeMetric("Bit Rate", formatBitrate(encoded.bitRate), formatBitrate(source.bitRate), formatPercentDiff(encoded.bitRate, source.bitRate))}
           ${renderOutcomeMetric("Resolution", formatResolution(encoded.width, encoded.height), formatResolution(source.width, source.height), formatResolutionDiff(encoded, source))}
-          ${renderOutcomeMetric("Aspect Ratio", formatAspectRatio(encoded), formatAspectRatio(source))}
           ${renderOutcomeMetric("FPS", formatFps(encoded.frameRate), formatFps(source.frameRate), formatPercentDiff(encoded.frameRate, source.frameRate))}
           ${renderOutcomeMetric("Duration", formatDuration(encoded.durationMs), formatDuration(source.durationMs))}
           ${renderOutcomeMetric("Container", encoded.container || "—", source.container || "—")}
@@ -77,8 +85,58 @@ function renderData(item, source, encoded) {
     </section>`;
 }
 
-function renderActions(item, canReview) {
-    const disabledClass = canReview ? "" : "disabled";
+function renderOutcomeData(item, outcome, source, encoded) {
+    return `<section>
+      ${renderReceiptData(item, outcome)}
+      <div class="ui inverted charcoal segment">
+        <div class="ui four column stackable compact grid">
+          ${renderOutcomeMetric("Size", formatBytes(encoded.fileSizeBytes), formatBytes(source.fileSizeBytes), formatSavedSizeDiff(
+            outcome ? outcome.sizeDeltaBytes : encoded.fileSizeBytes - source.fileSizeBytes,
+            outcome ? outcome.sizeDeltaPercent : calculatePercentDiff(encoded.fileSizeBytes, source.fileSizeBytes)
+          ))}
+          ${renderOutcomeMetric("Bit Rate", formatBitrate(encoded.bitRate), formatBitrate(source.bitRate), formatBitrateDiff(
+            outcome ? outcome.bitrateDeltaBps : encoded.bitRate - source.bitRate,
+            outcome ? outcome.bitrateDeltaPercent : calculatePercentDiff(encoded.bitRate, source.bitRate)
+          ))}
+          ${renderOutcomeMetric("Resolution", formatResolution(encoded.width, encoded.height), formatResolution(source.width, source.height), formatResolutionDiff(encoded, source))}
+          ${renderOutcomeMetric("FPS", formatFps(encoded.frameRate), formatFps(source.frameRate), formatPercentDiff(encoded.frameRate, source.frameRate))}
+          ${renderOutcomeMetric("Duration", formatDuration(encoded.durationMs), formatDuration(source.durationMs))}
+          ${renderOutcomeMetric("Container", encoded.container || "—", source.container || "—")}
+          ${renderOutcomeMetric("Codec", encoded.videoCodec || "—", source.videoCodec || "—")}
+          ${renderOutcomeMetric("Pixel Format", getPixelFormat(encoded), getPixelFormat(source))}
+        </div>
+      </div>
+    </section>`;
+}
+
+function renderReceiptData(item, outcome) {
+    const status = String(item.status || "unknown");
+    const requestedAt = (outcome && outcome.requestedAt) || item.queuedAt || item.requestedAt || item.createdAt;
+    const finishedAt = (outcome && outcome.encodingFinishedAt) || item.completedAt || item.updatedAt;
+    const profile = item.profileId || (outcome && outcome.profileId) || "—";
+
+    return `
+      <div class="ui four column stackable compact grid">
+        ${renderInlineMetric("Status", status)}
+        ${renderInlineMetric("Source", item.inboxRelativeDir ? `/${item.inboxRelativeDir}` : "/")}
+        ${renderInlineMetric("Requested", formatDateTime(requestedAt))}
+        ${renderInlineMetric("Finished", formatDateTime(finishedAt))}
+      </div>
+      <div class="ui four column stackable compact grid">
+        ${renderInlineMetric("Completed In", formatDuration(outcome && outcome.activeEncodingMs))}
+        ${renderInlineMetric("Paused Time", formatDuration(outcome && outcome.pausedMs))}
+        ${renderInlineMetric("Elapsed Time", formatDuration(outcome && outcome.wallClockMs))}
+        ${renderInlineMetric("Profile", profile)}
+      </div>`;
+}
+
+function renderActions(item, canReview, retainSourceByDefault) {
+    if (!canReview) {
+        return ``;
+    }
+
+    const disabledClass = "";
+    const sourceAction = retainSourceByDefault ? "retain" : "delete";
 
     return `<section class="ui inverted horizontally fitted segment">
       <div class="ui stackable bottom aligned grid">
@@ -92,7 +150,7 @@ function renderActions(item, canReview) {
                   type="checkbox"
                   name="retainSourceSwitch"
                   value="retain"
-                  checked
+                  ${retainSourceByDefault ? "checked" : ""}
                   ${canReview ? "" : "disabled"}
                   onchange="window.updateSourceActionSwitch(this)"
                 />
@@ -116,7 +174,7 @@ function renderActions(item, canReview) {
           </form>
           <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/approve" data-api-form data-confirm="Approve this encode and move it to outbox? This removes the encoder's internal working copy." style="display: inline-block;">
             <input type="hidden" name="reviewer" value="operator" />
-            <input type="hidden" name="sourceAction" value="retain" data-source-action-input />
+            <input type="hidden" name="sourceAction" value="${escapeHtml(sourceAction)}" data-source-action-input />
             <button type="submit" class="ui green ${disabledClass} button" ${canReview ? "" : "disabled"}>
               <i class="check icon"></i>
               Commit
@@ -157,16 +215,21 @@ function formatFps(value) {
     return Number.isInteger(fps) ? String(fps) : fps.toFixed(3).replace(/\.?0+$/, "");
 }
 
-function formatSizeDiff(encodedBytes, sourceBytes) {
+function formatLiveSizeDiff(encodedBytes, sourceBytes) {
     const encoded = Number(encodedBytes || 0);
     const source = Number(sourceBytes || 0);
     if (!encoded || !source) return null;
 
-    const delta = encoded - source;
-    const percent = (delta / source) * 100;
-    const sign = delta > 0 ? "+" : "";
+    return formatSavedSizeDiff(encoded - source, calculatePercentDiff(encoded, source));
+}
 
-    return `${sign}${formatBytes(Math.abs(delta))}${delta < 0 ? " smaller" : delta > 0 ? " larger" : ""}, ${percent > 0 ? "+" : ""}${percent.toFixed(1)}%`;
+function formatSavedSizeDiff(delta, percent) {
+    const safeDelta = Number(delta || 0);
+    const safePercent = Number(percent);
+    if (!Number.isFinite(safeDelta) || !Number.isFinite(safePercent) || !safeDelta) return null;
+
+    const sign = safeDelta > 0 ? "+" : "-";
+    return `${sign}${formatBytes(Math.abs(safeDelta))}, ${safePercent > 0 ? "+" : ""}${safePercent.toFixed(1)}%`;
 }
 
 function formatPercentDiff(encodedValue, sourceValue) {
@@ -185,6 +248,21 @@ function formatResolutionDiff(encoded, source) {
 
     const percent = ((encodedPixels - sourcePixels) / sourcePixels) * 100;
     return `${percent > 0 ? "+" : ""}${percent.toFixed(1)}%`;
+}
+
+function formatBitrateDiff(delta, percent) {
+    const safeDelta = Number(delta || 0);
+    const safePercent = Number(percent);
+    if (!Number.isFinite(safeDelta) || !Number.isFinite(safePercent) || !safeDelta) return null;
+
+    return `${safeDelta > 0 ? "+" : "-"}${Math.round(Math.abs(safeDelta) / 1000).toLocaleString()} kbps, ${safePercent > 0 ? "+" : ""}${safePercent.toFixed(1)}%`;
+}
+
+function calculatePercentDiff(encodedValue, sourceValue) {
+    const encoded = Number(encodedValue || 0);
+    const source = Number(sourceValue || 0);
+    if (!encoded || !source) return null;
+    return ((encoded - source) / source) * 100;
 }
 
 function getPixelFormat(metadata) {

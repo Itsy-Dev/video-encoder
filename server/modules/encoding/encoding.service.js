@@ -128,6 +128,11 @@ module.exports = class EncodingService {
         return this._requireItem(id);
     }
 
+    async getLatestOutcome(id) {
+        await this.ready;
+        return this.repository.getLatestOutcomeForItem(id);
+    }
+
     async scanInbox() {
         await this.ready;
         return this._scanInboxInternal();
@@ -295,7 +300,7 @@ module.exports = class EncodingService {
         return results;
     }
 
-    async queueItem(id, { profileId, inboxRelativeDir } = {}) {
+    async queueItem(id, { profileId, inboxRelativeDir, queuePlacement = "back" } = {}) {
         await this.ready;
         const queued = await this.repository.withTransaction(async repo => {
             const item = await this._requireItemWithRepository(repo, id);
@@ -316,7 +321,12 @@ module.exports = class EncodingService {
                 reordered.push(item);
             }
 
-            const normalizedQueue = applyQueuePositionStrategy(reordered);
+            const placement = String(queuePlacement || "").toLowerCase() === "front"
+                ? "front"
+                : "back";
+            const reorderedQueue = reorderQueueItems(reordered, item.id, placement);
+
+            const normalizedQueue = applyQueuePositionStrategy(reorderedQueue);
             await repo.replaceQueuePositions(normalizedQueue);
 
             const queueRecord = normalizedQueue.find(queueItem => queueItem.id === item.id);
@@ -338,7 +348,7 @@ module.exports = class EncodingService {
                 outputFilename: buildOutputFilename(item.originalFilename, selectedProfileId)
             });
         });
-        console.log(`[encoder] Item queued. id=${queued.id} profile=${queued.profileId || "browser_compatibility"} inboxDir=${queued.inboxRelativeDir || "/"}`);
+        console.log(`[encoder] Item queued. id=${queued.id} profile=${queued.profileId || "browser_compatibility"} inboxDir=${queued.inboxRelativeDir || "/"} placement=${String(queuePlacement || "back").toLowerCase() === "front" ? "front" : "back"}`);
         this._ensureWorkerRunning();
         return queued;
     }
@@ -792,6 +802,10 @@ module.exports = class EncodingService {
 
             const encodedStat = await fsp.stat(encodedOutputAbsPath);
             const encodedMetadata = await this.ffprobeService.probeFile(encodedOutputAbsPath, encodedStat);
+            const encodingFinishedAt = new Date().toISOString();
+            const pausedMs = this._getTotalPausedMs();
+            const wallClockMs = calculateElapsedMs(encodingStartedAt, encodingFinishedAt);
+            const activeEncodingMs = wallClockMs == null ? null : Math.max(0, wallClockMs - pausedMs);
 
             await this.repository.upsert({
                 ...encodingItem,
@@ -801,10 +815,24 @@ module.exports = class EncodingService {
                 status: "review",
                 encodingStartedAt,
                 pausedAt: null,
-                completedAt: new Date().toISOString(),
+                completedAt: encodingFinishedAt,
                 attemptCount: nextAttemptCount,
                 encodedMetadata
             });
+
+            await this.repository.upsertOutcome(buildEncodingOutcomeReceipt({
+                item: encodingItem,
+                attemptNumber: nextAttemptCount,
+                profileId,
+                encodingStartedAt,
+                encodingFinishedAt,
+                activeEncodingMs,
+                pausedMs,
+                wallClockMs,
+                sourceMetadata: encodingItem.sourceMetadata,
+                outputMetadata: encodedMetadata,
+                encodedOutputAbsPath
+            }));
 
             this.safety.lastItemFinishedAt = new Date().toISOString();
             console.log(`[encoder] Worker completed item. id=${encodingItem.id} encoded=${encodedOutputAbsPath}`);
@@ -945,6 +973,19 @@ module.exports = class EncodingService {
         }
 
         this.safety.pausedStartedAt = null;
+    }
+
+    _getTotalPausedMs() {
+        let pausedMs = Number(this.safety.totalPausedMs || 0);
+
+        if (this.safety.pausedStartedAt) {
+            const currentPauseMs = Date.now() - new Date(this.safety.pausedStartedAt).getTime();
+            if (Number.isFinite(currentPauseMs) && currentPauseMs > 0) {
+                pausedMs += currentPauseMs;
+            }
+        }
+
+        return Math.max(0, pausedMs);
     }
 
     async _requireItem(id) {
@@ -1348,6 +1389,57 @@ async function walk(rootAbs, onFile) {
 
 function buildOutputFilename(filename, profileId) {
     return String(filename || "output.mp4");
+}
+
+function buildEncodingOutcomeReceipt({
+    item,
+    attemptNumber,
+    profileId,
+    encodingStartedAt,
+    encodingFinishedAt,
+    activeEncodingMs,
+    pausedMs,
+    wallClockMs,
+    sourceMetadata,
+    outputMetadata,
+    encodedOutputAbsPath
+}) {
+    const sourceSize = Number(sourceMetadata && sourceMetadata.fileSizeBytes || 0);
+    const outputSize = Number(outputMetadata && outputMetadata.fileSizeBytes || 0);
+    const sourceBitrate = Number(sourceMetadata && sourceMetadata.bitRate || 0);
+    const outputBitrate = Number(outputMetadata && outputMetadata.bitRate || 0);
+    const sizeDeltaBytes = outputSize - sourceSize;
+    const bitrateDeltaBps = outputBitrate - sourceBitrate;
+
+    return {
+        encodingItemId: item && item.id,
+        attemptNumber,
+        profileId,
+        requestedAt: item && item.requestedAt,
+        queuedAt: item && item.queuedAt,
+        encodingStartedAt,
+        encodingFinishedAt,
+        activeEncodingMs,
+        pausedMs,
+        wallClockMs,
+        sourceMetadata,
+        outputMetadata,
+        sizeDeltaBytes,
+        sizeDeltaPercent: sourceSize > 0 ? (sizeDeltaBytes / sourceSize) * 100 : null,
+        bitrateDeltaBps,
+        bitrateDeltaPercent: sourceBitrate > 0 ? (bitrateDeltaBps / sourceBitrate) * 100 : null,
+        encodedOutputAbsPath
+    };
+}
+
+function calculateElapsedMs(startedAt, finishedAt) {
+    const startedMs = new Date(startedAt || 0).getTime();
+    const finishedMs = new Date(finishedAt || 0).getTime();
+    if (!Number.isFinite(startedMs) || !Number.isFinite(finishedMs) || finishedMs < startedMs) {
+        return null;
+    }
+
+    return finishedMs - startedMs;
 }
 
 function sanitizeSegment(value) {
