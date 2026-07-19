@@ -1,4 +1,4 @@
-const { escapeHtml, formatBytes, formatDateTime } = require("./helpers");
+const { escapeHtml, formatDate, formatDateTime } = require("./helpers");
 
 module.exports = function renderLogs(logs = {}) {
     const files = Array.isArray(logs.files) ? logs.files : [];
@@ -8,31 +8,15 @@ module.exports = function renderLogs(logs = {}) {
 
     return `<section class="ui segment">
       <div class="ui stackable grid">
-      <!--
-        <div class="four wide column">
-          <div class="ui inverted charcoal segment">
-            <h3 class="ui inverted header">Log Files</h3>
-            <div class="ui inverted relaxed divided list">
-              ${files.length ? files.map(file => renderLogFileItem(file, activeFile)).join("") : `
-                <div class="item">
-                  <div class="content">
-                    <div class="header">No log files found yet.</div>
-                    <div class="description">Logs will appear here after the app writes its first events.</div>
-                  </div>
-                </div>
-              `}
-            </div>
-          </div>
-        </div>
--->
         <div class=" column">
           <div class="ui inverted charcoal segment">
             <div class="ui stackable middle aligned grid">
-              <div class="ten wide column">
+              <div class="eight wide column">
                 <h3 class="ui inverted header" style="margin-bottom: 0.35rem;">Recent Activity</h3>
-                <div class="ui small grey text">Showing newest entries first from <code>${escapeHtml(activeFileLabel)}</code>.</div>
+                <div class="ui small grey text">Showing entries from <code>${escapeHtml(activeFileLabel)}</code>.</div>
               </div>
-              <div class="six wide right aligned column">
+              <div class="eight wide right aligned column">
+                ${renderLogFilePicker(files, activeFile)}
                 <a class="ui small basic inverted button" href="/encoding/logs${activeFile ? `?file=${encodeURIComponent(activeFile)}` : ""}">
                   <i class="sync alternate icon"></i>
                   Refresh
@@ -49,18 +33,20 @@ module.exports = function renderLogs(logs = {}) {
     </section>`;
 };
 
-function renderLogFileItem(file, activeFile) {
-    const isActive = file && file.name === activeFile;
-    return `<div class="item">
-      <div class="content">
-        <a class="header" href="/encoding/logs?file=${encodeURIComponent(file.name)}">${escapeHtml(file.name)}</a>
-        <div class="description" style="margin-top: 0.35rem;">
-          <span class="ui tiny ${isActive ? "teal" : "grey"} label">${isActive ? "Open" : "Available"}</span>
-          <span>${escapeHtml(formatBytes(file.sizeBytes))}</span>
-          <span style="margin-left: 0.75rem;">Updated ${escapeHtml(formatDateTime(file.updatedAt))}</span>
-        </div>
+function renderLogFilePicker(files, activeFile) {
+    if (!files.length) {
+        return `<div class="ui tiny grey text" style="display: inline-block; margin-right: 0.75rem;">No log files yet.</div>`;
+    }
+
+    return `<form method="get" action="/encoding/logs" class="ui tiny inverted form encoder-settings-panel" style="display: inline-block; width: 13rem; margin-right: 0.75rem;">
+      <div class="field" style="margin: 0;">
+        <select name="file" class="ui fluid dropdown" onchange="this.form.submit()">
+          ${files.map(file => `
+            <option value="${escapeHtml(file.name)}"${file.name === activeFile ? " selected" : ""}>${escapeHtml(formatLogFileLabel(file.name))}</option>
+          `).join("")}
+        </select>
       </div>
-    </div>`;
+    </form>`;
 }
 
 function renderActivityFeed(entries) {
@@ -119,4 +105,15 @@ function splitSubsystemMessage(message) {
         subsystem: String(match[1] || "").toUpperCase(),
         message: match[2] || ""
     };
+}
+
+function formatLogFileLabel(filename) {
+    const name = String(filename || "");
+    const match = /^encoder-(\d{4})-(\d{2})-(\d{2})\.log$/i.exec(name);
+    if (!match) {
+        return name;
+    }
+
+    const isoDate = `${match[1]}-${match[2]}-${match[3]}T00:00:00.000Z`;
+    return `[${formatDate(isoDate)}]`;
 }
