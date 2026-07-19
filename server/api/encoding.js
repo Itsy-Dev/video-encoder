@@ -5,6 +5,7 @@ const multer = require("multer");
 const EncodingService = require("../modules/encoding/encoding.service");
 const SettingsService = require("../modules/settings/settings.service");
 const { getEncoderPaths } = require("../modules/filesystem/handoff-paths");
+const { readEncoderLogs } = require("../modules/filesystem/log-reader");
 
 const VIEW_ROOT_ABS = path.resolve(__dirname, "..", "views", "encoding");
 const IS_DEV_VIEW_HOT_RELOAD = process.env.NODE_ENV !== "production";
@@ -72,6 +73,17 @@ module.exports = function encodingApi(app, database, fileIntake) {
             ok: true,
             definitions: settingsService.getDefinitions(),
             values
+        });
+    }));
+
+    app.get("/api/encoding/logs", asyncRoute(async function (req, res) {
+        const logs = await readEncoderLogs(getEncoderPaths().logs, {
+            file: req.query.file,
+            limit: req.query.limit
+        });
+        res.json({
+            ok: true,
+            logs
         });
     }));
 
@@ -423,6 +435,24 @@ module.exports = function encodingApi(app, database, fileIntake) {
         }));
     }));
 
+    app.get("/encoding/logs", asyncRoute(async function (req, res) {
+        const state = await encodingService.getDashboardState();
+        const logs = await readEncoderLogs(getEncoderPaths().logs, {
+            file: req.query.file,
+            limit: req.query.limit
+        });
+        const { renderPage, renderLogs } = loadEncodingViews();
+
+        res.send(renderPage({
+            title: "Logs",
+            heading: "Logs",
+            description: "Inspect recent operation and error logs without opening the filesystem.",
+            state,
+            body: renderLogs(logs),
+            autoRefreshMs: 20_000
+        }));
+    }));
+
     app.get("/encoding/settings", asyncRoute(async function (_req, res) {
         const state = await encodingService.getDashboardState();
         const settings = await settingsService.getSettings();
@@ -441,7 +471,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
     settingsService.getSettings()
         .then(applyFileIntakeSettings)
         .catch(error => {
-            console.error("[encoder] Failed to apply file intake settings on startup", error);
+            console.error("[SETTINGS] Failed to apply file intake settings on startup", error);
         });
 };
 
@@ -458,6 +488,7 @@ function loadEncodingViews() {
         renderReview: require("../views/encoding/review"),
         renderReviewItem: require("../views/encoding/review-item"),
         renderHistory: require("../views/encoding/history"),
+        renderLogs: require("../views/encoding/logs"),
         renderSettings: require("../views/encoding/settings")
     };
 }

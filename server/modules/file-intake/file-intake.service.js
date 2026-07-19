@@ -56,7 +56,7 @@ module.exports = class FileIntakeService {
 
         setImmediate(() => {
             this._runJob(job, processor, stagedFiles, metadata).catch(error => {
-                console.error("[encoder] File intake job crashed", error);
+                console.error("[INTAKE] File intake job crashed", error);
             });
         });
 
@@ -134,7 +134,7 @@ module.exports = class FileIntakeService {
             job.error = error && error.message ? error.message : "File intake failed";
             job.finishedAt = new Date().toISOString();
             job.updatedAt = job.finishedAt;
-            console.error(`[encoder] File intake job failed. id=${job.id} kind=${job.kind}`, error);
+            console.error(`[INTAKE] File intake job failed. id=${job.id} kind=${job.kind}`, error);
         }
         finally {
             await this.cleanupStagedFiles(files).catch(() => {});

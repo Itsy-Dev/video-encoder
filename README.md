@@ -1,31 +1,170 @@
-# Encoder Service
+# Video Encoder
 
-Standalone video encoder scaffold.
+Standalone video intake, encoding, review, and export app with a browser UI, background worker, persistent settings, and operator-focused logging.
 
-## Start
+## What It Does
+
+The app is built around a simple operator workflow:
+
+1. place source videos in `inbox/` or upload them through the browser
+2. ingest sources into internal `pending/` storage
+3. choose an encoding profile in Setup
+4. run one active encode worker at a time
+5. review the output
+6. approve to `outbox/` or reject/discard the item
+
+The current UI includes:
+
+- Pending
+- Setup
+- Queue
+- Review
+- History
+- Logs
+- Settings
+
+## Requirements
+
+- Node.js
+- MySQL
+- `ffmpeg`
+- `ffprobe`
+
+If `ffmpeg` or `ffprobe` are not on the default `PATH`, set:
+
+- `ENCODER_FFMPEG_BIN`
+- `ENCODER_FFPROBE_BIN`
+
+## Install
 
 ```bash
 npm install
-npm run start
 ```
 
-## Migrations
+## Run
+
+Start the web server:
+
+```bash
+npm start
+```
+
+Run database migrations manually:
 
 ```bash
 npm run migrate
 ```
 
-The server also runs pending SQL migrations automatically at startup.
+Launch the Electron shell:
 
-## Deployment Split
+```bash
+npm run desktop
+```
 
-- each checkout reads its own local `.env`
-- separate dev and prod by setting different `ENCODER_PORT`, `ENCODER_DB_NAME`, `ENCODER_DEFAULT_INBOX_ROOT`, `ENCODER_DEFAULT_OUTBOX_ROOT`, and `ENCODER_INTERNAL_ROOT` in each location
-- `storage.inboxRoot` and `storage.outboxRoot` in the database are the runtime source of truth once settings exist
-- `.env` inbox/outbox values are initialization defaults for a new environment, not runtime overrides
-- storage path env vars accept absolute paths, repo-relative paths, and `~/...` paths
+The server also applies pending SQL migrations automatically at startup.
 
-## Routes
+## Runtime Layout
+
+The app uses two operator-facing handoff folders plus one internal managed root.
+
+- `inbox/`: operator import location
+- `outbox/`: approved export location
+- internal root:
+  - `pending/`
+  - `working/`
+  - `encoded/`
+  - `logs/`
+  - upload temp storage
+
+Operators should treat only `inbox/` and `outbox/` as manual workflow folders. Internal storage is app-managed.
+
+## Configuration
+
+Each checkout reads its own local `.env`.
+
+Important environment variables:
+
+- `ENCODER_PORT`
+- `ENCODER_DB_NAME`
+- `ENCODER_DEFAULT_INBOX_ROOT`
+- `ENCODER_DEFAULT_OUTBOX_ROOT`
+- `ENCODER_INTERNAL_ROOT`
+- `ENCODER_FFMPEG_BIN`
+- `ENCODER_FFPROBE_BIN`
+
+Path values may be:
+
+- absolute paths
+- repo-relative paths
+- `~/...` paths
+
+Inbox/outbox precedence is:
+
+1. database setting
+2. `.env` default
+3. hardcoded Movies fallback
+
+Once settings exist, `storage.inboxRoot` and `storage.outboxRoot` in the database become the runtime source of truth.
+
+## Core Workflow
+
+### Intake
+
+- scans discover supported video files anywhere under `inbox/`
+- files directly in `inbox/` are valid
+- nested inbox subdirectories are preserved and later reused under `outbox/`
+- browser uploads can also ingest directly into pending when enabled in Settings
+- scans skip files that still look unstable by using an age window and a second size check
+
+### Setup
+
+- profile selection is based on real probed source metadata
+- HD/QHD downscale profiles are disabled when they would not actually reduce the current source for that aspect family
+- `Archive HD` remains available even when the source is already at or below HD
+- Setup surfaces compatibility guidance such as:
+  - `Copy Container Eligible`
+  - `Browser Incompatible`
+
+### Queue And Worker
+
+- queueing an item wakes a single active worker
+- only one encode runs at a time
+- queued items can be moved up, down, front, or back
+- the worker supports:
+  - post-item cooldown
+  - continuous-run rest cycle
+  - manual pause
+  - manual resume
+  - manual stop
+
+### Review And Export
+
+- completed items move to Review
+- operators can approve or reject outputs
+- approval exports to `outbox/`
+- reject keeps the source available for requeue
+- previously rejected items can be rediscovered from `inbox/` and returned to pending setup when scanned again
+
+### Logs
+
+- the Logs page reads the same internal log files written under `logs/`
+- multiline errors are grouped as a single log item
+- log entries display both severity and subsystem badges
+
+## Persistence
+
+The main persistence layer is:
+
+- `encoding_item`
+- `encoding_item_metadata`
+- `encoding_outcome`
+- `app_setting`
+
+`encoding_item_metadata` stores current source/output metadata for active items.
+
+`encoding_outcome` stores per-attempt encode receipts, timing, and historical output metrics.
+
+## Web Routes
 
 - `/`
 - `/encoding/pending`
@@ -35,11 +174,19 @@ The server also runs pending SQL migrations automatically at startup.
 - `/encoding/review`
 - `/encoding/review/item`
 - `/encoding/history`
+- `/encoding/logs`
 - `/encoding/settings`
+
+## API Routes
+
 - `/api/health`
 - `/api/encoding/summary`
 - `/api/encoding/settings`
+- `/api/encoding/logs`
 - `/api/encoding/scan`
+- `/api/encoding/pending/preflight`
+- `/api/encoding/pending/import`
+- `/api/encoding/pending/import/:jobId`
 - `/api/encoding/items/:id/queue`
 - `/api/encoding/items/:id/complete`
 - `/api/encoding/items/:id/approve`
@@ -57,25 +204,29 @@ The server also runs pending SQL migrations automatically at startup.
 - `/api/encoding/control/stop`
 - `/api/encoding/control/wake`
 
+## Current Scope
+
+This version is designed around the encoding workflow itself:
+
+- ingest
+- setup
+- queue
+- encode
+- review
+- export
+- logs
+- settings
+
+Intentionally not built out yet:
+
+- external player integration
+- remote/hosted-safe desktop file opening
+- multi-worker distributed encoding
+
 ## Notes
 
-- MySQL and runtime config are loaded from the local checkout's `.env`.
-- inbox/outbox precedence is: database setting -> `.env` default -> hardcoded Movies fallback
-- SQL patches live under `server/modules/database/migrations/` and are auto-applied once.
-- `encoding_item`, `encoding_item_metadata`, and `app_setting` are the intended persistence layer for the encoder workflow.
-- It is intended as the first extraction step toward a standalone encoder service.
-- The inbox scanner looks for supported video files anywhere under `inbox/`.
-- Any relative subdirectory under `inbox/` is preserved and later reused under `outbox/`.
-- `ffmpeg` is now used for the actual encode step. Set `ENCODER_FFMPEG_BIN` if it is not on the default PATH.
-- `ffprobe` is used to capture real source and encoded metadata. Set `ENCODER_FFPROBE_BIN` if it is not on the default PATH.
-- Files placed directly in `inbox/` with no subdirectory are also valid.
-- Scan ingests discovered videos into internal `pending/` storage so queueing no longer depends on the handoff inbox copy.
-- Internal storage currently in use is `pending/`, `working/`, `encoded/`, and `logs/`.
-- Scan skips files that still look unstable by using an inbox age window and a second size check.
-- The current vertical slice is: scan -> queue -> automatic worker encode -> review -> export to outbox.
-- Queueing an item now wakes a single active worker that processes one encode at a time.
-- The queue UI supports moving queued items forward/backward and exposes active worker controls.
-- The worker supports a post-item cooldown, continuous-run rest cycle, manual pause, manual resume, and manual stop.
-- Settings persistence and API endpoints now exist, but the Settings page is still a UI-first mock and runtime hot-apply wiring is still in progress.
-- Human operators should only use the handoff root: `inbox/` for imports and `outbox/` for exports.
-- Encoder-managed storage should live under a separate internal root and stay out of manual workflows.
+- MySQL and runtime config are loaded from the local checkout's `.env`
+- SQL migrations live under `server/modules/database/migrations/`
+- the app uses real `ffmpeg` and `ffprobe`, not mock encoding
+- browser file intake is available but disabled by default
+- watch folders are planned in Settings, but discovery currently uses the primary inbox folder

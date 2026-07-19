@@ -12,7 +12,7 @@ async function main() {
 
     try {
         await runMigrations(database);
-        console.log("Encoder migrations applied successfully.");
+        console.log("[MIGRATION] Encoder migrations applied successfully.");
     }
     finally {
         await database.close();
@@ -20,6 +20,6 @@ async function main() {
 }
 
 main().catch(error => {
-    console.error("Encoder migrations failed:", error);
+    console.error("[MIGRATION] Encoder migrations failed:", error);
     process.exit(1);
 });

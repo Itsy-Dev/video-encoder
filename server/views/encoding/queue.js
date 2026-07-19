@@ -64,9 +64,9 @@ function renderActiveQueuePanel(state, activeItem, showForceWakeButton) {
       </div>
 
       <div class="ui eight column inverted stackable compact grid" style="margin-top: 4px;">
+        ${renderMetric("Remaining", formatRemaining(calculateRemainingProcessingMs(activeItem, worker, progress)), 'green')}
         ${renderMetric("Active Time", formatElapsedMs(activeTimeMs))}
         ${renderMetric("Paused Time", formatRemaining(pausedTimeMs))}
-        ${renderMetric("Remaining", formatRemaining(calculateRemainingProcessingMs(activeItem, worker, progress)))}
         ${renderMetric("Speed", progress.speed || "—")}
         ${renderMetric("FPS", progress.fps == null ? "—" : progress.fps)}
         ${renderMetric("Frame", progress.frame == null ? "—" : progress.frame)}
@@ -323,11 +323,11 @@ function progressColor(state) {
     }[String(state || "").toLowerCase()] || "grey";
 }
 
-function renderMetric(label, value) {
+function renderMetric(label, value, color="grey") {
     return `<div class="middle aligned two wide column">
       <div>
         <div><span class="ui grey text">${escapeHtml(label)}</span></div>
-        <div><span class="ui inverted text">${escapeHtml(String(value))}</span></div>
+        <div><span class="ui inverted ${color} text">${escapeHtml(String(value))}</span></div>
       </div>
     </div>`;
 }
@@ -407,7 +407,7 @@ function calculateEtaConfidence(activeItem, worker, progress) {
     }
 
     return {
-        showEta: progressPercent >= 10 && activeTimeMs >= 30000
+        showEta: progressPercent >= 5 || activeTimeMs >= 30000
     };
 }
 
