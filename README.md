@@ -35,10 +35,12 @@ The server also runs pending SQL migrations automatically at startup.
 - `/encoding/review`
 - `/encoding/review/item`
 - `/encoding/history`
+- `/encoding/logs`
 - `/encoding/settings`
 - `/api/health`
 - `/api/encoding/summary`
 - `/api/encoding/settings`
+- `/api/encoding/logs`
 - `/api/encoding/scan`
 - `/api/encoding/items/:id/queue`
 - `/api/encoding/items/:id/complete`
@@ -62,7 +64,7 @@ The server also runs pending SQL migrations automatically at startup.
 - MySQL and runtime config are loaded from the local checkout's `.env`.
 - inbox/outbox precedence is: database setting -> `.env` default -> hardcoded Movies fallback
 - SQL patches live under `server/modules/database/migrations/` and are auto-applied once.
-- `encoding_item`, `encoding_item_metadata`, and `app_setting` are the intended persistence layer for the encoder workflow.
+- `encoding_item`, `encoding_item_metadata`, `encoding_outcome`, and `app_setting` are the intended persistence layer for the encoder workflow.
 - It is intended as the first extraction step toward a standalone encoder service.
 - The inbox scanner looks for supported video files anywhere under `inbox/`.
 - Any relative subdirectory under `inbox/` is preserved and later reused under `outbox/`.
@@ -71,6 +73,7 @@ The server also runs pending SQL migrations automatically at startup.
 - Files placed directly in `inbox/` with no subdirectory are also valid.
 - Scan ingests discovered videos into internal `pending/` storage so queueing no longer depends on the handoff inbox copy.
 - Internal storage currently in use is `pending/`, `working/`, `encoded/`, and `logs/`.
+- The Logs page reads the same internal log files written under `logs/`.
 - Scan skips files that still look unstable by using an inbox age window and a second size check.
 - The current vertical slice is: scan -> queue -> automatic worker encode -> review -> export to outbox.
 - Queueing an item now wakes a single active worker that processes one encode at a time.

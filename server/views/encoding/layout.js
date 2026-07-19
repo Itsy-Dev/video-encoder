@@ -7,6 +7,7 @@ module.exports = function renderPage({ title, heading, description, state, body,
         ["Queue", "/encoding/queue"],
         ["Review", "/encoding/review"],
         ["History", "/encoding/history"],
+        ["Logs", "/encoding/logs"],
         ["Settings", "/encoding/settings"]
     ];
 
