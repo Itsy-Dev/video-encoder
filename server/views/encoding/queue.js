@@ -65,7 +65,7 @@ function renderActiveQueuePanel(state, activeItem, showForceWakeButton) {
       <div class="ui eight column inverted stackable compact grid" style="margin-top: 4px;">
         ${renderMetric("Active Time", formatElapsedMs(calculateActiveTimeMs(activeItem, worker)))}
         ${renderMetric("Paused Time", formatRemaining(pausedTimeMs))}
-        ${renderMetric("Remaining", formatRemaining(calculateRemainingProcessingMs(activeItem, progress)))}
+        ${renderMetric("Remaining", formatRemaining(calculateRemainingProcessingMs(activeItem, worker, progress)))}
         ${renderMetric("Speed", progress.speed || "—")}
         ${renderMetric("FPS", progress.fps == null ? "—" : progress.fps)}
         ${renderMetric("Frame", progress.frame == null ? "—" : progress.frame)}
@@ -368,12 +368,12 @@ function calculateProgressPercent(activeItem, progress) {
     return Math.max(0, Math.min(100, (outTimeMs / durationMs) * 100));
 }
 
-function calculateRemainingProcessingMs(activeItem, progress) {
+function calculateRemainingProcessingMs(activeItem, worker, progress) {
     const outTimeMs = Number(progress && progress.outTimeMs || 0);
     const durationMs = Number(activeItem && activeItem.sourceMetadata && activeItem.sourceMetadata.durationMs || 0);
-    const speed = parseSpeedMultiplier(progress && progress.speed);
+    const activeTimeMs = calculateActiveTimeMs(activeItem, worker);
 
-    if (!durationMs || !outTimeMs || !speed) {
+    if (!durationMs || !outTimeMs || !activeTimeMs) {
         return 0;
     }
 
@@ -382,7 +382,12 @@ function calculateRemainingProcessingMs(activeItem, progress) {
         return 0;
     }
 
-    return Math.round(remainingMediaMs / speed);
+    const processedRatio = outTimeMs / durationMs;
+    if (!Number.isFinite(processedRatio) || processedRatio <= 0) {
+        return 0;
+    }
+
+    return Math.round(activeTimeMs * (remainingMediaMs / outTimeMs));
 }
 
 function calculatePausedTimeMs(activeItem, worker) {
@@ -430,20 +435,6 @@ function formatEstimatedSize(progressPercent, totalSizeBytes) {
     }
 
     return formatBytes(size / (percent / 100));
-}
-
-function parseSpeedMultiplier(value) {
-    if (value == null || value === "") {
-        return 0;
-    }
-
-    const match = String(value).trim().match(/^([0-9]*\.?[0-9]+)x$/i);
-    if (!match) {
-        return 0;
-    }
-
-    const parsed = Number(match[1]);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
 function resolveActiveStartedAt(activeItem, worker) {
