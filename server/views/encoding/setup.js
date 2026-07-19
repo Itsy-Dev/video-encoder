@@ -17,8 +17,8 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
     }
 
     const source = item.sourceMetadata || {};
-    const browserCompatibleRemuxHint = detectBrowserCompatibleRemuxHint(source);
-    const profileOptions = buildProfileOptions(profiles, source, browserCompatibleRemuxHint);
+    const browserCompatibilityStatus = detectBrowserCompatibilityStatus(source);
+    const profileOptions = buildProfileOptions(profiles, source, browserCompatibilityStatus);
     const selectedProfile = resolveSelectedProfile(profileOptions, selectedProfileId, item && item.profileId)
         || null;
     const scalePlan = resolveScalePlan(selectedProfile, source);
@@ -66,7 +66,7 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
       <div class="ui inverted segment charcoal">
         <h3 class="ui inverted small header">
             Encoding Profile / Options
-            ${renderBrowserCompatibleRemuxHint(browserCompatibleRemuxHint)}
+            ${renderBrowserCompatibilityStatusBadge(browserCompatibilityStatus)}
         </h3>
 
         <form method="get" action="/encoding/setup/fragment" class="ui inverted form">
@@ -261,23 +261,29 @@ function renderInfoLabel(label, helpText) {
     return `${escapeHtml(label)} <i class="info circle icon" title="${safeHelpText}" aria-label="${safeHelpText}" style="margin-left: 4px; opacity: 0.8; cursor: help;"></i>`;
 }
 
-function renderBrowserCompatibleRemuxHint(hint) {
-    if (!hint || !hint.eligible) {
+function renderBrowserCompatibilityStatusBadge(status) {
+    if (!status || !status.kind) {
         return "";
     }
 
-    return `<span class="ui tiny teal label" title="${escapeHtml(hint.message)}" aria-label="${escapeHtml(hint.message)}">
-        <i class="magic icon"></i>
-        Copy Container Eligible
+    const color = status.kind === "copy_container_eligible" ? "teal" : "red";
+    const icon = status.kind === "copy_container_eligible" ? "magic" : "warning sign";
+    const label = status.kind === "copy_container_eligible"
+        ? "Copy Container Eligible"
+        : "Browser Incompatible";
+
+    return `<span class="ui tiny ${escapeHtml(color)} label" title="${escapeHtml(status.message)}" aria-label="${escapeHtml(status.message)}">
+        <i class="${escapeHtml(icon)} icon"></i>
+        ${escapeHtml(label)}
     </span>`;
 }
 
-function buildProfileOptions(profiles, source, browserCompatibleRemuxHint = null) {
+function buildProfileOptions(profiles, source, browserCompatibilityStatus = null) {
     const sourceDimensions = getNormalizedSourceDimensions(source);
 
     return (Array.isArray(profiles) ? profiles : []).map(profile => {
         const disabledReason = getProfileDisabledReason(profile, source, sourceDimensions);
-        const recommendedReason = getProfileRecommendedReason(profile, browserCompatibleRemuxHint);
+        const recommendedReason = getProfileRecommendedReason(profile, browserCompatibilityStatus);
         return {
             profile,
             disabled: Boolean(disabledReason),
@@ -350,8 +356,8 @@ function getProfileDisabledReason(profile, source, sourceDimensions) {
     return "";
 }
 
-function getProfileRecommendedReason(profile, browserCompatibleRemuxHint) {
-    if (!browserCompatibleRemuxHint || !browserCompatibleRemuxHint.eligible) {
+function getProfileRecommendedReason(profile, browserCompatibilityStatus) {
+    if (!browserCompatibilityStatus || browserCompatibilityStatus.kind !== "copy_container_eligible") {
         return "";
     }
 
@@ -390,7 +396,7 @@ function getNormalizedSourceDimensions(source) {
         : { width: Number(source && source.width || 0), height: Number(source && source.height || 0) };
 }
 
-function detectBrowserCompatibleRemuxHint(source) {
+function detectBrowserCompatibilityStatus(source) {
     const container = String(source && source.container || "").toLowerCase();
     const videoCodec = String(source && source.videoCodec || "").toLowerCase();
     const audioCodec = String(source && source.audioCodec || "").toLowerCase();
@@ -404,27 +410,41 @@ function detectBrowserCompatibleRemuxHint(source) {
     });
 
     if (!hasVideoStream || hasUnsupportedNonSubtitleStream) {
-        return { eligible: false };
+        return hasUnsupportedNonSubtitleStream
+            ? {
+                kind: "browser_incompatible",
+                message: "This file includes unsupported extra streams, so browser compatibility would require more than a simple container copy."
+            }
+            : { kind: "" };
     }
 
     if (container === "mp4") {
-        return { eligible: false };
+        return { kind: "" };
     }
 
     if (videoCodec !== "h264") {
-        return { eligible: false };
+        return {
+            kind: "browser_incompatible",
+            message: `Video codec ${videoCodec || "unknown"} is not treated as browser-safe for this workflow, so browser compatibility would require re-encoding.`
+        };
     }
 
     if (audioCodec && !["aac", "mp3"].includes(audioCodec)) {
-        return { eligible: false };
+        return {
+            kind: "browser_incompatible",
+            message: `Audio codec ${audioCodec} is not treated as browser-safe for this workflow, so browser compatibility would require re-encoding or audio conversion.`
+        };
     }
 
     if (pixelFormat && pixelFormat !== "yuv420p") {
-        return { eligible: false };
+        return {
+            kind: "browser_incompatible",
+            message: `Pixel format ${pixelFormat} is not treated as browser-safe for this workflow, so browser compatibility would require re-encoding.`
+        };
     }
 
     return {
-        eligible: true,
+        kind: "copy_container_eligible",
         message: `This file already appears browser-safe at the codec level and may only need a container repack into MP4. Choose Copy Container if your goal is browser playback only, or choose another profile if you also want downscaling or additional size savings.`
     };
 }
