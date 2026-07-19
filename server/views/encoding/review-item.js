@@ -164,9 +164,9 @@ function formatSizeDiff(encodedBytes, sourceBytes) {
 
     const delta = encoded - source;
     const percent = (delta / source) * 100;
-    const sign = delta > 0 ? "+" : "";
+    const sign = delta > 0 ? "+" : "-";
 
-    return `${sign}${formatBytes(Math.abs(delta))}${delta < 0 ? " smaller" : delta > 0 ? " larger" : ""}, ${percent > 0 ? "+" : ""}${percent.toFixed(1)}%`;
+    return `${sign}${formatBytes(Math.abs(delta))}, ${percent > 0 ? "+" : ""}${percent.toFixed(1)}%`;
 }
 
 function formatPercentDiff(encodedValue, sourceValue) {

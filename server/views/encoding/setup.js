@@ -123,12 +123,12 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
       <div class="ui inverted segment charcoal">
         <h3 class="ui inverted small header">Video Outcome</h3>
         <div class="ui seven column stackable inverted compact grid">
-          ${renderOutcomeMetric("Size", formatBytes(source.fileSizeBytes), formatBytes(estimate.sizeBytes), estimate.sizeDeltaBytes <= 0 ? "green" : "yellow", formatSizeChange(estimate.sizeDeltaBytes, source.fileSizeBytes))}
+          ${renderOutcomeMetric(renderInfoLabel("Size", buildSizeEstimateHelpText(selectedProfile)), formatBytes(source.fileSizeBytes), formatBytes(estimate.sizeBytes), estimate.sizeDeltaBytes <= 0 ? "green" : "yellow", formatSizeChange(estimate.sizeDeltaBytes, source.fileSizeBytes))}
           ${renderOutcomeMetric("Resolution", formatResolution(source.width, source.height), formatResolution(estimate.width, estimate.height))}
           ${renderOutcomeMetric("Aspect Ratio", formatAspectRatio(source), formatAspectRatio(estimate.width, estimate.height))}
           ${renderOutcomeMetric("Target Standard", scalePlan.family ? scalePlan.family.label : "—", estimate.targetStandardLabel)}
           ${renderOutcomeMetric("FPS", formatFps(source.frameRate), formatFps(estimate.fps))}
-          ${renderOutcomeMetric("Bitrate", formatBitrate(source.bitRate), formatBitrate(estimate.videoBitrateBps), null, formatBitrateChange(estimate.videoBitrateBps, source.bitRate))}
+          ${renderOutcomeMetric("Bitrate", formatBitrate(source.bitRate), formatBitrate(estimate.totalBitrateBps), null, formatBitrateChange(estimate.totalBitrateBps, source.bitRate))}
           ${renderOutcomeMetric("Container", source.container || "—", estimate.container)}
           ${renderOutcomeMetric("Codec", source.videoCodec || "—", estimate.videoCodec)}
           ${renderOutcomeMetric("Format", getPixelFormat(source), estimate.pixelFormat)}
@@ -212,20 +212,32 @@ function renderOutcomeMetric(label, before, after, color = null, change = null) 
     const current = before == null ? "—" : String(before);
     const output = after == null ? "—" : String(after);
     const comparison = change || (current !== output && current !== "—" ? current : "");
+    const labelMarkup = String(label || "");
+    const safeLabelMarkup = labelMarkup.includes("<")
+        ? labelMarkup
+        : escapeHtml(labelMarkup);
 
     return `<div class="column encoding-setup-change-row">
-      <div><span class="ui grey text">${escapeHtml(label)}</span></div>
+      <div><span class="ui grey text">${safeLabelMarkup}</span></div>
       <div><span class="${escapeHtml(afterClass)}">${escapeHtml(output)}</span></div>
       <div><span class="ui grey text">${escapeHtml(comparison)}</span></div>
     </div>`;
 }
 
+function renderInfoLabel(label, helpText) {
+    const safeHelpText = escapeHtml(helpText);
+
+    return `${escapeHtml(label)} <i class="info circle icon" title="${safeHelpText}" aria-label="${safeHelpText}" style="margin-left: 4px; opacity: 0.8; cursor: help;"></i>`;
+}
+
 function buildEstimate(source, profile, scalePlan) {
     const dimensions = estimatedDimensions(source, profile, scalePlan);
     const videoBitrateBps = estimatedBitrate(source, profile, dimensions);
+    const audioBitrateBps = estimatedAudioBitrate(source, profile);
+    const totalBitrateBps = Math.max(0, videoBitrateBps + audioBitrateBps);
     const durationSec = Math.max(0, Number(source && source.durationMs || 0) / 1000);
-    const sizeBytes = videoBitrateBps > 0 && durationSec > 0
-        ? Math.round((videoBitrateBps * durationSec) / 8)
+    const sizeBytes = totalBitrateBps > 0 && durationSec > 0
+        ? Math.round(((totalBitrateBps * durationSec) / 8) * 1.02)
         : Number(source && source.fileSizeBytes || 0);
 
     return {
@@ -237,6 +249,8 @@ function buildEstimate(source, profile, scalePlan) {
         pixelFormat: profile && profile.pixelFormat ? profile.pixelFormat.label : "—",
         targetStandardLabel: getScaleTargetLabel(scalePlan),
         videoBitrateBps,
+        audioBitrateBps,
+        totalBitrateBps,
         sizeBytes,
         sizeDeltaBytes: sizeBytes - Number(source && source.fileSizeBytes || 0)
     };
@@ -249,19 +263,41 @@ function estimatedDimensions(_source, _profile, scalePlan) {
 }
 
 function estimatedBitrate(source, profile, dimensions) {
-    const sourceBitrate = Number(source && source.bitRate || 0);
-    if (!sourceBitrate) return 0;
+    const sourceTotalBitrate = getSourceTotalBitrate(source);
+    const sourceAudioBitrate = getSourceAudioBitrate(source);
+    const sourceVideoBitrate = Math.max(0, getSourceVideoBitrate(source) || (sourceTotalBitrate - sourceAudioBitrate));
+    if (!sourceVideoBitrate) return 0;
 
     if (profile && profile.videoCodec && profile.videoCodec.id === "copy") {
-        return sourceBitrate;
+        return sourceVideoBitrate;
     }
 
     const sourcePixels = Math.max(1, Number(source && source.width || 0) * Number(source && source.height || 0));
     const outputPixels = Math.max(1, Number(dimensions.width || 0) * Number(dimensions.height || 0));
-    const scale = outputPixels / sourcePixels;
-    const crfFactor = Number(profile && profile.crf || 20) >= 24 ? 0.42 : 0.62;
+    const scale = clamp(outputPixels / sourcePixels, 0.2, 1.25);
+    const crfFactor = getCrfCompressionFactor(profile && profile.crf);
 
-    return Math.max(900000, Math.round(sourceBitrate * scale * crfFactor));
+    return Math.max(getMinimumVideoBitrate(outputPixels), Math.round(sourceVideoBitrate * scale * crfFactor));
+}
+
+function estimatedAudioBitrate(source, profile) {
+    const audioCodecId = profile && profile.audioCodec && profile.audioCodec.id;
+    const sourceAudioBitrate = getSourceAudioBitrate(source);
+
+    if (!hasAudioStream(source)) {
+        return 0;
+    }
+
+    if (audioCodecId === "copy") {
+        return sourceAudioBitrate;
+    }
+
+    const configuredBitrate = Number(profile && profile.audioBitrate && profile.audioBitrate.id || 0);
+    if (configuredBitrate > 0) {
+        return configuredBitrate;
+    }
+
+    return sourceAudioBitrate;
 }
 
 function formatResolution(width, height) {
@@ -313,11 +349,19 @@ function buildScaleDecision(scalePlan) {
 function formatSizeChange(deltaBytes, sourceBytes) {
     const source = Number(sourceBytes || 0);
     const delta = Number(deltaBytes || 0);
-    const sign = delta > 0 ? "+" : "";
+    const sign = delta > 0 ? "+" : "-";
     const percent = source > 0 ? (delta / source) * 100 : null;
     const percentText = percent == null ? "" : `, ${percent > 0 ? "+" : ""}${percent.toFixed(1)}%`;
 
-    return `${sign}${formatBytes(Math.abs(delta))}${delta < 0 ? " smaller" : delta > 0 ? " larger" : ""}${percentText}`.trim();
+    return `${sign}${formatBytes(Math.abs(delta))}${percentText}`.trim();
+}
+
+function buildSizeEstimateHelpText(profile) {
+    const audioMode = profile && profile.audioCodec && profile.audioCodec.id === "copy"
+        ? "source audio bitrate when audio is copied"
+        : "profile audio bitrate when audio is re-encoded";
+
+  return `Estimate only. Based on the selected output settings, including resolution, compression quality, codec, and audio settings. Actual file size may vary.`;
 }
 
 function formatBitrateChange(outputBps, sourceBps) {
@@ -330,6 +374,73 @@ function formatBitrateChange(outputBps, sourceBps) {
     const deltaKbps = Math.round(Math.abs(delta) / 1000).toLocaleString();
 
     return `${delta > 0 ? "+" : "-"}${deltaKbps} kbps, ${percent > 0 ? "+" : ""}${percent.toFixed(1)}%`;
+}
+
+function getSourceTotalBitrate(source) {
+    const explicitBitrate = Number(source && source.bitRate || 0);
+    if (explicitBitrate > 0) {
+        return explicitBitrate;
+    }
+
+    const durationSec = Math.max(0, Number(source && source.durationMs || 0) / 1000);
+    const fileSizeBytes = Math.max(0, Number(source && source.fileSizeBytes || 0));
+    if (durationSec > 0 && fileSizeBytes > 0) {
+        return Math.round((fileSizeBytes * 8) / durationSec);
+    }
+
+    return 0;
+}
+
+function getSourceVideoBitrate(source) {
+    return getProbeStreamBitrate(source, "video");
+}
+
+function getSourceAudioBitrate(source) {
+    if (!hasAudioStream(source)) {
+        return 0;
+    }
+
+    const streamBitrate = getProbeStreamBitrate(source, "audio");
+    if (streamBitrate > 0) {
+        return streamBitrate;
+    }
+
+    return 160000;
+}
+
+function getProbeStreamBitrate(source, codecType) {
+    const probeJson = source && source.probeJson ? source.probeJson : null;
+    const streams = Array.isArray(probeJson && probeJson.streams) ? probeJson.streams : [];
+    const stream = streams.find(entry => entry && entry.codec_type === codecType) || null;
+    const bitRate = Number(stream && stream.bit_rate || 0);
+    return bitRate > 0 ? bitRate : 0;
+}
+
+function hasAudioStream(source) {
+    const probeJson = source && source.probeJson ? source.probeJson : null;
+    const streams = Array.isArray(probeJson && probeJson.streams) ? probeJson.streams : [];
+    return streams.some(stream => stream && stream.codec_type === "audio");
+}
+
+function getCrfCompressionFactor(crf) {
+    const safeCrf = Number(crf || 20);
+
+    if (safeCrf <= 18) return 0.72;
+    if (safeCrf <= 20) return 0.62;
+    if (safeCrf <= 22) return 0.52;
+    if (safeCrf <= 24) return 0.44;
+    return 0.36;
+}
+
+function getMinimumVideoBitrate(outputPixels) {
+    if (outputPixels >= 2560 * 1440) return 1800000;
+    if (outputPixels >= 1920 * 1080) return 900000;
+    if (outputPixels >= 1280 * 720) return 550000;
+    return 350000;
+}
+
+function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
 }
 
 function formatResponseTimestamp(value) {
