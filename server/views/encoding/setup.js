@@ -130,7 +130,7 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
           ${renderOutcomeMetric("Resolution", formatResolution(source.width, source.height), formatResolution(estimate.width, estimate.height))}
           ${renderOutcomeMetric("Target Standard", scalePlan.family ? scalePlan.family.label : "—", estimate.targetStandardLabel)}
           ${renderOutcomeMetric("Container", source.container || "—", estimate.container)}
-          ${renderOutcomeMetric("Bitrate", formatBitrate(source.bitRate), formatBitrate(estimate.totalBitrateBps), null, formatBitrateChange(estimate.totalBitrateBps, source.bitRate))}
+          ${renderOutcomeMetric(renderInfoLabel("Bitrate", buildBitrateEstimateHelpText(selectedProfile)), formatBitrate(source.bitRate), formatBitrate(estimate.totalBitrateBps), null, formatBitrateChange(estimate.totalBitrateBps, source.bitRate))}
           ${renderOutcomeMetric("FPS", formatFps(source.frameRate), formatFps(estimate.fps))}
           ${renderOutcomeMetric("Codec", source.videoCodec || "—", estimate.videoCodec)}
           ${renderOutcomeMetric("Format", getPixelFormat(source), estimate.pixelFormat)}
@@ -304,9 +304,14 @@ function estimatedBitrate(source, profile, dimensions) {
     const sourcePixels = Math.max(1, Number(source && source.width || 0) * Number(source && source.height || 0));
     const outputPixels = Math.max(1, Number(dimensions.width || 0) * Number(dimensions.height || 0));
     const scale = clamp(outputPixels / sourcePixels, 0.2, 1.25);
-    const crfFactor = getCrfCompressionFactor(profile && profile.crf);
+    const sourceFps = normalizeEstimatedFps(source && source.frameRate);
+    const outputFps = normalizeEstimatedFps(source && source.frameRate);
+    const fpsScale = clamp(outputFps / sourceFps, 0.7, 1.6);
+    const codecFactor = getCodecCompressionFactor(profile && profile.videoCodec && profile.videoCodec.id);
+    const crfFactor = getCrfCompressionFactor(profile && profile.crf, profile && profile.intent && profile.intent.id);
+    const estimated = sourceVideoBitrate * scale * fpsScale * codecFactor * crfFactor;
 
-    return Math.max(getMinimumVideoBitrate(outputPixels), Math.round(sourceVideoBitrate * scale * crfFactor));
+    return Math.max(getMinimumVideoBitrate(outputPixels, outputFps), Math.round(estimated));
 }
 
 function estimatedAudioBitrate(source, profile) {
@@ -390,7 +395,11 @@ function buildSizeEstimateHelpText(profile) {
         ? "source audio bitrate when audio is copied"
         : "profile audio bitrate when audio is re-encoded";
 
-  return `Estimate only. Based on the selected output settings, including resolution, compression quality, codec, and audio settings. Actual file size may vary.`;
+    return `Estimate only. Based on the selected output settings, including resolution, compression quality, codec, and audio settings. Actual file size may vary.`;
+}
+
+function buildBitrateEstimateHelpText(_profile) {
+    return "Estimate only. Based on the selected output settings, including resolution, compression quality, codec, and audio settings. Actual bitrate may vary.";
 }
 
 function formatBitrateChange(outputBps, sourceBps) {
@@ -451,21 +460,67 @@ function hasAudioStream(source) {
     return streams.some(stream => stream && stream.codec_type === "audio");
 }
 
-function getCrfCompressionFactor(crf) {
+function getCrfCompressionFactor(crf, intentId) {
     const safeCrf = Number(crf || 20);
+    const intentFactor = getProfileIntentBitrateFactor(intentId);
 
-    if (safeCrf <= 18) return 0.72;
-    if (safeCrf <= 20) return 0.62;
-    if (safeCrf <= 22) return 0.52;
-    if (safeCrf <= 24) return 0.44;
-    return 0.36;
+    if (safeCrf <= 18) return 0.72 * intentFactor;
+    if (safeCrf <= 20) return 0.62 * intentFactor;
+    if (safeCrf <= 22) return 0.52 * intentFactor;
+    if (safeCrf <= 24) return 0.44 * intentFactor;
+    return 0.36 * intentFactor;
 }
 
-function getMinimumVideoBitrate(outputPixels) {
-    if (outputPixels >= 2560 * 1440) return 1800000;
-    if (outputPixels >= 1920 * 1080) return 900000;
-    if (outputPixels >= 1280 * 720) return 550000;
-    return 350000;
+function getMinimumVideoBitrate(outputPixels, outputFps) {
+    const fpsFactor = clamp(normalizeEstimatedFps(outputFps) / 30, 0.85, 1.8);
+
+    if (outputPixels >= 2560 * 1440) return Math.round(1800000 * fpsFactor);
+    if (outputPixels >= 1920 * 1080) return Math.round(900000 * fpsFactor);
+    if (outputPixels >= 1280 * 720) return Math.round(550000 * fpsFactor);
+    return Math.round(350000 * fpsFactor);
+}
+
+function getCodecCompressionFactor(codecId) {
+    switch (String(codecId || "").toLowerCase()) {
+        case "h265":
+            return 0.72;
+        case "av1":
+            return 0.62;
+        case "vp9":
+            return 0.76;
+        case "h264":
+            return 1;
+        case "copy":
+            return 1;
+        default:
+            return 0.9;
+    }
+}
+
+function getProfileIntentBitrateFactor(intentId) {
+    switch (String(intentId || "").toLowerCase()) {
+        case "browser_compatibility":
+            return 1.04;
+        case "downscale":
+            return 0.96;
+        case "downscale_and_compress":
+            return 0.88;
+        case "recompress":
+            return 0.92;
+        case "remux":
+            return 1;
+        default:
+            return 1;
+    }
+}
+
+function normalizeEstimatedFps(value) {
+    const fps = Number(value || 0);
+    if (!Number.isFinite(fps) || fps <= 0) {
+        return 30;
+    }
+
+    return fps;
 }
 
 function clamp(value, min, max) {
