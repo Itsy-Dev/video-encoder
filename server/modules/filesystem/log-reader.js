@@ -13,7 +13,7 @@ async function readEncoderLogs(logDirAbsPath, options = {}) {
     const files = await listLogFiles(logDir);
     const activeFile = selectedFile && files.some(file => file.name === selectedFile)
         ? selectedFile
-        : (files[0] ? files[0].name : null);
+        : getDefaultActiveFile(files);
 
     const recentEntries = activeFile
         ? await readLogEntries(path.join(logDir, activeFile), { limit })
@@ -124,6 +124,9 @@ function isLogEntryStart(line) {
 }
 
 function compareLogFiles(left, right) {
+    if (left.name === "error.log") return -1;
+    if (right.name === "error.log") return 1;
+
     const leftTime = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
     const rightTime = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
     if (leftTime !== rightTime) {
@@ -149,6 +152,12 @@ function normalizeLimit(value, fallback) {
     }
 
     return Math.min(500, Math.round(next));
+}
+
+function getDefaultActiveFile(files) {
+    const list = Array.isArray(files) ? files : [];
+    const preferred = list.find(file => file && file.name !== "error.log");
+    return preferred ? preferred.name : (list[0] ? list[0].name : null);
 }
 
 module.exports = {
