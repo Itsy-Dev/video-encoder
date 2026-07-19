@@ -125,14 +125,13 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
 
       <div class="ui inverted segment charcoal">
         <h3 class="ui inverted small header">Video Outcome</h3>
-        <div class="ui seven column stackable inverted compact grid">
+        <div class="ui four column stackable inverted compact grid">
           ${renderOutcomeMetric(renderInfoLabel("Size", buildSizeEstimateHelpText(selectedProfile)), formatBytes(source.fileSizeBytes), formatBytes(estimate.sizeBytes), estimate.sizeDeltaBytes <= 0 ? "green" : "yellow", formatSizeChange(estimate.sizeDeltaBytes, source.fileSizeBytes))}
           ${renderOutcomeMetric("Resolution", formatResolution(source.width, source.height), formatResolution(estimate.width, estimate.height))}
-          ${renderOutcomeMetric("Aspect Ratio", formatAspectRatio(source), formatAspectRatio(estimate.width, estimate.height))}
           ${renderOutcomeMetric("Target Standard", scalePlan.family ? scalePlan.family.label : "—", estimate.targetStandardLabel)}
-          ${renderOutcomeMetric("FPS", formatFps(source.frameRate), formatFps(estimate.fps))}
-          ${renderOutcomeMetric("Bitrate", formatBitrate(source.bitRate), formatBitrate(estimate.totalBitrateBps), null, formatBitrateChange(estimate.totalBitrateBps, source.bitRate))}
           ${renderOutcomeMetric("Container", source.container || "—", estimate.container)}
+          ${renderOutcomeMetric("Bitrate", formatBitrate(source.bitRate), formatBitrate(estimate.totalBitrateBps), null, formatBitrateChange(estimate.totalBitrateBps, source.bitRate))}
+          ${renderOutcomeMetric("FPS", formatFps(source.frameRate), formatFps(estimate.fps))}
           ${renderOutcomeMetric("Codec", source.videoCodec || "—", estimate.videoCodec)}
           ${renderOutcomeMetric("Format", getPixelFormat(source), estimate.pixelFormat)}
         </div>
