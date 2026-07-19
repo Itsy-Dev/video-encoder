@@ -323,6 +323,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
 
     app.get("/encoding/setup", asyncRoute(async function (req, res) {
         const state = await encodingService.getDashboardState();
+        const settings = await settingsService.getSettings();
         const selectedId = String(req.query.id || "");
         const selected = state.items.find(item => item.id === selectedId) || state.actionableItems[0] || null;
         const selectedProfileId = String(req.query.profileId || (selected && (selected.profileId || selected.requestedProfileId)) || "browser_compatibility");
@@ -335,13 +336,16 @@ module.exports = function encodingApi(app, database, fileIntake) {
             state,
             body: renderSetup(selected, state.profiles, {
                 selectedProfileId,
-                sourcePreviewUrl: buildPendingSourceUrl(selected)
+                sourcePreviewUrl: buildPendingSourceUrl(selected),
+                showVideoPlayerByDefault: resolveSetupToggle(req.query.showVideoPlayer, settings && settings.setup && settings.setup.showVideoPlayerByDefault),
+                queueToFrontByDefault: resolveSetupToggle(req.query.queueToFront, settings && settings.setup && settings.setup.queueToFrontByDefault)
             })
         }));
     }));
 
     app.get("/encoding/setup/fragment", asyncRoute(async function (req, res) {
         const state = await encodingService.getDashboardState();
+        const settings = await settingsService.getSettings();
         const selectedId = String(req.query.id || "");
         const selected = state.items.find(item => item.id === selectedId) || state.actionableItems[0] || null;
         const selectedProfileId = String(req.query.profileId || (selected && (selected.profileId || selected.requestedProfileId)) || "browser_compatibility");
@@ -349,7 +353,9 @@ module.exports = function encodingApi(app, database, fileIntake) {
 
         res.send(renderSetup(selected, state.profiles, {
             selectedProfileId,
-            sourcePreviewUrl: buildPendingSourceUrl(selected)
+            sourcePreviewUrl: buildPendingSourceUrl(selected),
+            showVideoPlayerByDefault: resolveSetupToggle(req.query.showVideoPlayer, settings && settings.setup && settings.setup.showVideoPlayerByDefault),
+            queueToFrontByDefault: resolveSetupToggle(req.query.queueToFront, settings && settings.setup && settings.setup.queueToFrontByDefault)
         }));
     }));
 
@@ -466,4 +472,14 @@ function buildPendingSourceUrl(item) {
     }
 
     return `/media/pending-source/${relativePath.split(path.sep).map(encodeURIComponent).join("/")}`;
+}
+
+function resolveSetupToggle(queryValue, fallbackValue) {
+    if (typeof queryValue === "string") {
+        const normalized = queryValue.trim().toLowerCase();
+        if (["true", "1", "yes", "on"].includes(normalized)) return true;
+        if (["false", "0", "no", "off"].includes(normalized)) return false;
+    }
+
+    return Boolean(fallbackValue);
 }

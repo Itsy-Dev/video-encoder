@@ -249,6 +249,7 @@ module.exports = function renderPage({ title, heading, description, state, body,
       }
 
       expandedSection.hidden = false;
+      window.setSetupVideoPlayerPreference(root, true);
 
       try {
         if (Number.isFinite(compactVideo.currentTime)) {
@@ -280,6 +281,27 @@ module.exports = function renderPage({ title, heading, description, state, body,
       }
       if (expandedSection instanceof HTMLElement) {
         expandedSection.hidden = true;
+      }
+      window.setSetupVideoPlayerPreference(root, false);
+    };
+
+    window.setSetupVideoPlayerPreference = function (root, enabled) {
+      const setupRoot = root instanceof HTMLElement ? root : document.getElementById("encoding-setup-root");
+      if (!setupRoot) return;
+
+      const input = setupRoot.querySelector("[data-setup-show-video-input]");
+      if (input instanceof HTMLInputElement) {
+        input.value = enabled ? "true" : "false";
+      }
+    };
+
+    window.syncSetupQueueToFrontPreference = function (checkbox) {
+      const root = checkbox && checkbox.closest ? checkbox.closest("#encoding-setup-root") : document.getElementById("encoding-setup-root");
+      if (!root) return;
+
+      const input = root.querySelector("[data-setup-queue-front-input]");
+      if (input instanceof HTMLInputElement) {
+        input.value = checkbox && checkbox.checked ? "true" : "false";
       }
     };
 

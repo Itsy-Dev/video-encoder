@@ -11,7 +11,7 @@ const {
     resolveScalePlan
 } = require("../../modules/encoding/scale-policy");
 
-module.exports = function renderSetup(item, profiles, { selectedProfileId, sourcePreviewUrl } = {}) {
+module.exports = function renderSetup(item, profiles, { selectedProfileId, sourcePreviewUrl, showVideoPlayerByDefault = false, queueToFrontByDefault = false } = {}) {
     if (!item) {
         return `<section class="ui segment encoder-panel"><div class="ui placeholder segment"><div class="ui header">No discovered item is available for setup yet.</div></div></section>`;
     }
@@ -31,7 +31,7 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
         : "Confirm the selected profile and send this item to the queue.";
 
     return `<section id="encoding-setup-root" class="ui inverted segment">
-      ${renderExpandedSourceVideo(item, sourcePreviewUrl)}
+      ${renderExpandedSourceVideo(item, sourcePreviewUrl, { visible: showVideoPlayerByDefault })}
       <div class="ui inverted segment charcoal">
         <div class="ui stackable grid">
           <div class="four wide column">
@@ -69,6 +69,8 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
 
         <form method="get" action="/encoding/setup/fragment" class="ui inverted form">
           <input type="hidden" name="id" value="${escapeHtml(item.id)}" />
+          <input type="hidden" name="showVideoPlayer" value="${showVideoPlayerByDefault ? "true" : "false"}" data-setup-show-video-input />
+          <input type="hidden" name="queueToFront" value="${queueToFrontByDefault ? "true" : "false"}" data-setup-queue-front-input />
           <div class="fields">
             <div class="six wide field">
               <label>Profile</label>
@@ -150,6 +152,8 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
                     name="queueToFront"
                     value="true"
                     form="setup-queue-form"
+                    ${queueToFrontByDefault ? " checked" : ""}
+                    onchange="window.syncSetupQueueToFrontPreference(this)"
                   />
                   <label></label>
                 </div>
@@ -175,11 +179,11 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
     </section>`;
 };
 
-function renderExpandedSourceVideo(item, sourcePreviewUrl) {
+function renderExpandedSourceVideo(item, sourcePreviewUrl, { visible = false } = {}) {
     const previewUrl = sourcePreviewUrl || `/api/encoding/items/${encodeURIComponent(item.id)}/source`;
 
     return `
-      <section class="encoder-setup-expanded-player" data-setup-expanded-player hidden>
+      <section class="encoder-setup-expanded-player" data-setup-expanded-player${visible ? "" : " hidden"}>
         <section class="video-box">
           ${previewUrl
               ? `<video controls preload="metadata" data-setup-expanded-video>

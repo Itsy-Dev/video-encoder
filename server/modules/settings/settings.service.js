@@ -16,6 +16,8 @@ const DEFAULTS = Object.freeze({
     filterThreads: 2,
     processPriority: 15,
     defaultProfileId: "browser_compatibility",
+    showSetupVideoPlayerByDefault: false,
+    queueToFrontByDefault: false,
     inboxRoot: getConfiguredDefaultInboxRoot(),
     outboxRoot: getConfiguredDefaultOutboxRoot(),
     browserFileIntakeEnabled: false,
@@ -66,6 +68,12 @@ const SETTINGS_DEFINITIONS = Object.freeze([
     }),
     defineSetting("performance.defaultProfileId", DEFAULTS.defaultProfileId, {
         type: "profile_id"
+    }),
+    defineSetting("setup.showVideoPlayerByDefault", DEFAULTS.showSetupVideoPlayerByDefault, {
+        type: "boolean"
+    }),
+    defineSetting("setup.queueToFrontByDefault", DEFAULTS.queueToFrontByDefault, {
+        type: "boolean"
     }),
     defineSetting("storage.inboxRoot", DEFAULTS.inboxRoot, {
         type: "path"
