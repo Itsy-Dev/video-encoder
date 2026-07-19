@@ -395,6 +395,138 @@ class EncodingRepository {
             toSqlDatetime(metadata.probedAt)
         ]);
     }
+
+    async upsertOutcome(outcome) {
+        const next = outcome || {};
+        const source = next.sourceMetadata || {};
+        const output = next.outputMetadata || {};
+
+        await this.database.query(`
+            INSERT INTO encoding_outcome (
+                encoding_item_id,
+                attempt_number,
+                profile_id,
+                requested_at,
+                queued_at,
+                encoding_started_at,
+                encoding_finished_at,
+                active_encoding_ms,
+                paused_ms,
+                wall_clock_ms,
+                source_duration_ms,
+                source_file_size_bytes,
+                source_width,
+                source_height,
+                source_frame_rate,
+                source_bit_rate,
+                source_video_codec,
+                source_audio_codec,
+                source_container,
+                source_probe_json,
+                output_file_size_bytes,
+                output_duration_ms,
+                output_width,
+                output_height,
+                output_frame_rate,
+                output_bit_rate,
+                output_video_codec,
+                output_audio_codec,
+                output_container,
+                output_probe_json,
+                size_delta_bytes,
+                size_delta_percent,
+                bitrate_delta_bps,
+                bitrate_delta_percent,
+                encoded_output_abs_path,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                profile_id = VALUES(profile_id),
+                requested_at = VALUES(requested_at),
+                queued_at = VALUES(queued_at),
+                encoding_started_at = VALUES(encoding_started_at),
+                encoding_finished_at = VALUES(encoding_finished_at),
+                active_encoding_ms = VALUES(active_encoding_ms),
+                paused_ms = VALUES(paused_ms),
+                wall_clock_ms = VALUES(wall_clock_ms),
+                source_duration_ms = VALUES(source_duration_ms),
+                source_file_size_bytes = VALUES(source_file_size_bytes),
+                source_width = VALUES(source_width),
+                source_height = VALUES(source_height),
+                source_frame_rate = VALUES(source_frame_rate),
+                source_bit_rate = VALUES(source_bit_rate),
+                source_video_codec = VALUES(source_video_codec),
+                source_audio_codec = VALUES(source_audio_codec),
+                source_container = VALUES(source_container),
+                source_probe_json = VALUES(source_probe_json),
+                output_file_size_bytes = VALUES(output_file_size_bytes),
+                output_duration_ms = VALUES(output_duration_ms),
+                output_width = VALUES(output_width),
+                output_height = VALUES(output_height),
+                output_frame_rate = VALUES(output_frame_rate),
+                output_bit_rate = VALUES(output_bit_rate),
+                output_video_codec = VALUES(output_video_codec),
+                output_audio_codec = VALUES(output_audio_codec),
+                output_container = VALUES(output_container),
+                output_probe_json = VALUES(output_probe_json),
+                size_delta_bytes = VALUES(size_delta_bytes),
+                size_delta_percent = VALUES(size_delta_percent),
+                bitrate_delta_bps = VALUES(bitrate_delta_bps),
+                bitrate_delta_percent = VALUES(bitrate_delta_percent),
+                encoded_output_abs_path = VALUES(encoded_output_abs_path)
+        `, [
+            next.encodingItemId || "",
+            Number(next.attemptNumber || 0),
+            next.profileId || "",
+            toSqlDatetime(next.requestedAt),
+            toSqlDatetime(next.queuedAt),
+            toSqlDatetime(next.encodingStartedAt),
+            toSqlDatetime(next.encodingFinishedAt),
+            numberOrNull(next.activeEncodingMs),
+            numberOrNull(next.pausedMs),
+            numberOrNull(next.wallClockMs),
+            numberOrNull(source.durationMs),
+            numberOrNull(source.fileSizeBytes),
+            numberOrNull(source.width),
+            numberOrNull(source.height),
+            decimalOrNull(source.frameRate),
+            numberOrNull(source.bitRate),
+            source.videoCodec || null,
+            source.audioCodec || null,
+            source.container || null,
+            source.probeJson == null ? null : JSON.stringify(source.probeJson),
+            numberOrNull(output.fileSizeBytes),
+            numberOrNull(output.durationMs),
+            numberOrNull(output.width),
+            numberOrNull(output.height),
+            decimalOrNull(output.frameRate),
+            numberOrNull(output.bitRate),
+            output.videoCodec || null,
+            output.audioCodec || null,
+            output.container || null,
+            output.probeJson == null ? null : JSON.stringify(output.probeJson),
+            numberOrNull(next.sizeDeltaBytes),
+            decimalOrNull(next.sizeDeltaPercent),
+            numberOrNull(next.bitrateDeltaBps),
+            decimalOrNull(next.bitrateDeltaPercent),
+            next.encodedOutputAbsPath || null,
+            toSqlDatetime(next.createdAt) || toSqlDatetime(new Date().toISOString())
+        ]);
+
+        return this.getLatestOutcomeForItem(next.encodingItemId);
+    }
+
+    async getLatestOutcomeForItem(encodingItemId) {
+        const { results } = await this.database.query(`
+            SELECT *
+            FROM encoding_outcome
+            WHERE encoding_item_id = ?
+            ORDER BY attempt_number DESC, created_at DESC, id DESC
+            LIMIT 1
+        `, [String(encodingItemId || "")]);
+
+        return Array.isArray(results) && results.length ? mapRowToOutcome(results[0]) : null;
+    }
 }
 
 function mapRowToItem(row) {
@@ -460,6 +592,52 @@ function buildMetadata(row, prefix) {
         bitRate: numberOrNull(row[`${prefix}_bit_rate`]),
         probeJson: parseJsonOrNull(row[`${prefix}_probe_json`]),
         probedAt
+    };
+}
+
+function mapRowToOutcome(row) {
+    return {
+        id: numberOrNull(row.id),
+        encodingItemId: row.encoding_item_id,
+        attemptNumber: Number(row.attempt_number || 0),
+        profileId: row.profile_id || null,
+        requestedAt: toIsoOrNull(row.requested_at),
+        queuedAt: toIsoOrNull(row.queued_at),
+        encodingStartedAt: toIsoOrNull(row.encoding_started_at),
+        encodingFinishedAt: toIsoOrNull(row.encoding_finished_at),
+        activeEncodingMs: numberOrNull(row.active_encoding_ms),
+        pausedMs: numberOrNull(row.paused_ms),
+        wallClockMs: numberOrNull(row.wall_clock_ms),
+        encodedOutputAbsPath: row.encoded_output_abs_path || null,
+        sizeDeltaBytes: numberOrNull(row.size_delta_bytes),
+        sizeDeltaPercent: decimalOrNull(row.size_delta_percent),
+        bitrateDeltaBps: numberOrNull(row.bitrate_delta_bps),
+        bitrateDeltaPercent: decimalOrNull(row.bitrate_delta_percent),
+        sourceMetadata: {
+            durationMs: numberOrNull(row.source_duration_ms),
+            fileSizeBytes: numberOrNull(row.source_file_size_bytes),
+            width: numberOrNull(row.source_width),
+            height: numberOrNull(row.source_height),
+            frameRate: decimalOrNull(row.source_frame_rate),
+            bitRate: numberOrNull(row.source_bit_rate),
+            videoCodec: row.source_video_codec || null,
+            audioCodec: row.source_audio_codec || null,
+            container: row.source_container || null,
+            probeJson: parseJsonOrNull(row.source_probe_json)
+        },
+        outputMetadata: {
+            durationMs: numberOrNull(row.output_duration_ms),
+            fileSizeBytes: numberOrNull(row.output_file_size_bytes),
+            width: numberOrNull(row.output_width),
+            height: numberOrNull(row.output_height),
+            frameRate: decimalOrNull(row.output_frame_rate),
+            bitRate: numberOrNull(row.output_bit_rate),
+            videoCodec: row.output_video_codec || null,
+            audioCodec: row.output_audio_codec || null,
+            container: row.output_container || null,
+            probeJson: parseJsonOrNull(row.output_probe_json)
+        },
+        createdAt: toIsoOrNull(row.created_at)
     };
 }
 

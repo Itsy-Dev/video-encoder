@@ -1,5 +1,4 @@
 const {
-    formatAspectRatio,
     escapeHtml,
     formatBitrate,
     formatBytes,
@@ -53,7 +52,6 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
               ${renderMetric("Pixel Format", getPixelFormat(source))}
               ${renderMetric("Size", formatBytes(source.fileSizeBytes))}
               ${renderMetric("Resolution", formatResolution(source.width, source.height))}
-              ${renderMetric("Aspect Ratio", formatAspectRatio(source))}
               ${renderMetric("Aspect Family", scalePlan.family ? scalePlan.family.label : "—")}
               ${renderMetric("FPS", formatFps(source.frameRate))}
               ${renderMetric("Bit Rate", formatBitrate(source.bitRate))}
