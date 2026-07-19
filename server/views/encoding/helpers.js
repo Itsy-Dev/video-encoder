@@ -217,6 +217,17 @@ function formatDateTime(value) {
     return date.toLocaleString();
 }
 
+function formatDate(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleDateString("en-US", {
+        month: "2-digit",
+        day: "2-digit",
+        year: "numeric"
+    }).replace(/\//g, "-");
+}
+
 function formatAspectRatio(widthOrMetadata, height) {
     const metadata = widthOrMetadata && typeof widthOrMetadata === "object" && height == null
         ? widthOrMetadata
@@ -301,6 +312,7 @@ module.exports = {
     formatAspectRatio,
     formatBitrate,
     formatBytes,
+    formatDate,
     formatDateTime,
     formatDuration,
     formatProgress,

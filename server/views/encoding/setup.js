@@ -5,6 +5,7 @@ const {
     formatDuration,
     renderDiscardButton
 } = require("./helpers");
+const EncodingOptions = require("../../modules/encoding/encoding-options");
 const {
     describeScalePolicy,
     resolveScalePlan
@@ -16,9 +17,9 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
     }
 
     const source = item.sourceMetadata || {};
-    const selectedProfile = profiles.find(profile => profile.id === selectedProfileId)
-        || profiles.find(profile => profile.id === item.profileId)
-        || profiles[0]
+    const browserCompatibilityStatus = detectBrowserCompatibilityStatus(source);
+    const profileOptions = buildProfileOptions(profiles, source, browserCompatibilityStatus);
+    const selectedProfile = resolveSelectedProfile(profileOptions, selectedProfileId, item && item.profileId)
         || null;
     const scalePlan = resolveScalePlan(selectedProfile, source);
     const estimate = buildEstimate(source, selectedProfile, scalePlan);
@@ -63,7 +64,10 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
       <div class="ui hidden divider"></div>
 
       <div class="ui inverted segment charcoal">
-        <h3 class="ui inverted small header">Encoding Profile / Options</h3>
+        <h3 class="ui inverted small header">
+            Encoding Profile / Options
+            ${renderBrowserCompatibilityStatusBadge(browserCompatibilityStatus)}
+        </h3>
 
         <form method="get" action="/encoding/setup/fragment" class="ui inverted form">
           <input type="hidden" name="id" value="${escapeHtml(item.id)}" />
@@ -73,12 +77,12 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
             <div class="six wide field">
               <label>Profile</label>
               <select class="ui fluid dropdown" name="profileId" onchange="reloadSetupProfile(this.form)">
-                ${profiles.map(profile => `<option value="${escapeHtml(profile.id)}"${profile.id === (selectedProfile && selectedProfile.id) ? " selected" : ""}>${escapeHtml(profile.label)}</option>`).join("")}
+                ${profileOptions.map(option => `<option value="${escapeHtml(option.profile.id)}"${option.profile.id === (selectedProfile && selectedProfile.id) ? " selected" : ""}${option.disabled ? " disabled" : ""}>${escapeHtml(option.label)}</option>`).join("")}
               </select>
             </div>
             <div class="ten wide disabled field">
               <label>Description</label>
-              <input type="text" disabled value="${escapeHtml(selectedProfile && selectedProfile.description || "")}" />
+              <input type="text" disabled value="${escapeHtml(getSelectedProfileDescription(profileOptions, selectedProfile))}" />
             </div>
           </div>
         </form>
@@ -255,6 +259,194 @@ function renderInfoLabel(label, helpText) {
     const safeHelpText = escapeHtml(helpText);
 
     return `${escapeHtml(label)} <i class="info circle icon" title="${safeHelpText}" aria-label="${safeHelpText}" style="margin-left: 4px; opacity: 0.8; cursor: help;"></i>`;
+}
+
+function renderBrowserCompatibilityStatusBadge(status) {
+    if (!status || !status.kind) {
+        return "";
+    }
+
+    const color = status.kind === "copy_container_eligible" ? "teal" : "red";
+    const icon = status.kind === "copy_container_eligible" ? "magic" : "warning sign";
+    const label = status.kind === "copy_container_eligible"
+        ? "Copy Container Eligible"
+        : "Browser Incompatible";
+
+    return `<span class="ui tiny ${escapeHtml(color)} label" title="${escapeHtml(status.message)}" aria-label="${escapeHtml(status.message)}">
+        <i class="${escapeHtml(icon)} icon"></i>
+        ${escapeHtml(label)}
+    </span>`;
+}
+
+function buildProfileOptions(profiles, source, browserCompatibilityStatus = null) {
+    const sourceDimensions = getNormalizedSourceDimensions(source);
+
+    return (Array.isArray(profiles) ? profiles : []).map(profile => {
+        const disabledReason = getProfileDisabledReason(profile, source, sourceDimensions);
+        const recommendedReason = getProfileRecommendedReason(profile, browserCompatibilityStatus);
+        return {
+            profile,
+            disabled: Boolean(disabledReason),
+            disabledReason,
+            recommendedReason,
+            label: disabledReason
+                ? `${profile.label} (${disabledReason})`
+                : recommendedReason
+                    ? `${profile.label} (${recommendedReason})`
+                : profile.label
+        };
+    });
+}
+
+function resolveSelectedProfile(profileOptions, requestedProfileId, fallbackProfileId) {
+    const options = Array.isArray(profileOptions) ? profileOptions : [];
+    const candidates = [requestedProfileId, fallbackProfileId].filter(Boolean);
+
+    for (const candidateId of candidates) {
+        const match = options.find(option => option.profile && option.profile.id === candidateId && !option.disabled);
+        if (match) {
+            return match.profile;
+        }
+    }
+
+    const firstAvailable = options.find(option => !option.disabled);
+    return firstAvailable ? firstAvailable.profile : (options[0] ? options[0].profile : null);
+}
+
+function getSelectedProfileDescription(profileOptions, selectedProfile) {
+    if (!selectedProfile) {
+        return "";
+    }
+
+    const selectedOption = (Array.isArray(profileOptions) ? profileOptions : [])
+        .find(option => option.profile && option.profile.id === selectedProfile.id);
+
+    if (!selectedOption || !selectedOption.disabledReason) {
+        if (selectedOption && selectedOption.recommendedReason) {
+            return `${selectedProfile.description || ""} ${selectedOption.recommendedReason}.`.trim();
+        }
+        return selectedProfile.description || "";
+    }
+
+    return `${selectedProfile.description || ""} Unavailable: ${selectedOption.disabledReason}.`.trim();
+}
+
+function getProfileDisabledReason(profile, source, sourceDimensions) {
+    if (!isTierConstrainedDownscaleProfile(profile)) {
+        return "";
+    }
+
+    const sourceWidth = Number(sourceDimensions && sourceDimensions.width || 0);
+    const sourceHeight = Number(sourceDimensions && sourceDimensions.height || 0);
+    if (!sourceWidth || !sourceHeight) {
+        return "";
+    }
+
+    const scalePlan = resolveScalePlan(profile, source || {});
+    const outputWidth = Number(scalePlan && scalePlan.estimatedDimensions && scalePlan.estimatedDimensions.width || 0);
+    const outputHeight = Number(scalePlan && scalePlan.estimatedDimensions && scalePlan.estimatedDimensions.height || 0);
+    if (!outputWidth || !outputHeight) {
+        return "";
+    }
+
+    if (outputWidth >= sourceWidth && outputHeight >= sourceHeight) {
+        return `already at or below ${profile.targetTier.label}`;
+    }
+
+    return "";
+}
+
+function getProfileRecommendedReason(profile, browserCompatibilityStatus) {
+    if (!browserCompatibilityStatus || browserCompatibilityStatus.kind !== "copy_container_eligible") {
+        return "";
+    }
+
+    return profile && profile.id === "copy_container"
+        ? "recommended for browser compatibility"
+        : "";
+}
+
+function isTierConstrainedDownscaleProfile(profile) {
+    const targetTierId = profile && profile.targetTier && profile.targetTier.id;
+    const intentId = profile && profile.intent && profile.intent.id;
+    const downscaleIntentIds = new Set([
+        EncodingOptions.ProfileIntent.DOWNSCALE.id,
+        EncodingOptions.ProfileIntent.DOWNSCALE_AND_COMPRESS.id
+    ]);
+
+    if (profile && profile.id === "archive_hd") {
+        return false;
+    }
+
+    return downscaleIntentIds.has(intentId)
+        && [EncodingOptions.ResolutionTier.QHD.id, EncodingOptions.ResolutionTier.HD.id].includes(targetTierId);
+}
+
+function getNormalizedSourceDimensions(source) {
+    const preserveProfile = {
+        pixelFormat: EncodingOptions.PixelFormat.YUV420P,
+        scaleMode: EncodingOptions.ScaleMode.PRESERVE_SOURCE,
+        targetTier: EncodingOptions.ResolutionTier.ORIGINAL,
+        tierFallback: EncodingOptions.TierFallback.PRESERVE_SOURCE,
+        customFamilyFallback: EncodingOptions.CustomFamilyFallback.PRESERVE_SOURCE
+    };
+    const preservePlan = resolveScalePlan(preserveProfile, source || {});
+    return preservePlan && preservePlan.estimatedDimensions
+        ? preservePlan.estimatedDimensions
+        : { width: Number(source && source.width || 0), height: Number(source && source.height || 0) };
+}
+
+function detectBrowserCompatibilityStatus(source) {
+    const container = String(source && source.container || "").toLowerCase();
+    const videoCodec = String(source && source.videoCodec || "").toLowerCase();
+    const audioCodec = String(source && source.audioCodec || "").toLowerCase();
+    const pixelFormat = String(getPixelFormat(source) || "").toLowerCase();
+    const probeJson = source && source.probeJson ? source.probeJson : null;
+    const streams = Array.isArray(probeJson && probeJson.streams) ? probeJson.streams : [];
+    const hasVideoStream = streams.some(stream => stream && stream.codec_type === "video");
+    const hasUnsupportedNonSubtitleStream = streams.some(stream => {
+        const streamType = String(stream && stream.codec_type || "").toLowerCase();
+        return streamType && !["video", "audio", "subtitle"].includes(streamType);
+    });
+
+    if (!hasVideoStream || hasUnsupportedNonSubtitleStream) {
+        return hasUnsupportedNonSubtitleStream
+            ? {
+                kind: "browser_incompatible",
+                message: "This file includes unsupported extra streams, so browser compatibility would require more than a simple container copy."
+            }
+            : { kind: "" };
+    }
+
+    if (container === "mp4") {
+        return { kind: "" };
+    }
+
+    if (videoCodec !== "h264") {
+        return {
+            kind: "browser_incompatible",
+            message: `Video codec ${videoCodec || "unknown"} is not treated as browser-safe for this workflow, so browser compatibility would require re-encoding.`
+        };
+    }
+
+    if (audioCodec && !["aac", "mp3"].includes(audioCodec)) {
+        return {
+            kind: "browser_incompatible",
+            message: `Audio codec ${audioCodec} is not treated as browser-safe for this workflow, so browser compatibility would require re-encoding or audio conversion.`
+        };
+    }
+
+    if (pixelFormat && pixelFormat !== "yuv420p") {
+        return {
+            kind: "browser_incompatible",
+            message: `Pixel format ${pixelFormat} is not treated as browser-safe for this workflow, so browser compatibility would require re-encoding.`
+        };
+    }
+
+    return {
+        kind: "copy_container_eligible",
+        message: `This file already appears browser-safe at the codec level and may only need a container repack into MP4. Choose Copy Container if your goal is browser playback only, or choose another profile if you also want downscaling or additional size savings.`
+    };
 }
 
 function buildEstimate(source, profile, scalePlan) {

@@ -396,6 +396,16 @@ class EncodingRepository {
         ]);
     }
 
+    async deleteMetadata(encodingItemId, kind) {
+        await this.database.query(`
+            DELETE FROM encoding_item_metadata
+            WHERE encoding_item_id = ? AND kind = ?
+        `, [
+            String(encodingItemId || ""),
+            String(kind || "")
+        ]);
+    }
+
     async upsertOutcome(outcome) {
         const next = outcome || {};
         const source = next.sourceMetadata || {};

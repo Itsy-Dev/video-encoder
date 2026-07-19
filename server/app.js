@@ -38,7 +38,7 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
     app.use("/media/pending-source", express.static(encoderPaths.pending));
 
     initFileLogger(encoderPaths.logs);
-    console.log("[encoder] Server starting...");
+    console.log("[SERVER] Server starting...");
 
     const database = createDatabase();
     await runMigrations(database);
@@ -58,7 +58,7 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
     });
 
     const address = `http://localhost:${server.address().port}`;
-    console.log(">>".good, "Encoder Server started at:", address.data);
+    console.log("[SERVER] Encoder Server started at:", address.data);
 
     let isShuttingDown = false;
 
@@ -66,7 +66,7 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
         if (isShuttingDown) return;
         isShuttingDown = true;
 
-        console.log("[encoder] Shutdown requested.");
+        console.log("[SERVER] Shutdown requested.");
 
         await new Promise(resolve => {
             server.close(function onClose() {
@@ -75,7 +75,7 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
         }).catch(() => {});
 
         await database.close().catch(() => {});
-        console.log("[encoder] Shutdown complete.");
+        console.log("[SERVER] Shutdown complete.");
     }
 
     return {

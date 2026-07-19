@@ -20,6 +20,6 @@ async function start() {
 }
 
 start().catch(error => {
-    console.error(">>".error, "Encoder Server failed to start:", error);
+    console.error("[SERVER] Encoder Server failed to start:", error);
     process.exit(1);
 });

@@ -27,7 +27,7 @@ function initFileLogger(logDirAbsPath) {
     console.error = createPatchedConsoleMethod("ERROR", originalConsole.error);
 
     initialized = true;
-    console.log("[encoder] File logger initialized", activeLogDir);
+    console.log("[LOGGING] File logger initialized", activeLogDir);
 }
 
 function createPatchedConsoleMethod(level, originalMethod) {
