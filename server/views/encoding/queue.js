@@ -407,7 +407,7 @@ function calculateEtaConfidence(activeItem, worker, progress) {
     }
 
     return {
-        showEta: progressPercent >= 10 && activeTimeMs >= 30000
+        showEta: progressPercent >= 5 || activeTimeMs >= 30000
     };
 }
 
