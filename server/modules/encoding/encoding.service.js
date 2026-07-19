@@ -275,7 +275,7 @@ module.exports = class EncodingService {
 
                 const itemId = buildItemId(inboxRelativePath);
                 const existing = await this.repository.get(itemId);
-                if (existing) {
+                if (existing && !this._canReingestScannedItem(existing)) {
                     results.duplicates += 1;
                     continue;
                 }
@@ -285,6 +285,7 @@ module.exports = class EncodingService {
                     inboxRelativeDir,
                     inboxRelativePath,
                     itemId,
+                    existingItem: existing,
                     paths,
                     defaultProfileId: this._getDefaultProfileId(settings)
                 });
@@ -1056,6 +1057,7 @@ module.exports = class EncodingService {
         inboxRelativeDir,
         inboxRelativePath,
         itemId,
+        existingItem = null,
         paths,
         defaultProfileId
     }) {
@@ -1081,6 +1083,10 @@ module.exports = class EncodingService {
         });
         const sourceMetadata = await this.ffprobeService.probeFile(managedInputAbsPath, inputStat);
         console.log(`[encoder] Ingested inbox file. id=${itemId} source=${managedInputAbsPath}`);
+
+        if (this._canReingestScannedItem(existingItem)) {
+            await this.repository.deleteMetadata(itemId, "encoded");
+        }
 
         return this.repository.upsert({
             ...item,
@@ -1226,6 +1232,10 @@ module.exports = class EncodingService {
             files.push(fileAbs);
         });
         return files;
+    }
+
+    _canReingestScannedItem(item) {
+        return Boolean(item) && String(item.status || "").toLowerCase() === "rejected";
     }
 
     async _findDiscoveryVideoFiles(rootAbsPaths) {
