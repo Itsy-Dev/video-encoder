@@ -1,8 +1,8 @@
 const encodingProfiles = require("../encoding/encoding-profiles");
 const SettingsRepository = require("./settings.repository");
 const {
-    getDefaultInboxRoot,
-    getDefaultOutboxRoot
+    getConfiguredDefaultInboxRoot,
+    getConfiguredDefaultOutboxRoot
 } = require("../filesystem/handoff-paths");
 
 const SCAN_INTERVAL_MINUTES_KEY = "discovery.scanIntervalMinutes";
@@ -16,8 +16,8 @@ const DEFAULTS = Object.freeze({
     filterThreads: 2,
     processPriority: 15,
     defaultProfileId: "browser_compatibility",
-    inboxRoot: getDefaultInboxRoot(),
-    outboxRoot: getDefaultOutboxRoot(),
+    inboxRoot: getConfiguredDefaultInboxRoot(),
+    outboxRoot: getConfiguredDefaultOutboxRoot(),
     browserFileIntakeEnabled: false,
     scanIntervalMinutes: 1,
     uploadTempMaxAgeHours: 2,

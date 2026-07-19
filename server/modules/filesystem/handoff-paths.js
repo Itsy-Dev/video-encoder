@@ -11,12 +11,26 @@ function getDefaultOutboxRoot() {
     return path.join(os.homedir(), "Movies", "Video Encoder Outbox");
 }
 
+function getConfiguredDefaultInboxRoot() {
+    return resolveEncoderPath(
+        process.env.ENCODER_DEFAULT_INBOX_ROOT || process.env.ENCODER_INBOX_ROOT,
+        getDefaultInboxRoot()
+    );
+}
+
+function getConfiguredDefaultOutboxRoot() {
+    return resolveEncoderPath(
+        process.env.ENCODER_DEFAULT_OUTBOX_ROOT || process.env.ENCODER_OUTBOX_ROOT,
+        getDefaultOutboxRoot()
+    );
+}
+
 function getEncoderInboxRoot(overridePath = null) {
-    return resolveEncoderPath(overridePath || process.env.ENCODER_INBOX_ROOT, getDefaultInboxRoot());
+    return resolveEncoderPath(overridePath, getDefaultInboxRoot());
 }
 
 function getEncoderOutboxRoot(overridePath = null) {
-    return resolveEncoderPath(overridePath || process.env.ENCODER_OUTBOX_ROOT, getDefaultOutboxRoot());
+    return resolveEncoderPath(overridePath, getDefaultOutboxRoot());
 }
 
 function getEncoderInternalRoot() {
@@ -30,8 +44,12 @@ function getEncoderPaths(options = {}) {
     const internalRoot = options.internalRoot
         ? resolveEncoderPath(options.internalRoot, getEncoderInternalRoot())
         : getEncoderInternalRoot();
-    const inbox = getEncoderInboxRoot(options.inbox);
-    const outbox = getEncoderOutboxRoot(options.outbox);
+    const inbox = options.inbox
+        ? getEncoderInboxRoot(options.inbox)
+        : getConfiguredDefaultInboxRoot();
+    const outbox = options.outbox
+        ? getEncoderOutboxRoot(options.outbox)
+        : getConfiguredDefaultOutboxRoot();
 
     return {
         handoffRoot: findCommonParent(inbox, outbox),
@@ -65,6 +83,8 @@ function resolveEncoderPath(targetPath, fallbackAbsPath) {
 module.exports = {
     getDefaultInboxRoot,
     getDefaultOutboxRoot,
+    getConfiguredDefaultInboxRoot,
+    getConfiguredDefaultOutboxRoot,
     getEncoderInboxRoot,
     getEncoderOutboxRoot,
     getEncoderInternalRoot,

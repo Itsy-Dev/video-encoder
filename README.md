@@ -20,7 +20,9 @@ The server also runs pending SQL migrations automatically at startup.
 ## Deployment Split
 
 - each checkout reads its own local `.env`
-- separate dev and prod by setting different `ENCODER_PORT`, `ENCODER_DB_NAME`, `ENCODER_INBOX_ROOT`, `ENCODER_OUTBOX_ROOT`, and `ENCODER_INTERNAL_ROOT` in each location
+- separate dev and prod by setting different `ENCODER_PORT`, `ENCODER_DB_NAME`, `ENCODER_DEFAULT_INBOX_ROOT`, `ENCODER_DEFAULT_OUTBOX_ROOT`, and `ENCODER_INTERNAL_ROOT` in each location
+- `storage.inboxRoot` and `storage.outboxRoot` in the database are the runtime source of truth once settings exist
+- `.env` inbox/outbox values are initialization defaults for a new environment, not runtime overrides
 - storage path env vars accept absolute paths, repo-relative paths, and `~/...` paths
 
 ## Routes
@@ -58,6 +60,7 @@ The server also runs pending SQL migrations automatically at startup.
 ## Notes
 
 - MySQL and runtime config are loaded from the local checkout's `.env`.
+- inbox/outbox precedence is: database setting -> `.env` default -> hardcoded Movies fallback
 - SQL patches live under `server/modules/database/migrations/` and are auto-applied once.
 - `encoding_item`, `encoding_item_metadata`, and `app_setting` are the intended persistence layer for the encoder workflow.
 - It is intended as the first extraction step toward a standalone encoder service.
