@@ -12,15 +12,16 @@ function getDefaultOutboxRoot() {
 }
 
 function getEncoderInboxRoot(overridePath = null) {
-    return resolveEncoderPath(overridePath, getDefaultInboxRoot());
+    return resolveEncoderPath(overridePath || process.env.ENCODER_INBOX_ROOT, getDefaultInboxRoot());
 }
 
 function getEncoderOutboxRoot(overridePath = null) {
-    return resolveEncoderPath(overridePath, getDefaultOutboxRoot());
+    return resolveEncoderPath(overridePath || process.env.ENCODER_OUTBOX_ROOT, getDefaultOutboxRoot());
 }
 
 function getEncoderInternalRoot() {
     return resolveEncoderPath(
+        process.env.ENCODER_INTERNAL_ROOT,
         path.join(ENCODER_SERVICE_ROOT, ".internal")
     );
 }
@@ -50,11 +51,15 @@ function resolveEncoderPath(targetPath, fallbackAbsPath) {
         return fallbackAbsPath;
     }
 
-    if (path.isAbsolute(value)) {
-        return path.resolve(value);
+    const expandedValue = value.startsWith("~/")
+        ? path.join(os.homedir(), value.slice(2))
+        : value;
+
+    if (path.isAbsolute(expandedValue)) {
+        return path.resolve(expandedValue);
     }
 
-    return path.resolve(ENCODER_SERVICE_ROOT, value);
+    return path.resolve(ENCODER_SERVICE_ROOT, expandedValue);
 }
 
 module.exports = {
