@@ -1,6 +1,5 @@
 const path = require("path");
 const express = require("express");
-const colors = require("colors");
 
 const { createDatabase } = require("./modules/database/mysql");
 const { runMigrations } = require("./modules/database/migrate");
@@ -12,18 +11,11 @@ require("dotenv").config({
     path: path.join(__dirname, "..", ".env")
 });
 
-colors.setTheme({
-    good: "green",
-    data: "brightCyan",
-    warn: "yellow",
-    error: "red"
-});
-
 async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 4300) } = {}) {
     const app = express();
     const encoderPaths = getEncoderPaths();
     const desktopAssetsAbs = path.join(__dirname, "..", "desktop", "assets");
-    const semanticRootAbs = path.join(path.dirname(require.resolve("fomantic-ui/package.json")), "dist");
+    const semanticRootAbs = path.dirname(require.resolve("fomantic-ui-css/semantic.min.css"));
     const jqueryRootAbs = path.dirname(require.resolve("jquery/dist/jquery.js"));
     const fileIntake = new FileIntakeService({
         tempRootAbsPath: encoderPaths.uploads

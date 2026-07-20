@@ -25,7 +25,7 @@ The current UI includes:
 
 ## Requirements
 
-- Node.js
+- Node.js 24.15.0 or newer
 - MySQL
 - `ffmpeg`
 - `ffprobe`

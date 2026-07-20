@@ -2,6 +2,10 @@
   "name": "@video-encoder",
   "version": "0.4.0",
   "private": true,
+  "engines": {
+    "node": ">=24.15.0",
+    "npm": ">=10"
+  },
   "main": "server/server.js",
   "scripts": {
     "start": "node server/server.js",
@@ -10,13 +14,12 @@
     "desktop": "electron desktop/main.js"
   },
   "devDependencies": {
-    "electron": "31.7.7"
+    "electron": "^43.1.1"
   },
   "dependencies": {
-    "colors": "^1.4.0",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
-    "fomantic-ui": "^2.9.4",
+    "fomantic-ui-css": "^2.9.4",
     "jquery": "^3.7.1",
     "multer": "^1.4.5-lts.1",
     "mysql": "^2.18.1"
