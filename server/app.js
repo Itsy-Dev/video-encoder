@@ -26,7 +26,7 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
     const semanticRootAbs = path.join(path.dirname(require.resolve("fomantic-ui/package.json")), "dist");
     const jqueryRootAbs = path.dirname(require.resolve("jquery/dist/jquery.js"));
     const fileIntake = new FileIntakeService({
-        tempRootAbsPath: path.join(encoderPaths.internalRoot, "uploads")
+        tempRootAbsPath: encoderPaths.uploads
     });
 
     app.use(express.json({ limit: "2mb" }));
@@ -35,7 +35,6 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
     app.use("/assets", express.static(desktopAssetsAbs));
     app.use("/shared/semantic", express.static(semanticRootAbs));
     app.use("/shared/jquery", express.static(jqueryRootAbs));
-    app.use("/media/pending-source", express.static(encoderPaths.pending));
 
     initFileLogger(encoderPaths.logs);
     console.log("[SERVER] Server starting...");

@@ -41,7 +41,7 @@ function renderRow(item) {
         </a>
       </td>
       <td>${renderSourceLabel(item)}</td>
-      <td title="${escapeHtml(item.encodedOutputAbsPath || item.inputAbsPath || "")}">
+      <td title="${escapeHtml(item.outputAbsPath || item.inputAbsPath || "")}">
         <div>${escapeHtml(item.originalFilename || "—")}</div>
       </td>
       <td>${escapeHtml(item.profileId || "—")}</td>

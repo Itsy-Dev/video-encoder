@@ -161,18 +161,18 @@ function renderActions(item, canReview, retainSourceByDefault) {
           </div>
         </div>
         <div class="nine wide right aligned column">
-          <a class="ui blue button" href="/encoding/setup?id=${encodeURIComponent(item.id)}">
+          <a class="ui blue button" href="/encoding/setup?id=${encodeURIComponent(item.id)}" title="Redo keeps the current output until the replacement encode succeeds.">
             <i class="redo icon"></i>
             Redo
           </a>
-          <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/reject" data-api-form data-confirm="Reject this encode? The encoded output will be removed and the source will stay available for requeue." style="display: inline-block;">
+          <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/reject" data-api-form data-confirm="Reject this encode? The output will be moved to Outbox/rejected and the source receipt will stay available for requeue." style="display: inline-block;">
             <input type="hidden" name="reviewer" value="operator" />
             <button type="submit" class="ui red ${disabledClass} button" ${canReview ? "" : "disabled"}>
               <i class="ban icon"></i>
               Reject
             </button>
           </form>
-          <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/approve" data-api-form data-confirm="Approve this encode and move it to outbox? This removes the encoder's internal working copy." style="display: inline-block;">
+          <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/approve" data-api-form data-confirm="Approve this encode and apply the selected source handling?" style="display: inline-block;">
             <input type="hidden" name="reviewer" value="operator" />
             <input type="hidden" name="sourceAction" value="${escapeHtml(sourceAction)}" data-source-action-input />
             <button type="submit" class="ui green ${disabledClass} button" ${canReview ? "" : "disabled"}>
