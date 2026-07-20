@@ -26,10 +26,8 @@ The current UI includes:
 ## Requirements
 
 - Node.js 24.15.0 or newer
-- `ffmpeg`
-- `ffprobe`
 
-If `ffmpeg` or `ffprobe` are not on the default `PATH`, set:
+The app bundles `ffmpeg` and `ffprobe` for local and packaged runs. To override those binaries, set:
 
 - `ENCODER_FFMPEG_BIN`
 - `ENCODER_FFPROBE_BIN`
@@ -132,10 +130,13 @@ Each checkout reads its own local `.env`.
 Important environment variables:
 
 - `ENCODER_PORT`
+- `ENCODER_APP_DATA_ROOT`
+- `ENCODER_CACHE_ROOT`
+- `ENCODER_LOGS_ROOT`
 - `ENCODER_DEFAULT_INBOX_ROOT`
 - `ENCODER_DEFAULT_OUTBOX_ROOT`
-- `ENCODER_FFMPEG_BIN`
-- `ENCODER_FFPROBE_BIN`
+- `ENCODER_FFMPEG_BIN` optional binary override
+- `ENCODER_FFPROBE_BIN` optional binary override
 
 Path values may be:
 

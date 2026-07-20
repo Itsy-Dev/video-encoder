@@ -5,8 +5,9 @@ const EventEmitter = require("events");
 const { spawn, spawnSync } = require("child_process");
 const encodingProfiles = require("./encoding-profiles");
 const { buildSafeScaleFilter, resolveScalePlan } = require("./scale-policy");
+const { getFfmpegBin } = require("./media-binaries");
 
-const FFMPEG_BIN = process.env.ENCODER_FFMPEG_BIN || "ffmpeg";
+const FFMPEG_BIN = getFfmpegBin();
 const DEFAULT_FFMPEG_RUNTIME = Object.freeze({
     PROCESS_PRIORITY: 15,
     THREADS: 1,
@@ -16,7 +17,7 @@ const DEFAULT_FFMPEG_RUNTIME = Object.freeze({
 (function ensureFfmpeg() {
     const result = spawnSync(FFMPEG_BIN, ["-version"], { stdio: "ignore" });
     if (result.status !== 0) {
-        throw new Error(`ffmpeg not found at '${FFMPEG_BIN}'. Install ffmpeg or set ENCODER_FFMPEG_BIN.`);
+        throw new Error(`ffmpeg could not be started at '${FFMPEG_BIN}'. Set ENCODER_FFMPEG_BIN to a valid executable or reinstall the app.`);
     }
 })();
 
