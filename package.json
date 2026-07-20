@@ -20,6 +20,8 @@
     "migrate:package-test": "ENCODER_ENV_FILE=.env.package-test npm run migrate",
     "pack": "npm run check:runtime && electron-builder --dir",
     "dist": "npm run check:runtime && electron-builder",
+    "pack:package-test": "npm run check:runtime && electron-builder --dir --config electron-builder.package-test.js",
+    "dist:package-test": "npm run check:runtime && electron-builder --config electron-builder.package-test.js",
     "predesktop": "npm run check:runtime",
     "desktop": "electron desktop/main.js",
     "desktop:dev": "ENCODER_ENV_FILE=.env.dev npm run desktop",

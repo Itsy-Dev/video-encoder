@@ -6,12 +6,12 @@ const projectRoot = path.resolve(__dirname, "..", "..");
 const envPath = path.join(projectRoot, ".env.package-test");
 const appExecutable = path.join(
     projectRoot,
-    "dist",
+    "dist-package-test",
     "mac-arm64",
-    "Video Encoder.app",
+    "Video Encoder Package Test.app",
     "Contents",
     "MacOS",
-    "Video Encoder"
+    "Video Encoder Package Test"
 );
 
 if (!fs.existsSync(envPath)) {
@@ -22,17 +22,18 @@ if (!fs.existsSync(envPath)) {
 
 if (!fs.existsSync(appExecutable)) {
     console.error(`[PACKAGED TEST] Missing packaged app executable: ${appExecutable}`);
-    console.error("[PACKAGED TEST] Build it first with: npm run pack");
+    console.error("[PACKAGED TEST] Build it first with: npm run pack:package-test");
     process.exit(1);
 }
 
-console.log(`[PACKAGED TEST] Launching packaged app with ENCODER_ENV_FILE=${envPath}`);
+console.log(`[PACKAGED TEST] Launching dedicated package-test app with ENCODER_ENV_FILE=${envPath}`);
 
 const child = spawn(appExecutable, {
     stdio: "inherit",
     env: {
         ...process.env,
-        ENCODER_ENV_FILE: envPath
+        ENCODER_ENV_FILE: envPath,
+        ENCODER_DISTRIBUTION_PROFILE: "package-test"
     }
 });
 

@@ -91,9 +91,11 @@ Each lane should use its own `ENCODER_PORT`, `ENCODER_APP_DATA_ROOT`, `ENCODER_C
 To launch an unpacked packaged app against the package-test lane:
 
 ```bash
-npm run pack
+npm run pack:package-test
 npm run packaged:package-test
 ```
+
+Do not use the normal `dist/Video Encoder.app` for package-test while a stable encoder is running. The dedicated package-test build has its own app name, bundle id, port, and Library defaults so Finder launches do not collide with the stable app.
 
 ## Package
 
@@ -107,6 +109,12 @@ Create distributable macOS artifacts in `dist/`:
 
 ```bash
 npm run dist
+```
+
+Create isolated package-test macOS artifacts in `dist-package-test/`:
+
+```bash
+npm run dist:package-test
 ```
 
 Install from the generated DMG by dragging `Video Encoder.app` into `Applications`. This local build is unsigned until Apple Developer signing/notarization is configured, so macOS may require right-clicking the app and choosing **Open** the first time.
