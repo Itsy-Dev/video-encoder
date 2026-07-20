@@ -8,12 +8,19 @@
   },
   "main": "server/server.js",
   "scripts": {
+    "check:runtime": "node server/scripts/check-node-runtime.js",
+    "prestart": "npm run check:runtime",
     "start": "node server/server.js",
+    "premigrate": "npm run check:runtime",
     "migrate": "node server/scripts/migrate.js",
+    "preimport:mysql-to-sqlite": "npm run check:runtime",
+    "import:mysql-to-sqlite": "node server/scripts/import-mysql-to-sqlite.js",
+    "predesktop": "npm run check:runtime",
     "desktop": "electron desktop/main.js"
   },
   "devDependencies": {
-    "electron": "^43.1.1"
+    "electron": "^43.1.1",
+    "mysql": "^2.18.1"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
