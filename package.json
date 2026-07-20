@@ -12,12 +12,17 @@
     "check:runtime": "node server/scripts/check-node-runtime.js",
     "prestart": "npm run check:runtime",
     "start": "node server/server.js",
+    "start:dev": "ENCODER_ENV_FILE=.env.dev npm start",
     "premigrate": "npm run check:runtime",
     "migrate": "node server/scripts/migrate.js",
+    "migrate:dev": "ENCODER_ENV_FILE=.env.dev npm run migrate",
+    "migrate:package-test": "ENCODER_ENV_FILE=.env.package-test npm run migrate",
     "pack": "npm run check:runtime && electron-builder --dir",
     "dist": "npm run check:runtime && electron-builder",
     "predesktop": "npm run check:runtime",
-    "desktop": "electron desktop/main.js"
+    "desktop": "electron desktop/main.js",
+    "desktop:dev": "ENCODER_ENV_FILE=.env.dev npm run desktop",
+    "desktop:package-test": "ENCODER_ENV_FILE=.env.package-test npm run desktop"
   },
   "build": {
     "appId": "com.videoencoder.app",

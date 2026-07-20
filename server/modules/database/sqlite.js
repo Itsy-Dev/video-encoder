@@ -1,12 +1,12 @@
 const fs = require("fs");
 const path = require("path");
 const { DatabaseSync } = require("node:sqlite");
-const { getDefaultAppDataRoot } = require("../filesystem/handoff-paths");
+const { getEncoderInternalRoot } = require("../filesystem/handoff-paths");
 
 const DEFAULT_DATABASE_FILENAME = "encoder.sqlite";
 
 function createDatabase(options = {}) {
-    const databasePath = path.resolve(options.databasePath || path.join(getDefaultAppDataRoot(), DEFAULT_DATABASE_FILENAME));
+    const databasePath = path.resolve(options.databasePath || path.join(getEncoderInternalRoot(), DEFAULT_DATABASE_FILENAME));
     fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 
     const connection = new DatabaseSync(databasePath);

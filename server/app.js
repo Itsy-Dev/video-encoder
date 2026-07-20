@@ -6,10 +6,9 @@ const { runMigrations } = require("./modules/database/migrate");
 const { getEncoderPaths } = require("./modules/filesystem/handoff-paths");
 const { initFileLogger } = require("./modules/filesystem/logger");
 const FileIntakeService = require("./modules/file-intake/file-intake.service");
+const { loadEncoderEnv } = require("./modules/config/env-loader");
 
-require("dotenv").config({
-    path: path.join(__dirname, "..", ".env")
-});
+const loadedEnv = loadEncoderEnv();
 
 async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 4300) } = {}) {
     const app = express();
@@ -30,6 +29,12 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
 
     initFileLogger(encoderPaths.logs);
     console.log("[SERVER] Server starting...");
+    console.log(`[SERVER] Env file: ${loadedEnv.loaded ? loadedEnv.path : `${loadedEnv.path} (not loaded)`}`);
+    console.log(`[SERVER] Runtime paths: appData=${encoderPaths.internalRoot}`);
+    console.log(`[SERVER] Runtime paths: cache=${encoderPaths.cacheRoot}`);
+    console.log(`[SERVER] Runtime paths: logs=${encoderPaths.logs}`);
+    console.log(`[SERVER] Handoff paths: inbox=${encoderPaths.inbox}`);
+    console.log(`[SERVER] Handoff paths: outbox=${encoderPaths.outbox}`);
 
     const database = createDatabase();
     await runMigrations(database);

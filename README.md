@@ -38,6 +38,7 @@ If `ffmpeg` or `ffprobe` are not on the default `PATH`, set:
 
 ```bash
 npm install
+cp .env.example .env
 ```
 
 ## Run
@@ -61,6 +62,39 @@ npm run desktop
 ```
 
 The server also applies pending SQL migrations automatically at startup.
+
+## Runtime Profiles
+
+Real `.env*` files are local-only and ignored by git. Commit only `.env.example` templates.
+
+Use the default/prod-style lane:
+
+```bash
+cp .env.example .env
+npm start
+```
+
+Use the isolated dev lane:
+
+```bash
+cp .env.dev.example .env.dev
+npm run start:dev
+```
+
+Use the isolated package-test lane from the repo:
+
+```bash
+cp .env.package-test.example .env.package-test
+npm run desktop:package-test
+```
+
+Each lane should use its own `ENCODER_PORT`, `ENCODER_APP_DATA_ROOT`, `ENCODER_CACHE_ROOT`, `ENCODER_LOGS_ROOT`, Inbox, and Outbox. This allows a stable encoder to keep running while repo or packaged builds are tested separately.
+
+To launch an unpacked packaged app against the package-test lane from Terminal:
+
+```bash
+ENCODER_ENV_FILE="$(pwd)/.env.package-test" "dist/mac-arm64/Video Encoder.app/Contents/MacOS/Video Encoder"
+```
 
 ## Package
 
