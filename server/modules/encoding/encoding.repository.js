@@ -268,14 +268,11 @@ class EncodingRepository {
                 id,
                 status,
                 original_filename,
-                inbox_input_abs_path,
                 input_abs_path,
-                inbox_relative_path,
                 inbox_relative_dir,
                 profile_id,
                 output_filename,
-                encoded_output_abs_path,
-                outbox_output_abs_path,
+                output_abs_path,
                 last_error,
                 attempt_count,
                 requested_at,
@@ -288,18 +285,15 @@ class EncodingRepository {
                 rejected_at,
                 created_at,
                 updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 status = VALUES(status),
                 original_filename = VALUES(original_filename),
-                inbox_input_abs_path = VALUES(inbox_input_abs_path),
                 input_abs_path = VALUES(input_abs_path),
-                inbox_relative_path = VALUES(inbox_relative_path),
                 inbox_relative_dir = VALUES(inbox_relative_dir),
                 profile_id = VALUES(profile_id),
                 output_filename = VALUES(output_filename),
-                encoded_output_abs_path = VALUES(encoded_output_abs_path),
-                outbox_output_abs_path = VALUES(outbox_output_abs_path),
+                output_abs_path = VALUES(output_abs_path),
                 last_error = VALUES(last_error),
                 attempt_count = VALUES(attempt_count),
                 requested_at = VALUES(requested_at),
@@ -315,14 +309,11 @@ class EncodingRepository {
             next.id,
             next.status || "pending",
             next.originalFilename || "",
-            next.inboxInputAbsPath || "",
             next.inputAbsPath || "",
-            next.inboxRelativePath || "",
             next.inboxRelativeDir || "",
             next.profileId || null,
             next.outputFilename || null,
-            next.encodedOutputAbsPath || null,
-            next.outboxOutputAbsPath || null,
+            next.outputAbsPath || next.outboxOutputAbsPath || next.encodedOutputAbsPath || null,
             next.lastError || null,
             Number(next.attemptCount || 0),
             toSqlDatetime(next.requestedAt),
@@ -447,7 +438,7 @@ class EncodingRepository {
                 size_delta_percent,
                 bitrate_delta_bps,
                 bitrate_delta_percent,
-                encoded_output_abs_path,
+                output_abs_path,
                 created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
@@ -483,7 +474,7 @@ class EncodingRepository {
                 size_delta_percent = VALUES(size_delta_percent),
                 bitrate_delta_bps = VALUES(bitrate_delta_bps),
                 bitrate_delta_percent = VALUES(bitrate_delta_percent),
-                encoded_output_abs_path = VALUES(encoded_output_abs_path)
+                output_abs_path = VALUES(output_abs_path)
         `, [
             next.encodingItemId || "",
             Number(next.attemptNumber || 0),
@@ -519,7 +510,7 @@ class EncodingRepository {
             decimalOrNull(next.sizeDeltaPercent),
             numberOrNull(next.bitrateDeltaBps),
             decimalOrNull(next.bitrateDeltaPercent),
-            next.encodedOutputAbsPath || null,
+            next.outputAbsPath || next.encodedOutputAbsPath || null,
             toSqlDatetime(next.createdAt) || toSqlDatetime(new Date().toISOString())
         ]);
 
@@ -544,14 +535,13 @@ function mapRowToItem(row) {
         id: row.id,
         status: row.status,
         originalFilename: row.original_filename,
-        inboxInputAbsPath: row.inbox_input_abs_path,
         inputAbsPath: row.input_abs_path,
-        inboxRelativePath: row.inbox_relative_path,
         inboxRelativeDir: row.inbox_relative_dir,
         profileId: row.profile_id,
         outputFilename: row.output_filename,
-        encodedOutputAbsPath: row.encoded_output_abs_path,
-        outboxOutputAbsPath: row.outbox_output_abs_path,
+        outputAbsPath: row.output_abs_path,
+        encodedOutputAbsPath: row.output_abs_path,
+        outboxOutputAbsPath: row.output_abs_path,
         lastError: row.last_error,
         attemptCount: Number(row.attempt_count || 0),
         requestedAt: toIsoOrNull(row.requested_at),
@@ -618,7 +608,8 @@ function mapRowToOutcome(row) {
         activeEncodingMs: numberOrNull(row.active_encoding_ms),
         pausedMs: numberOrNull(row.paused_ms),
         wallClockMs: numberOrNull(row.wall_clock_ms),
-        encodedOutputAbsPath: row.encoded_output_abs_path || null,
+        outputAbsPath: row.output_abs_path || null,
+        encodedOutputAbsPath: row.output_abs_path || null,
         sizeDeltaBytes: numberOrNull(row.size_delta_bytes),
         sizeDeltaPercent: decimalOrNull(row.size_delta_percent),
         bitrateDeltaBps: numberOrNull(row.bitrate_delta_bps),
