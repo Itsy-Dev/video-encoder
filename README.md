@@ -7,7 +7,7 @@ Standalone video intake, encoding, review, and export app with a browser UI, bac
 The app is built around a simple operator workflow:
 
 1. place source videos in `inbox/` or upload them through the browser
-2. ingest sources into internal `pending/` storage
+2. ingest sources into the configured Inbox
 3. choose an encoding profile in Setup
 4. run one active encode worker at a time
 5. review the output
@@ -65,18 +65,16 @@ The server also applies pending SQL migrations automatically at startup.
 
 ## Runtime Layout
 
-The app uses two operator-facing handoff folders plus one internal managed root.
+The app uses two operator-facing handoff folders plus OS-managed app storage.
 
 - `inbox/`: operator import location
-- `outbox/`: approved export location
-- internal root:
-  - `pending/`
-  - `working/`
-  - `encoded/`
-  - `logs/`
-  - upload temp storage
+- `outbox/`: completed output location
+- `~/Library/Application Support/Video Encoder`: persistent app-managed state
+- `~/Library/Caches/Video Encoder/uploads`: browser upload temp storage
+- `~/Library/Caches/Video Encoder/working`: active encode working files
+- `~/Library/Logs/Video Encoder`: persistent logs
 
-Operators should treat only `inbox/` and `outbox/` as manual workflow folders. Internal storage is app-managed.
+Operators should treat only Inbox and Outbox as manual workflow folders. Cache and log storage is app-managed.
 
 ## Configuration
 
@@ -88,7 +86,6 @@ Important environment variables:
 - `ENCODER_DB_NAME`
 - `ENCODER_DEFAULT_INBOX_ROOT`
 - `ENCODER_DEFAULT_OUTBOX_ROOT`
-- `ENCODER_INTERNAL_ROOT`
 - `ENCODER_FFMPEG_BIN`
 - `ENCODER_FFPROBE_BIN`
 
@@ -141,13 +138,13 @@ Once settings exist, `storage.inboxRoot` and `storage.outboxRoot` in the databas
 
 - completed items move to Review
 - operators can approve or reject outputs
-- approval exports to `outbox/`
-- reject keeps the source available for requeue
+- approval confirms the existing Outbox output
+- reject moves the output to `Outbox/rejected` and keeps the source receipt available for requeue
 - previously rejected items can be rediscovered from `inbox/` and returned to pending setup when scanned again
 
 ### Logs
 
-- the Logs page reads the same internal log files written under `logs/`
+- the Logs page reads the same app log files written under `~/Library/Logs/Video Encoder`
 - multiline errors are grouped as a single log item
 - log entries display both severity and subsystem badges
 

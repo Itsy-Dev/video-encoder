@@ -36,10 +36,7 @@ function getEncoderOutboxRoot(overridePath = null) {
 }
 
 function getEncoderInternalRoot() {
-    return resolveEncoderPath(
-        process.env.ENCODER_INTERNAL_ROOT,
-        getDefaultAppDataRoot()
-    );
+    return getDefaultAppDataRoot();
 }
 
 function getEncoderCacheRoot() {
@@ -57,9 +54,7 @@ function getEncoderLogsRoot() {
 }
 
 function getEncoderPaths(options = {}) {
-    const internalRoot = options.internalRoot
-        ? resolveEncoderPath(options.internalRoot, getEncoderInternalRoot())
-        : getEncoderInternalRoot();
+    const internalRoot = getEncoderInternalRoot();
     const cacheRoot = options.cacheRoot
         ? resolveEncoderPath(options.cacheRoot, getEncoderCacheRoot())
         : getEncoderCacheRoot();
