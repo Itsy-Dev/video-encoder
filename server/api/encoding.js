@@ -1,5 +1,6 @@
 const path = require("path");
 const fs = require("fs");
+const fsp = fs.promises;
 const multer = require("multer");
 
 const EncodingService = require("../modules/encoding/encoding.service");
@@ -68,11 +69,12 @@ module.exports = function encodingApi(app, database, fileIntake) {
     }));
 
     app.get("/api/encoding/settings", asyncRoute(async function (_req, res) {
-        const values = await settingsService.getSettings();
+        const settingsState = await settingsService.getSettingsState();
         res.json({
             ok: true,
             definitions: settingsService.getDefinitions(),
-            values
+            values: settingsState.values,
+            meta: buildSettingsMeta(settingsState)
         });
     }));
 
@@ -92,12 +94,14 @@ module.exports = function encodingApi(app, database, fileIntake) {
             ? req.body.settings
             : req.body;
         const values = await settingsService.updateSettings(payload || {});
+        const settingsState = await settingsService.getSettingsState();
         await encodingService.applyRuntimeSettings(values);
         applyFileIntakeSettings(values);
         res.json({
             ok: true,
             definitions: settingsService.getDefinitions(),
-            values
+            values,
+            meta: buildSettingsMeta(settingsState)
         });
     }));
 
@@ -455,7 +459,9 @@ module.exports = function encodingApi(app, database, fileIntake) {
 
     app.get("/encoding/settings", asyncRoute(async function (_req, res) {
         const state = await encodingService.getDashboardState();
-        const settings = await settingsService.getSettings();
+        const settingsState = await settingsService.getSettingsState();
+        const settings = settingsState.values;
+        const storageStatus = await getStorageStatus(settings);
         applyFileIntakeSettings(settings);
         const { renderPage, renderSettings } = loadEncodingViews();
 
@@ -464,7 +470,10 @@ module.exports = function encodingApi(app, database, fileIntake) {
             heading: "Settings",
             description: "Configured directories and profile options for the standalone encoder.",
             state,
-            body: renderSettings(state.profiles, settings)
+            body: renderSettings(state.profiles, settings, {
+                settingsState,
+                storageStatus
+            })
         }));
     }));
 
@@ -510,6 +519,47 @@ function clearEncodingViewCache() {
 function buildPendingSourceUrl(item) {
     if (!item || !item.inputAbsPath) return null;
     return `/api/encoding/items/${encodeURIComponent(item.id)}/source`;
+}
+
+function buildSettingsMeta(settingsState) {
+    return {
+        sources: settingsState && settingsState.sources ? settingsState.sources : {},
+        firstRun: Boolean(settingsState && settingsState.firstRun)
+    };
+}
+
+async function getStorageStatus(settings) {
+    const storage = settings && settings.storage ? settings.storage : {};
+    return {
+        inboxRoot: await getPathStatus(storage.inboxRoot),
+        outboxRoot: await getPathStatus(storage.outboxRoot)
+    };
+}
+
+async function getPathStatus(absPath) {
+    const value = String(absPath || "").trim();
+    if (!value) {
+        return {
+            exists: false,
+            isDirectory: false,
+            message: "No folder configured"
+        };
+    }
+
+    const stat = await fsp.stat(value).catch(() => null);
+    if (!stat) {
+        return {
+            exists: false,
+            isDirectory: false,
+            message: "Folder will be created when the app needs it"
+        };
+    }
+
+    return {
+        exists: true,
+        isDirectory: stat.isDirectory(),
+        message: stat.isDirectory() ? "Folder exists" : "Path exists but is not a folder"
+    };
 }
 
 function resolveSetupToggle(queryValue, fallbackValue) {
