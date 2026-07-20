@@ -2,6 +2,7 @@
   "name": "video-encoder",
   "version": "0.5.0",
   "description": "A local macOS video encoding workflow app.",
+  "author": "Itsy Dev",
   "private": true,
   "engines": {
     "node": ">=24.15.0",
@@ -25,8 +26,9 @@
     "desktop:package-test": "ENCODER_ENV_FILE=.env.package-test npm run desktop"
   },
   "build": {
-    "appId": "com.videoencoder.app",
+    "appId": "dev.itsy.videoencoder",
     "productName": "Video Encoder",
+    "copyright": "Copyright © 2026 Itsy Dev",
     "artifactName": "${productName}-${version}-${arch}.${ext}",
     "asar": true,
     "asarUnpack": [
