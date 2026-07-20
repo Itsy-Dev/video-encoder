@@ -10,7 +10,6 @@
   "scripts": {
     "start": "node server/server.js",
     "migrate": "node server/scripts/migrate.js",
-    "migrate:legacy-storage": "node server/scripts/migrate-legacy-storage.js",
     "desktop": "electron desktop/main.js"
   },
   "devDependencies": {
