@@ -5,7 +5,7 @@ const { app, dialog, Menu, Tray, nativeImage, shell } = require("electron");
 
 const { startEncoderServer } = require("../server/app");
 
-const APP_NAME = "Encoder";
+const APP_NAME = "Video Encoder";
 const APP_URL_PATH = "/encoding/pending";
 const APP_ICON_ABS = path.join(__dirname, "assets", "icon.png");
 const APP_TRAY_ICON_ABS = path.join(__dirname, "assets", "trayTemplate.png");

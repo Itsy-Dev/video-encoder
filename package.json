@@ -1,23 +1,56 @@
 {
-  "name": "@video-encoder",
+  "name": "video-encoder",
   "version": "0.5.0",
+  "description": "A local macOS video encoding workflow app.",
   "private": true,
   "engines": {
     "node": ">=24.15.0",
     "npm": ">=10"
   },
-  "main": "server/server.js",
+  "main": "desktop/main.js",
   "scripts": {
     "check:runtime": "node server/scripts/check-node-runtime.js",
     "prestart": "npm run check:runtime",
     "start": "node server/server.js",
     "premigrate": "npm run check:runtime",
     "migrate": "node server/scripts/migrate.js",
+    "pack": "npm run check:runtime && electron-builder --dir",
+    "dist": "npm run check:runtime && electron-builder",
     "predesktop": "npm run check:runtime",
     "desktop": "electron desktop/main.js"
   },
+  "build": {
+    "appId": "com.videoencoder.app",
+    "productName": "Video Encoder",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "asar": true,
+    "directories": {
+      "output": "dist",
+      "buildResources": "desktop/assets"
+    },
+    "files": [
+      "desktop/**/*",
+      "server/**/*",
+      "package.json",
+      "!desktop/launch-electron-app.command",
+      "!**/.env*",
+      "!**/.internal/**",
+      "!dist/**",
+      "!TEST_PLAN.md"
+    ],
+    "mac": {
+      "category": "public.app-category.video",
+      "icon": "desktop/assets/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "identity": null
+    }
+  },
   "devDependencies": {
-    "electron": "^43.1.1"
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

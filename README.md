@@ -62,6 +62,22 @@ npm run desktop
 
 The server also applies pending SQL migrations automatically at startup.
 
+## Package
+
+Create an unpacked macOS app for local validation:
+
+```bash
+npm run pack
+```
+
+Create distributable macOS artifacts in `dist/`:
+
+```bash
+npm run dist
+```
+
+The packaged app keeps user data outside the app bundle in the macOS Library locations listed below.
+
 ## Runtime Layout
 
 The app uses two operator-facing handoff folders plus OS-managed app storage.
