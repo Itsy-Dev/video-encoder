@@ -35,7 +35,6 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
     app.use("/assets", express.static(desktopAssetsAbs));
     app.use("/shared/semantic", express.static(semanticRootAbs));
     app.use("/shared/jquery", express.static(jqueryRootAbs));
-    app.use("/media/pending-source", express.static(encoderPaths.pending));
 
     initFileLogger(encoderPaths.logs);
     console.log("[SERVER] Server starting...");

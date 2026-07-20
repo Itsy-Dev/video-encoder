@@ -110,7 +110,7 @@ function renderDiscardButton(item, { basic = false, compact = false, iconOnly = 
         return `<button type="button" class="${escapeHtml(buttonClasses)} disabled" disabled title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">${label}</button>`;
     }
 
-    return `<form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/discard" data-api-form data-confirm="Discard this source file? It will be moved to outbox/_sources/discarded and removed from the active encoder flow.">
+    return `<form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/discard" data-api-form data-confirm="Discard this item from the active encoder flow? The source file path will remain recorded.">
       <button type="submit" class="${escapeHtml(buttonClasses)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">${label}</button>
     </form>`;
 }

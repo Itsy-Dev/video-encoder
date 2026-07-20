@@ -193,6 +193,46 @@ class EncodingRepository {
         return Array.isArray(results) && results.length ? mapRowToItem(results[0]) : null;
     }
 
+    async getByInputAbsPath(inputAbsPath) {
+        const { results } = await this.database.query(`
+            SELECT
+                ei.*,
+                sm.abs_path AS source_abs_path,
+                sm.file_size_bytes AS source_file_size_bytes,
+                sm.duration_ms AS source_duration_ms,
+                sm.container AS source_container,
+                sm.video_codec AS source_video_codec,
+                sm.audio_codec AS source_audio_codec,
+                sm.width AS source_width,
+                sm.height AS source_height,
+                sm.frame_rate AS source_frame_rate,
+                sm.bit_rate AS source_bit_rate,
+                sm.probe_json AS source_probe_json,
+                sm.probed_at AS source_probed_at,
+                em.abs_path AS encoded_abs_path,
+                em.file_size_bytes AS encoded_file_size_bytes,
+                em.duration_ms AS encoded_duration_ms,
+                em.container AS encoded_container,
+                em.video_codec AS encoded_video_codec,
+                em.audio_codec AS encoded_audio_codec,
+                em.width AS encoded_width,
+                em.height AS encoded_height,
+                em.frame_rate AS encoded_frame_rate,
+                em.bit_rate AS encoded_bit_rate,
+                em.probe_json AS encoded_probe_json,
+                em.probed_at AS encoded_probed_at
+            FROM encoding_item ei
+            LEFT JOIN encoding_item_metadata sm
+                ON sm.encoding_item_id = ei.id AND sm.kind = 'source'
+            LEFT JOIN encoding_item_metadata em
+                ON em.encoding_item_id = ei.id AND em.kind = 'encoded'
+            WHERE ei.input_abs_path = ?
+            LIMIT 1
+        `, [String(inputAbsPath || "")]);
+
+        return Array.isArray(results) && results.length ? mapRowToItem(results[0]) : null;
+    }
+
     async listQueuedOrdered({ forUpdate = false } = {}) {
         const lockSql = forUpdate ? "FOR UPDATE" : "";
         const { results } = await this.database.query(`
@@ -313,7 +353,7 @@ class EncodingRepository {
             next.inboxRelativeDir || "",
             next.profileId || null,
             next.outputFilename || null,
-            next.outputAbsPath || next.outboxOutputAbsPath || next.encodedOutputAbsPath || null,
+            next.outputAbsPath || null,
             next.lastError || null,
             Number(next.attemptCount || 0),
             toSqlDatetime(next.requestedAt),
@@ -510,7 +550,7 @@ class EncodingRepository {
             decimalOrNull(next.sizeDeltaPercent),
             numberOrNull(next.bitrateDeltaBps),
             decimalOrNull(next.bitrateDeltaPercent),
-            next.outputAbsPath || next.encodedOutputAbsPath || null,
+            next.outputAbsPath || null,
             toSqlDatetime(next.createdAt) || toSqlDatetime(new Date().toISOString())
         ]);
 
@@ -540,8 +580,6 @@ function mapRowToItem(row) {
         profileId: row.profile_id,
         outputFilename: row.output_filename,
         outputAbsPath: row.output_abs_path,
-        encodedOutputAbsPath: row.output_abs_path,
-        outboxOutputAbsPath: row.output_abs_path,
         lastError: row.last_error,
         attemptCount: Number(row.attempt_count || 0),
         requestedAt: toIsoOrNull(row.requested_at),
@@ -609,7 +647,6 @@ function mapRowToOutcome(row) {
         pausedMs: numberOrNull(row.paused_ms),
         wallClockMs: numberOrNull(row.wall_clock_ms),
         outputAbsPath: row.output_abs_path || null,
-        encodedOutputAbsPath: row.output_abs_path || null,
         sizeDeltaBytes: numberOrNull(row.size_delta_bytes),
         sizeDeltaPercent: decimalOrNull(row.size_delta_percent),
         bitrateDeltaBps: numberOrNull(row.bitrate_delta_bps),

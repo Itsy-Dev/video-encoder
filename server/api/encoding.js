@@ -308,7 +308,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
 
     app.get("/api/encoding/items/:id/encoded", asyncRoute(async function (req, res) {
         const item = await encodingService.getItem(req.params.id);
-        const encodedAbsPath = item && item.encodedOutputAbsPath ? item.encodedOutputAbsPath : null;
+        const encodedAbsPath = item && item.outputAbsPath ? item.outputAbsPath : null;
 
         if (!encodedAbsPath || !fs.existsSync(encodedAbsPath)) {
             res.status(404).send("Encoded video not found.");
@@ -403,7 +403,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
         const selected = state.items.find(item => item.id === selectedId) || state.reviewItems[0] || null;
         const outcome = selected ? await encodingService.getLatestOutcome(selected.id) : null;
         const { renderPage, renderReviewItem } = loadEncodingViews();
-        const encodedPreviewUrl = selected && selected.encodedOutputAbsPath && fs.existsSync(selected.encodedOutputAbsPath)
+        const encodedPreviewUrl = selected && selected.outputAbsPath && fs.existsSync(selected.outputAbsPath)
             ? `/api/encoding/items/${encodeURIComponent(selected.id)}/encoded`
             : null;
         const canReview = selected && String(selected.status || "").toLowerCase() === "review";
@@ -503,16 +503,7 @@ function clearEncodingViewCache() {
 
 function buildPendingSourceUrl(item) {
     if (!item || !item.inputAbsPath) return null;
-
-    const pendingRootAbs = path.resolve(getEncoderPaths().pending);
-    const inputAbsPath = path.resolve(item.inputAbsPath);
-    const relativePath = path.relative(pendingRootAbs, inputAbsPath);
-
-    if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
-        return null;
-    }
-
-    return `/media/pending-source/${relativePath.split(path.sep).map(encodeURIComponent).join("/")}`;
+    return `/api/encoding/items/${encodeURIComponent(item.id)}/source`;
 }
 
 function resolveSetupToggle(queryValue, fallbackValue) {

@@ -40,7 +40,7 @@ function renderRow(item) {
 
     return `<tr>
       <td>${pill(status || "unknown")}</td>
-      <td title="${escapeHtml(item.outboxOutputAbsPath || item.encodedOutputAbsPath || item.inputAbsPath || "")}">
+      <td title="${escapeHtml(item.outputAbsPath || item.inputAbsPath || "")}">
         <div>${escapeHtml(item.originalFilename || "—")}</div>
         <span class="ui grey text">${escapeHtml(detail)}</span>
       </td>
@@ -85,7 +85,7 @@ function historyDetail(item, status) {
     }
 
     if (status === "discarded") {
-        return "Discarded to outbox/_sources";
+        return "Discarded from active flow";
     }
 
     return item.lastError || "—";

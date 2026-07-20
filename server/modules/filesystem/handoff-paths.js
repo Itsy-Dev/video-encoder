@@ -78,9 +78,7 @@ function getEncoderPaths(options = {}) {
         internalRoot,
         inbox,
         outbox,
-        pending: path.join(internalRoot, "pending"),
         working: path.join(cacheRoot, "working"),
-        encoded: path.join(internalRoot, "encoded"),
         uploads: path.join(cacheRoot, "uploads"),
         logs: logsRoot
     };
