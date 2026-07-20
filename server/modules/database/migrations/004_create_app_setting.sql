@@ -1,6 +1,0 @@
-CREATE TABLE IF NOT EXISTS `app_setting` (
-    `setting_key` TEXT NOT NULL PRIMARY KEY,
-    `value_json` TEXT NOT NULL,
-    `created_at` TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);

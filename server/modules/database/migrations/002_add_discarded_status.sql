@@ -1,1 +1,0 @@
--- SQLite stores item status as TEXT, so no enum alteration is required.

@@ -1,1 +1,0 @@
--- SQLite baseline schema already uses input_abs_path and output_abs_path.
