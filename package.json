@@ -23,7 +23,8 @@
     "predesktop": "npm run check:runtime",
     "desktop": "electron desktop/main.js",
     "desktop:dev": "ENCODER_ENV_FILE=.env.dev npm run desktop",
-    "desktop:package-test": "ENCODER_ENV_FILE=.env.package-test npm run desktop"
+    "desktop:package-test": "ENCODER_ENV_FILE=.env.package-test npm run desktop",
+    "packaged:package-test": "node server/scripts/launch-packaged-package-test.js"
   },
   "build": {
     "appId": "dev.itsy.videoencoder",

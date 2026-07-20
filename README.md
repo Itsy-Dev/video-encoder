@@ -88,10 +88,11 @@ npm run desktop:package-test
 
 Each lane should use its own `ENCODER_PORT`, `ENCODER_APP_DATA_ROOT`, `ENCODER_CACHE_ROOT`, `ENCODER_LOGS_ROOT`, Inbox, and Outbox. This allows a stable encoder to keep running while repo or packaged builds are tested separately.
 
-To launch an unpacked packaged app against the package-test lane from Terminal:
+To launch an unpacked packaged app against the package-test lane:
 
 ```bash
-ENCODER_ENV_FILE="$(pwd)/.env.package-test" "dist/mac-arm64/Video Encoder.app/Contents/MacOS/Video Encoder"
+npm run pack
+npm run packaged:package-test
 ```
 
 ## Package
