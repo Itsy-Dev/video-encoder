@@ -25,8 +25,7 @@ The current UI includes:
 
 ## Requirements
 
-- Node.js
-- MySQL
+- Node.js 24.15.0 or newer
 - `ffmpeg`
 - `ffprobe`
 
@@ -54,6 +53,14 @@ Run database migrations manually:
 ```bash
 npm run migrate
 ```
+
+Import existing MySQL history into a fresh SQLite database:
+
+```bash
+npm run import:mysql-to-sqlite
+```
+
+The import script loads MySQL connection settings from the project `.env`. The import is a dry run by default. Add `-- --execute` to write SQLite data, or `-- --execute --replace` to recreate the SQLite database before importing.
 
 Launch the Electron shell:
 
@@ -83,7 +90,6 @@ Each checkout reads its own local `.env`.
 Important environment variables:
 
 - `ENCODER_PORT`
-- `ENCODER_DB_NAME`
 - `ENCODER_DEFAULT_INBOX_ROOT`
 - `ENCODER_DEFAULT_OUTBOX_ROOT`
 - `ENCODER_FFMPEG_BIN`
@@ -102,6 +108,8 @@ Inbox/outbox precedence is:
 3. hardcoded Movies fallback
 
 Once settings exist, `storage.inboxRoot` and `storage.outboxRoot` in the database become the runtime source of truth.
+
+The app stores its SQLite database at `~/Library/Application Support/Video Encoder/encoder.sqlite`.
 
 ## Core Workflow
 
@@ -222,7 +230,8 @@ Intentionally not built out yet:
 
 ## Notes
 
-- MySQL and runtime config are loaded from the local checkout's `.env`
+- runtime config is loaded from the local checkout's `.env`
+- SQLite data is stored under the OS app data location
 - SQL migrations live under `server/modules/database/migrations/`
 - the app uses real `ffmpeg` and `ffprobe`, not mock encoding
 - browser file intake is available but disabled by default

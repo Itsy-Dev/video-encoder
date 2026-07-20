@@ -80,6 +80,7 @@ module.exports = class EncodingService {
         this.workerPromise = null;
         this.scanTimer = null;
         this.scanLoopRunning = false;
+        this.isShuttingDown = false;
         this.safety = {
             cooldownUntil: null,
             cooldownReason: null,
@@ -587,6 +588,22 @@ module.exports = class EncodingService {
         return stopped;
     }
 
+    async shutdown() {
+        this.isShuttingDown = true;
+
+        if (this.scanTimer) {
+            clearTimeout(this.scanTimer);
+            this.scanTimer = null;
+        }
+
+        if (this.activeHandle) {
+            this.activeHandle.stop();
+        }
+
+        await this.ready.catch(() => {});
+        await this._waitForScanLoopToFinish();
+    }
+
     async _initialize() {
         const settings = await this._refreshRuntimeSettings();
         const paths = this._getEncoderPaths();
@@ -638,6 +655,10 @@ module.exports = class EncodingService {
     }
 
     _startInboxPolling() {
+        if (this.isShuttingDown) {
+            return;
+        }
+
         if (this.scanLoopRunning || this.scanTimer) {
             return;
         }
@@ -654,6 +675,9 @@ module.exports = class EncodingService {
             }
             finally {
                 this.scanLoopRunning = false;
+                if (this.isShuttingDown) {
+                    return;
+                }
                 const settings = await this._refreshRuntimeSettings().catch(() => this.runtimeSettings);
                 this._scheduleInboxPoll(runNext, this._getScanIntervalMs(settings));
             }
@@ -662,6 +686,12 @@ module.exports = class EncodingService {
         runNext().catch(error => {
             console.error("[POLLER] Inbox polling loop failed", error);
         });
+    }
+
+    async _waitForScanLoopToFinish() {
+        while (this.scanLoopRunning) {
+            await sleep(50);
+        }
     }
 
     _ensureWorkerRunning() {
@@ -804,20 +834,36 @@ module.exports = class EncodingService {
             console.log(`[WORKER] Worker completed item. id=${encodingItem.id} output=${outputAbsPath}`);
         }
         catch (error) {
-            const latest = await this._requireItem(encodingItem.id);
             const stopped = error && error.code === "ENCODE_STOPPED";
-            await this._cleanupEncodedFiles(latest);
-            await this.repository.upsert({
-                ...latest,
-                profileId,
-                outputFilename,
-                status: stopped ? "cancelled" : "failed",
-                queuePosition: null,
-                pausedAt: null,
-                completedAt: null,
-                attemptCount: nextAttemptCount,
-                lastError: error.message
+            const latest = await this._requireItem(encodingItem.id).catch(() => encodingItem);
+            const lastError = formatErrorForStorage(error);
+
+            await this._cleanupEncodedFiles(latest).catch(cleanupError => {
+                console.error(`[WORKER] Failed to clean up encoded files after item failure. id=${encodingItem.id}`, cleanupError);
             });
+
+            try {
+                await this.repository.upsert({
+                    ...latest,
+                    profileId,
+                    outputFilename,
+                    status: stopped ? "cancelled" : "failed",
+                    queuePosition: null,
+                    pausedAt: null,
+                    completedAt: null,
+                    attemptCount: nextAttemptCount,
+                    lastError
+                });
+            }
+            catch (persistError) {
+                console.error(`[WORKER] Failed to persist failed item state. id=${encodingItem.id}`, persistError);
+                await this._persistMinimalFailureState({
+                    item: latest,
+                    status: stopped ? "cancelled" : "failed",
+                    fallbackMessage: stopped ? "Encoding was cancelled" : "Encoding failed; see logs for details"
+                });
+            }
+
             console.error(`[WORKER] Worker failed item. id=${encodingItem.id} stopped=${Boolean(stopped)}`, error);
         }
         finally {
@@ -833,6 +879,22 @@ module.exports = class EncodingService {
             this.safety.restUntil = null;
             this.safety.restReason = null;
             await removeIfExists(workingDirAbs);
+        }
+    }
+
+    async _persistMinimalFailureState({ item, status, fallbackMessage }) {
+        try {
+            await this.repository.upsert({
+                ...item,
+                status,
+                queuePosition: null,
+                pausedAt: null,
+                completedAt: null,
+                lastError: fallbackMessage
+            });
+        }
+        catch (error) {
+            console.error(`[WORKER] Minimal failure-state persist also failed. id=${item && item.id}`, error);
         }
     }
 
@@ -1378,6 +1440,13 @@ function calculateElapsedMs(startedAt, finishedAt) {
     }
 
     return finishedMs - startedMs;
+}
+
+function formatErrorForStorage(error) {
+    if (!error) return "Unknown encoding error";
+    if (error.stack) return String(error.stack);
+    if (error.message) return String(error.message);
+    return String(error);
 }
 
 function sanitizeSegment(value) {

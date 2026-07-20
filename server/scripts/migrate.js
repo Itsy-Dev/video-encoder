@@ -4,7 +4,7 @@ require("dotenv").config({
     path: path.join(__dirname, "..", "..", ".env")
 });
 
-const { createDatabase } = require("../modules/database/mysql");
+const { createDatabase } = require("../modules/database/sqlite");
 const { runMigrations } = require("../modules/database/migrate");
 
 async function main() {

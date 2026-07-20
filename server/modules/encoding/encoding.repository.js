@@ -234,7 +234,6 @@ class EncodingRepository {
     }
 
     async listQueuedOrdered({ forUpdate = false } = {}) {
-        const lockSql = forUpdate ? "FOR UPDATE" : "";
         const { results } = await this.database.query(`
             SELECT
                 ei.*,
@@ -273,7 +272,6 @@ class EncodingRepository {
                 ei.queue_position ASC,
                 ei.queued_at ASC,
                 ei.updated_at ASC
-            ${lockSql}
         `);
 
         return Array.isArray(results) ? results.map(mapRowToItem) : [];
@@ -289,7 +287,6 @@ class EncodingRepository {
                     queue_position = ?,
                     updated_at = updated_at
                 WHERE id = ?
-                LIMIT 1
             `, [
                 numberOrNull(item && item.queuePosition),
                 item && item.id
@@ -326,25 +323,25 @@ class EncodingRepository {
                 created_at,
                 updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-                status = VALUES(status),
-                original_filename = VALUES(original_filename),
-                input_abs_path = VALUES(input_abs_path),
-                inbox_relative_dir = VALUES(inbox_relative_dir),
-                profile_id = VALUES(profile_id),
-                output_filename = VALUES(output_filename),
-                output_abs_path = VALUES(output_abs_path),
-                last_error = VALUES(last_error),
-                attempt_count = VALUES(attempt_count),
-                requested_at = VALUES(requested_at),
-                queued_at = VALUES(queued_at),
-                queue_position = VALUES(queue_position),
-                encoding_started_at = VALUES(encoding_started_at),
-                paused_at = VALUES(paused_at),
-                completed_at = VALUES(completed_at),
-                approved_at = VALUES(approved_at),
-                rejected_at = VALUES(rejected_at),
-                updated_at = VALUES(updated_at)
+            ON CONFLICT(id) DO UPDATE SET
+                status = excluded.status,
+                original_filename = excluded.original_filename,
+                input_abs_path = excluded.input_abs_path,
+                inbox_relative_dir = excluded.inbox_relative_dir,
+                profile_id = excluded.profile_id,
+                output_filename = excluded.output_filename,
+                output_abs_path = excluded.output_abs_path,
+                last_error = excluded.last_error,
+                attempt_count = excluded.attempt_count,
+                requested_at = excluded.requested_at,
+                queued_at = excluded.queued_at,
+                queue_position = excluded.queue_position,
+                encoding_started_at = excluded.encoding_started_at,
+                paused_at = excluded.paused_at,
+                completed_at = excluded.completed_at,
+                approved_at = excluded.approved_at,
+                rejected_at = excluded.rejected_at,
+                updated_at = excluded.updated_at
         `, [
             next.id,
             next.status || "pending",
@@ -396,19 +393,20 @@ class EncodingRepository {
                 probe_json,
                 probed_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-                abs_path = VALUES(abs_path),
-                file_size_bytes = VALUES(file_size_bytes),
-                duration_ms = VALUES(duration_ms),
-                container = VALUES(container),
-                video_codec = VALUES(video_codec),
-                audio_codec = VALUES(audio_codec),
-                width = VALUES(width),
-                height = VALUES(height),
-                frame_rate = VALUES(frame_rate),
-                bit_rate = VALUES(bit_rate),
-                probe_json = VALUES(probe_json),
-                probed_at = VALUES(probed_at)
+            ON CONFLICT(encoding_item_id, kind) DO UPDATE SET
+                abs_path = excluded.abs_path,
+                file_size_bytes = excluded.file_size_bytes,
+                duration_ms = excluded.duration_ms,
+                container = excluded.container,
+                video_codec = excluded.video_codec,
+                audio_codec = excluded.audio_codec,
+                width = excluded.width,
+                height = excluded.height,
+                frame_rate = excluded.frame_rate,
+                bit_rate = excluded.bit_rate,
+                probe_json = excluded.probe_json,
+                probed_at = excluded.probed_at,
+                updated_at = CURRENT_TIMESTAMP
         `, [
             encodingItemId,
             kind,
@@ -481,40 +479,40 @@ class EncodingRepository {
                 output_abs_path,
                 created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-                profile_id = VALUES(profile_id),
-                requested_at = VALUES(requested_at),
-                queued_at = VALUES(queued_at),
-                encoding_started_at = VALUES(encoding_started_at),
-                encoding_finished_at = VALUES(encoding_finished_at),
-                active_encoding_ms = VALUES(active_encoding_ms),
-                paused_ms = VALUES(paused_ms),
-                wall_clock_ms = VALUES(wall_clock_ms),
-                source_duration_ms = VALUES(source_duration_ms),
-                source_file_size_bytes = VALUES(source_file_size_bytes),
-                source_width = VALUES(source_width),
-                source_height = VALUES(source_height),
-                source_frame_rate = VALUES(source_frame_rate),
-                source_bit_rate = VALUES(source_bit_rate),
-                source_video_codec = VALUES(source_video_codec),
-                source_audio_codec = VALUES(source_audio_codec),
-                source_container = VALUES(source_container),
-                source_probe_json = VALUES(source_probe_json),
-                output_file_size_bytes = VALUES(output_file_size_bytes),
-                output_duration_ms = VALUES(output_duration_ms),
-                output_width = VALUES(output_width),
-                output_height = VALUES(output_height),
-                output_frame_rate = VALUES(output_frame_rate),
-                output_bit_rate = VALUES(output_bit_rate),
-                output_video_codec = VALUES(output_video_codec),
-                output_audio_codec = VALUES(output_audio_codec),
-                output_container = VALUES(output_container),
-                output_probe_json = VALUES(output_probe_json),
-                size_delta_bytes = VALUES(size_delta_bytes),
-                size_delta_percent = VALUES(size_delta_percent),
-                bitrate_delta_bps = VALUES(bitrate_delta_bps),
-                bitrate_delta_percent = VALUES(bitrate_delta_percent),
-                output_abs_path = VALUES(output_abs_path)
+            ON CONFLICT(encoding_item_id, attempt_number) DO UPDATE SET
+                profile_id = excluded.profile_id,
+                requested_at = excluded.requested_at,
+                queued_at = excluded.queued_at,
+                encoding_started_at = excluded.encoding_started_at,
+                encoding_finished_at = excluded.encoding_finished_at,
+                active_encoding_ms = excluded.active_encoding_ms,
+                paused_ms = excluded.paused_ms,
+                wall_clock_ms = excluded.wall_clock_ms,
+                source_duration_ms = excluded.source_duration_ms,
+                source_file_size_bytes = excluded.source_file_size_bytes,
+                source_width = excluded.source_width,
+                source_height = excluded.source_height,
+                source_frame_rate = excluded.source_frame_rate,
+                source_bit_rate = excluded.source_bit_rate,
+                source_video_codec = excluded.source_video_codec,
+                source_audio_codec = excluded.source_audio_codec,
+                source_container = excluded.source_container,
+                source_probe_json = excluded.source_probe_json,
+                output_file_size_bytes = excluded.output_file_size_bytes,
+                output_duration_ms = excluded.output_duration_ms,
+                output_width = excluded.output_width,
+                output_height = excluded.output_height,
+                output_frame_rate = excluded.output_frame_rate,
+                output_bit_rate = excluded.output_bit_rate,
+                output_video_codec = excluded.output_video_codec,
+                output_audio_codec = excluded.output_audio_codec,
+                output_container = excluded.output_container,
+                output_probe_json = excluded.output_probe_json,
+                size_delta_bytes = excluded.size_delta_bytes,
+                size_delta_percent = excluded.size_delta_percent,
+                bitrate_delta_bps = excluded.bitrate_delta_bps,
+                bitrate_delta_percent = excluded.bitrate_delta_percent,
+                output_abs_path = excluded.output_abs_path
         `, [
             next.encodingItemId || "",
             Number(next.attemptNumber || 0),

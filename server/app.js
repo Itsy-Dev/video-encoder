@@ -1,8 +1,7 @@
 const path = require("path");
 const express = require("express");
-const colors = require("colors");
 
-const { createDatabase } = require("./modules/database/mysql");
+const { createDatabase } = require("./modules/database/sqlite");
 const { runMigrations } = require("./modules/database/migrate");
 const { getEncoderPaths } = require("./modules/filesystem/handoff-paths");
 const { initFileLogger } = require("./modules/filesystem/logger");
@@ -12,18 +11,11 @@ require("dotenv").config({
     path: path.join(__dirname, "..", ".env")
 });
 
-colors.setTheme({
-    good: "green",
-    data: "brightCyan",
-    warn: "yellow",
-    error: "red"
-});
-
 async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 4300) } = {}) {
     const app = express();
     const encoderPaths = getEncoderPaths();
     const desktopAssetsAbs = path.join(__dirname, "..", "desktop", "assets");
-    const semanticRootAbs = path.join(path.dirname(require.resolve("fomantic-ui/package.json")), "dist");
+    const semanticRootAbs = path.dirname(require.resolve("fomantic-ui-css/semantic.min.css"));
     const jqueryRootAbs = path.dirname(require.resolve("jquery/dist/jquery.js"));
     const fileIntake = new FileIntakeService({
         tempRootAbsPath: encoderPaths.uploads
@@ -46,7 +38,10 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
     app.locals.fileIntake = fileIntake;
 
     require("./api/health")(app, database);
-    require("./api/encoding")(app, database, fileIntake);
+    const encodingApiHandle = require("./api/encoding")(app, database, fileIntake);
+    if (encodingApiHandle && encodingApiHandle.ready) {
+        await encodingApiHandle.ready;
+    }
 
     const server = await new Promise((resolve, reject) => {
         const nextServer = app.listen(port, function onListen() {
@@ -57,7 +52,7 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
     });
 
     const address = `http://localhost:${server.address().port}`;
-    console.log("[SERVER] Encoder Server started at:", address.data);
+    console.log("[SERVER] Encoder Server started at:", address);
 
     let isShuttingDown = false;
 
@@ -66,6 +61,10 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
         isShuttingDown = true;
 
         console.log("[SERVER] Shutdown requested.");
+
+        if (encodingApiHandle && encodingApiHandle.encodingService) {
+            await encodingApiHandle.encodingService.shutdown();
+        }
 
         await new Promise(resolve => {
             server.close(function onClose() {
