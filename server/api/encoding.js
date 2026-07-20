@@ -390,7 +390,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
         res.send(renderPage({
             title: "Review",
             heading: "Review Completed Encodes",
-            description: "Approve or reject completed outputs before placing them into outbox.",
+            description: "Approve completed encoded outputs, reject them into Outbox/rejected, or redo with a new profile.",
             state,
             body: renderReview(state.reviewItems)
         }));
@@ -412,7 +412,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
             title: "Review Item",
             heading: "Review Completed Encodes",
             description: canReview
-                ? "Review the encoded output, compare it against the source, then commit or reject."
+                ? "Review the encoded output, compare it against the source, then commit, reject, or redo."
                 : "Review the saved encode outcome and timing data captured when the encode finished.",
             state,
             body: renderReviewItem(selected, {

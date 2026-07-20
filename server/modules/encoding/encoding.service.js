@@ -392,16 +392,21 @@ module.exports = class EncodingService {
     async rejectItem(id, { reviewer, notes } = {}) {
         await this.ready;
         const item = await this._requireItem(id);
-        await this._cleanupEncodedFiles(item);
+        const paths = this._getEncoderPaths();
+        await this._ensureManagedDirectories(paths);
+        const rejectedOutputAbsPath = await this._moveRejectedOutput(item, paths);
+
+        await this._cleanupEncodedFiles(item, paths);
 
         const rejected = await this.repository.upsert({
             ...item,
             status: "rejected",
+            outputAbsPath: rejectedOutputAbsPath || item.outputAbsPath || null,
             completedAt: null,
             lastError: notes || `Rejected by ${reviewer || "operator"}`,
             rejectedAt: new Date().toISOString()
         });
-        console.log(`[REVIEW] Item rejected. id=${rejected.id}`);
+        console.log(`[REVIEW] Item rejected. id=${rejected.id} output=${rejected.outputAbsPath || "missing"}`);
         return rejected;
     }
 
@@ -1105,6 +1110,19 @@ module.exports = class EncodingService {
         await this._cleanupEncodedFiles(item, paths);
     }
 
+    async _moveRejectedOutput(item, paths = this._getEncoderPaths()) {
+        if (!item || !item.outputAbsPath || !await pathExists(item.outputAbsPath)) {
+            return null;
+        }
+
+        const rejectedDirAbs = path.join(paths.outbox, "rejected", normalizeRelativeDir(item.inboxRelativeDir));
+        await fsp.mkdir(rejectedDirAbs, { recursive: true });
+
+        const rejectedOutputAbsPath = await buildUniqueRejectedOutputPath(rejectedDirAbs, item.outputAbsPath);
+        await moveFileIntoPlace(item.outputAbsPath, rejectedOutputAbsPath);
+        return rejectedOutputAbsPath;
+    }
+
     async _cleanupTemporaryArtifacts(paths = this._getEncoderPaths()) {
         await removeTempArtifacts(paths.working);
     }
@@ -1484,6 +1502,20 @@ async function moveFileIntoPlace(sourceAbsPath, destinationAbsPath) {
 
     await fsp.copyFile(sourceAbsPath, destinationAbsPath);
     await fsp.unlink(sourceAbsPath);
+}
+
+async function buildUniqueRejectedOutputPath(rejectedDirAbs, outputAbsPath) {
+    const ext = path.extname(outputAbsPath || "");
+    const base = path.basename(outputAbsPath || "output", ext);
+
+    for (let index = 1; index < Number.MAX_SAFE_INTEGER; index += 1) {
+        const candidate = path.join(rejectedDirAbs, `${base}_rejected_${index}${ext}`);
+        if (!await pathExists(candidate)) {
+            return candidate;
+        }
+    }
+
+    throw new Error(`Unable to find an available rejected output path in ${rejectedDirAbs}`);
 }
 
 function getWorkingItemRoot(paths, itemId) {
