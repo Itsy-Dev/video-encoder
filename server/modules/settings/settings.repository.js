@@ -55,8 +55,8 @@ class SettingsRepository {
                 setting_key,
                 value_json
             ) VALUES (?, ?)
-            ON DUPLICATE KEY UPDATE
-                value_json = VALUES(value_json),
+            ON CONFLICT(setting_key) DO UPDATE SET
+                value_json = excluded.value_json,
                 updated_at = CURRENT_TIMESTAMP
         `, [
             nextKey,
@@ -86,7 +86,6 @@ class SettingsRepository {
         const { results } = await this.database.query(`
             DELETE FROM app_setting
             WHERE setting_key = ?
-            LIMIT 1
         `, [nextKey]);
 
         return {
