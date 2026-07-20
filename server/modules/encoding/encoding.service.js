@@ -1235,7 +1235,8 @@ module.exports = class EncodingService {
     }
 
     _canReingestScannedItem(item) {
-        return Boolean(item) && String(item.status || "").toLowerCase() === "rejected";
+        const status = String(item && item.status || "").toLowerCase();
+        return status === "rejected" || status === "discarded";
     }
 
     async _findDiscoveryVideoFiles(rootAbsPaths) {
