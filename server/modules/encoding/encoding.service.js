@@ -164,11 +164,9 @@ module.exports = class EncodingService {
                     continue;
                 }
 
-                const inboxRelativePath = normalizedInboxRelativeDir
-                    ? `${normalizedInboxRelativeDir}/${originalFilename}`
-                    : originalFilename;
-                const itemId = buildItemId(inboxRelativePath);
-                const existing = await this.repository.get(itemId);
+                const inboxInputAbsPath = path.join(paths.inbox, normalizedInboxRelativeDir, originalFilename);
+                const itemId = buildItemId(inboxInputAbsPath);
+                const existing = await this.repository.getByInputAbsPath(inboxInputAbsPath);
                 if (existing) {
                     results.duplicates += 1;
                     results.processed += 1;
@@ -180,7 +178,6 @@ module.exports = class EncodingService {
                     uploadedFile: file,
                     itemId,
                     inboxRelativeDir: normalizedInboxRelativeDir,
-                    inboxRelativePath,
                     originalFilename,
                     paths,
                     defaultProfileId: this._getDefaultProfileId(this.runtimeSettings)
@@ -210,6 +207,8 @@ module.exports = class EncodingService {
 
     async checkUploadedFileDuplicates(files, { inboxRelativeDir = "" } = {}) {
         await this.ready;
+        await this._refreshRuntimeSettings().catch(() => this.runtimeSettings);
+        const paths = this._getEncoderPaths();
 
         const uploads = Array.isArray(files) ? files.filter(Boolean) : [];
         const normalizedInboxRelativeDir = normalizeRelativeDir(inboxRelativeDir, "");
@@ -227,13 +226,10 @@ module.exports = class EncodingService {
                 continue;
             }
 
-            const inboxRelativePath = normalizedInboxRelativeDir
-                ? `${normalizedInboxRelativeDir}/${originalFilename}`
-                : originalFilename;
-            const itemId = buildItemId(inboxRelativePath);
-            const existing = await this.repository.get(itemId);
+            const inboxInputAbsPath = path.join(paths.inbox, normalizedInboxRelativeDir, originalFilename);
+            const existing = await this.repository.getByInputAbsPath(inboxInputAbsPath);
 
-            if (existing) {
+            if (existing || await pathExists(inboxInputAbsPath)) {
                 results.duplicates.push(originalFilename);
                 continue;
             }
@@ -265,7 +261,6 @@ module.exports = class EncodingService {
                 this._assertWithinRoot(inboxInputAbsPath, paths.inbox, "Input file must be inside the encoder inbox");
 
                 const inboxRelativeDir = getInboxRelativeDir(inboxInputAbsPath, paths.inbox);
-                const inboxRelativePath = getInboxRelativePath(inboxInputAbsPath, paths.inbox);
 
                 const isStable = await this._isStableInboxFile(inboxInputAbsPath);
                 if (!isStable) {
@@ -273,24 +268,23 @@ module.exports = class EncodingService {
                     continue;
                 }
 
-                const itemId = buildItemId(inboxRelativePath);
-                const existing = await this.repository.get(itemId);
+                const existing = await this.repository.getByInputAbsPath(inboxInputAbsPath);
                 if (existing && !this._canReingestScannedItem(existing)) {
                     results.duplicates += 1;
                     continue;
                 }
+                const itemId = existing ? existing.id : buildItemId(inboxInputAbsPath);
 
                 const item = await this._ingestDiscoveredItem({
                     inboxInputAbsPath,
                     inboxRelativeDir,
-                    inboxRelativePath,
                     itemId,
                     existingItem: existing,
                     paths,
                     defaultProfileId: this._getDefaultProfileId(settings)
                 });
                 if (item) results.discovered += 1;
-                if (item && item.managedInputAbsPath) results.ingested += 1;
+                if (item) results.ingested += 1;
             }
             catch (_error) {
                 results.invalid += 1;
@@ -344,7 +338,6 @@ module.exports = class EncodingService {
                 completedAt: null,
                 approvedAt: null,
                 rejectedAt: null,
-                outboxOutputAbsPath: null,
                 lastError: null,
                 outputFilename: buildOutputFilename(item.originalFilename, selectedProfileId)
             });
@@ -374,54 +367,46 @@ module.exports = class EncodingService {
         await this._ensureManagedDirectories(paths);
         const normalizedSourceAction = normalizeSourceAction(sourceAction);
 
-        if (!item.encodedOutputAbsPath) {
+        if (!item.outputAbsPath) {
             const error = new Error("No encoded output is available to export.");
             error.statusCode = 400;
             throw error;
         }
 
-        const outboxDirAbs = path.join(paths.outbox, normalizeRelativeDir(item.inboxRelativeDir));
-        const outboxOutputAbsPath = path.join(outboxDirAbs, item.outputFilename || path.basename(item.encodedOutputAbsPath));
-
-        await fsp.mkdir(outboxDirAbs, { recursive: true });
-        await moveFileIntoPlace(item.encodedOutputAbsPath, outboxOutputAbsPath);
-
-        const retainedSourceAbsPath = normalizedSourceAction === "retain"
-            ? await this._retainSourceFile(item, paths)
-            : null;
+        if (normalizedSourceAction === "delete") {
+            await removeIfExists(item.inputAbsPath);
+        }
 
         const exported = await this.repository.upsert({
             ...item,
             status: "exported",
             approvedAt: new Date().toISOString(),
-            outboxOutputAbsPath,
-            inputAbsPath: retainedSourceAbsPath || item.inputAbsPath,
-            sourceMetadata: item.sourceMetadata ? {
-                ...item.sourceMetadata,
-                absPath: retainedSourceAbsPath || item.sourceMetadata.absPath
-            } : null,
             lastError: `Exported by ${reviewer || "operator"} with source ${normalizedSourceAction}`
         });
 
-        await this._cleanupApprovedItemFiles(exported, paths, { retainedSourceAbsPath });
-        console.log(`[REVIEW] Item approved and exported. id=${exported.id} outbox=${outboxOutputAbsPath} sourceAction=${normalizedSourceAction}`);
+        await this._cleanupApprovedItemFiles(exported, paths);
+        console.log(`[REVIEW] Item approved and exported. id=${exported.id} outbox=${item.outputAbsPath} sourceAction=${normalizedSourceAction}`);
         return exported;
     }
 
     async rejectItem(id, { reviewer, notes } = {}) {
         await this.ready;
         const item = await this._requireItem(id);
-        await this._cleanupEncodedFiles(item);
+        const paths = this._getEncoderPaths();
+        await this._ensureManagedDirectories(paths);
+        const rejectedOutputAbsPath = await this._moveRejectedOutput(item, paths);
+
+        await this._cleanupEncodedFiles(item, paths);
 
         const rejected = await this.repository.upsert({
             ...item,
             status: "rejected",
-            encodedOutputAbsPath: null,
+            outputAbsPath: rejectedOutputAbsPath || item.outputAbsPath || null,
             completedAt: null,
             lastError: notes || `Rejected by ${reviewer || "operator"}`,
             rejectedAt: new Date().toISOString()
         });
-        console.log(`[REVIEW] Item rejected. id=${rejected.id}`);
+        console.log(`[REVIEW] Item rejected. id=${rejected.id} output=${rejected.outputAbsPath || "missing"}`);
         return rejected;
     }
 
@@ -437,27 +422,14 @@ module.exports = class EncodingService {
             throw error;
         }
 
-        const discardedDirAbs = path.join(
-            paths.outbox,
-            "_sources",
-            "discarded",
-            normalizeRelativeDir(item.inboxRelativeDir)
-        );
-        const discardedSourceAbsPath = path.join(discardedDirAbs, item.originalFilename);
-
-        await fsp.mkdir(discardedDirAbs, { recursive: true });
-        await moveFileIntoPlace(item.inputAbsPath, discardedSourceAbsPath);
         await this._cleanupEncodedFiles(item, paths);
-        await removeIfExists(getPendingItemRoot(paths, item.id));
 
         const discarded = await this.repository.withTransaction(async repo => {
             const current = await this._requireItemWithRepository(repo, id);
             const discardedItem = await repo.upsert({
                 ...current,
                 status: "discarded",
-                inputAbsPath: discardedSourceAbsPath,
-                encodedOutputAbsPath: null,
-                outboxOutputAbsPath: discardedSourceAbsPath,
+                outputAbsPath: null,
                 queuedAt: null,
                 queuePosition: null,
                 encodingStartedAt: null,
@@ -465,18 +437,14 @@ module.exports = class EncodingService {
                 completedAt: null,
                 approvedAt: null,
                 rejectedAt: null,
-                lastError: `Discarded by ${reviewer || "operator"}`,
-                sourceMetadata: current.sourceMetadata ? {
-                    ...current.sourceMetadata,
-                    absPath: discardedSourceAbsPath
-                } : null
+                lastError: `Discarded by ${reviewer || "operator"}`
             });
 
             await this._normalizeQueuedItemsWithRepository(repo);
             return discardedItem;
         });
 
-        console.log(`[REVIEW] Item discarded. id=${discarded.id} destination=${discardedSourceAbsPath}`);
+        console.log(`[REVIEW] Item discarded. id=${discarded.id} source=${discarded.inputAbsPath || "missing"}`);
         return discarded;
     }
 
@@ -504,8 +472,7 @@ module.exports = class EncodingService {
                 completedAt: null,
                 approvedAt: null,
                 rejectedAt: null,
-                encodedOutputAbsPath: null,
-                outboxOutputAbsPath: null,
+                outputAbsPath: null,
                 lastError: `Removed from queue by ${reviewer || "operator"}`
             });
 
@@ -749,22 +716,20 @@ module.exports = class EncodingService {
         const outputFilename = item.outputFilename || buildOutputFilename(item.originalFilename, profileId);
         const workingDirAbs = getWorkingItemRoot(paths, item.id);
         const workingOutputAbsPath = path.join(workingDirAbs, outputFilename);
-        const encodedDirAbs = getEncodedItemRoot(paths, item);
-        const encodedOutputAbsPath = path.join(encodedDirAbs, outputFilename);
+        const outboxDirAbs = path.join(paths.outbox, normalizeRelativeDir(item.inboxRelativeDir));
+        const outputAbsPath = path.join(outboxDirAbs, outputFilename);
         const encodingStartedAt = new Date().toISOString();
         const nextAttemptCount = Number(item.attemptCount || 0) + 1;
         console.log(`[WORKER] Worker picked up item. id=${item.id} profile=${profileId} attempt=${nextAttemptCount}`);
 
         await removeIfExists(workingDirAbs);
-        await fsp.mkdir(encodedDirAbs, { recursive: true });
+        await fsp.mkdir(outboxDirAbs, { recursive: true });
         await fsp.mkdir(workingDirAbs, { recursive: true });
-        await removeIfExists(encodedOutputAbsPath);
 
         const encodingItem = await this.repository.upsert({
             ...item,
             profileId,
             outputFilename,
-            encodedOutputAbsPath,
             status: "encoding",
             encodingStartedAt,
             queuePosition: null,
@@ -799,10 +764,10 @@ module.exports = class EncodingService {
         try {
             await this.activeHandle.done;
             await restLoop;
-            await moveFileIntoPlace(workingOutputAbsPath, encodedOutputAbsPath);
+            await moveFileIntoPlace(workingOutputAbsPath, outputAbsPath);
 
-            const encodedStat = await fsp.stat(encodedOutputAbsPath);
-            const encodedMetadata = await this.ffprobeService.probeFile(encodedOutputAbsPath, encodedStat);
+            const encodedStat = await fsp.stat(outputAbsPath);
+            const encodedMetadata = await this.ffprobeService.probeFile(outputAbsPath, encodedStat);
             const encodingFinishedAt = new Date().toISOString();
             const pausedMs = this._getTotalPausedMs();
             const wallClockMs = calculateElapsedMs(encodingStartedAt, encodingFinishedAt);
@@ -812,7 +777,7 @@ module.exports = class EncodingService {
                 ...encodingItem,
                 profileId,
                 outputFilename,
-                encodedOutputAbsPath,
+                outputAbsPath,
                 status: "review",
                 encodingStartedAt,
                 pausedAt: null,
@@ -832,11 +797,11 @@ module.exports = class EncodingService {
                 wallClockMs,
                 sourceMetadata: encodingItem.sourceMetadata,
                 outputMetadata: encodedMetadata,
-                encodedOutputAbsPath
+                outputAbsPath
             }));
 
             this.safety.lastItemFinishedAt = new Date().toISOString();
-            console.log(`[WORKER] Worker completed item. id=${encodingItem.id} encoded=${encodedOutputAbsPath}`);
+            console.log(`[WORKER] Worker completed item. id=${encodingItem.id} output=${outputAbsPath}`);
         }
         catch (error) {
             const latest = await this._requireItem(encodingItem.id);
@@ -846,7 +811,6 @@ module.exports = class EncodingService {
                 ...latest,
                 profileId,
                 outputFilename,
-                encodedOutputAbsPath: null,
                 status: stopped ? "cancelled" : "failed",
                 queuePosition: null,
                 pausedAt: null,
@@ -1055,7 +1019,6 @@ module.exports = class EncodingService {
     async _ingestDiscoveredItem({
         inboxInputAbsPath,
         inboxRelativeDir,
-        inboxRelativePath,
         itemId,
         existingItem = null,
         paths,
@@ -1066,23 +1029,15 @@ module.exports = class EncodingService {
             throw new Error(`Input file missing: ${inboxInputAbsPath}`);
         }
 
-        const pendingItemRoot = path.join(paths.pending, sanitizeSegment(itemId));
-        const managedInputAbsPath = path.join(pendingItemRoot, path.basename(inboxInputAbsPath));
-
-        await fsp.mkdir(pendingItemRoot, { recursive: true });
-        await moveFileIntoPlace(inboxInputAbsPath, managedInputAbsPath);
-
         const item = this._buildDiscoveredItem({
             id: itemId,
             inboxRelativeDir,
-            inboxRelativePath,
             inboxInputAbsPath,
-            managedInputAbsPath,
             fileSizeBytes: inputStat.size,
             defaultProfileId
         });
-        const sourceMetadata = await this.ffprobeService.probeFile(managedInputAbsPath, inputStat);
-        console.log(`[SCAN] Ingested inbox file. id=${itemId} source=${managedInputAbsPath}`);
+        const sourceMetadata = await this.ffprobeService.probeFile(inboxInputAbsPath, inputStat);
+        console.log(`[SCAN] Ingested inbox file. id=${itemId} source=${inboxInputAbsPath}`);
 
         if (this._canReingestScannedItem(existingItem)) {
             await this.repository.deleteMetadata(itemId, "encoded");
@@ -1098,7 +1053,6 @@ module.exports = class EncodingService {
         uploadedFile,
         itemId,
         inboxRelativeDir,
-        inboxRelativePath,
         originalFilename,
         paths,
         defaultProfileId
@@ -1113,23 +1067,25 @@ module.exports = class EncodingService {
             throw new Error(`Uploaded file missing: ${uploadAbsPath}`);
         }
 
-        const pendingItemRoot = path.join(paths.pending, sanitizeSegment(itemId));
-        const managedInputAbsPath = path.join(pendingItemRoot, originalFilename);
+        const inboxDirAbs = path.join(paths.inbox, inboxRelativeDir);
+        const inboxInputAbsPath = path.join(inboxDirAbs, originalFilename);
 
-        await fsp.mkdir(pendingItemRoot, { recursive: true });
-        await moveFileIntoPlace(uploadAbsPath, managedInputAbsPath);
+        if (await pathExists(inboxInputAbsPath)) {
+            throw new Error(`Inbox file already exists: ${inboxInputAbsPath}`);
+        }
+
+        await fsp.mkdir(inboxDirAbs, { recursive: true });
+        await moveFileIntoPlace(uploadAbsPath, inboxInputAbsPath);
 
         const item = this._buildDiscoveredItem({
             id: itemId,
             inboxRelativeDir,
-            inboxRelativePath,
-            inboxInputAbsPath: managedInputAbsPath,
-            managedInputAbsPath,
+            inboxInputAbsPath,
             fileSizeBytes: uploadStat.size,
             defaultProfileId
         });
-        const sourceMetadata = await this.ffprobeService.probeFile(managedInputAbsPath, uploadStat);
-        console.log(`[INTAKE] Ingested uploaded file. id=${itemId} source=${managedInputAbsPath}`);
+        const sourceMetadata = await this.ffprobeService.probeFile(inboxInputAbsPath, uploadStat);
+        console.log(`[INTAKE] Ingested uploaded file. id=${itemId} source=${inboxInputAbsPath}`);
 
         return this.repository.upsert({
             ...item,
@@ -1139,65 +1095,42 @@ module.exports = class EncodingService {
     }
 
     async _cleanupItemFiles(item, paths = this._getEncoderPaths()) {
-        const pendingItemRoot = getPendingItemRoot(paths, item.id);
-        const encodedItemRoot = getEncodedItemRoot(paths, item);
         const workingItemRoot = getWorkingItemRoot(paths, item.id);
 
-        await removeIfExists(pendingItemRoot);
-        await removeIfExists(encodedItemRoot);
         await removeIfExists(workingItemRoot);
     }
 
     async _cleanupEncodedFiles(item, paths = this._getEncoderPaths()) {
-        const encodedItemRoot = getEncodedItemRoot(paths, item);
         const workingItemRoot = getWorkingItemRoot(paths, item.id);
 
-        await removeIfExists(encodedItemRoot);
         await removeIfExists(workingItemRoot);
     }
 
-    async _cleanupApprovedItemFiles(item, paths = this._getEncoderPaths(), { retainedSourceAbsPath = null } = {}) {
-        const pendingItemRoot = getPendingItemRoot(paths, item.id);
-
+    async _cleanupApprovedItemFiles(item, paths = this._getEncoderPaths()) {
         await this._cleanupEncodedFiles(item, paths);
-
-        if (retainedSourceAbsPath) {
-            await removeIfExists(pendingItemRoot);
-            return;
-        }
-
-        await removeIfExists(pendingItemRoot);
     }
 
-    async _retainSourceFile(item, paths = this._getEncoderPaths()) {
-        if (!item.inputAbsPath) {
+    async _moveRejectedOutput(item, paths = this._getEncoderPaths()) {
+        if (!item || !item.outputAbsPath || !await pathExists(item.outputAbsPath)) {
             return null;
         }
 
-        const retainedDirAbs = path.join(
-            paths.outbox,
-            "_sources",
-            "retained",
-            normalizeRelativeDir(item.inboxRelativeDir)
-        );
-        const retainedSourceAbsPath = path.join(retainedDirAbs, item.originalFilename);
+        const rejectedDirAbs = path.join(paths.outbox, "rejected", normalizeRelativeDir(item.inboxRelativeDir));
+        await fsp.mkdir(rejectedDirAbs, { recursive: true });
 
-        await fsp.mkdir(retainedDirAbs, { recursive: true });
-        await moveFileIntoPlace(item.inputAbsPath, retainedSourceAbsPath);
-        return retainedSourceAbsPath;
+        const rejectedOutputAbsPath = await buildUniqueRejectedOutputPath(rejectedDirAbs, item.outputAbsPath);
+        await moveFileIntoPlace(item.outputAbsPath, rejectedOutputAbsPath);
+        return rejectedOutputAbsPath;
     }
 
     async _cleanupTemporaryArtifacts(paths = this._getEncoderPaths()) {
         await removeTempArtifacts(paths.working);
-        await removeTempArtifacts(paths.encoded);
     }
 
     _buildDiscoveredItem({
         id,
         inboxRelativeDir,
-        inboxRelativePath,
         inboxInputAbsPath,
-        managedInputAbsPath,
         fileSizeBytes,
         defaultProfileId = "browser_compatibility"
     }) {
@@ -1208,7 +1141,6 @@ module.exports = class EncodingService {
             id,
             status: "pending",
             inboxRelativeDir,
-            inboxRelativePath,
             requestedAt: now,
             requestedBy: null,
             originalFilename: path.basename(inputAbsPath),
@@ -1216,9 +1148,7 @@ module.exports = class EncodingService {
             videoUuid: null,
             entityType: "video",
             entityId: null,
-            inboxInputAbsPath: inputAbsPath,
-            inputAbsPath: managedInputAbsPath,
-            managedInputAbsPath,
+            inputAbsPath,
             fileSizeBytes,
             createdAt: now,
             updatedAt: now
@@ -1257,9 +1187,8 @@ module.exports = class EncodingService {
             paths.inbox,
             paths.outbox,
             paths.internalRoot,
-            paths.pending,
             paths.working,
-            paths.encoded,
+            paths.uploads,
             paths.logs
         ];
 
@@ -1269,9 +1198,7 @@ module.exports = class EncodingService {
     }
 
     async _cleanupEmptyWorkingDirectories(paths = this._getEncoderPaths()) {
-        await pruneEmptyDirectories(paths.pending);
         await pruneEmptyDirectories(paths.working);
-        await pruneEmptyDirectories(paths.encoded);
     }
 
     async _refreshRuntimeSettings() {
@@ -1413,7 +1340,7 @@ function buildEncodingOutcomeReceipt({
     wallClockMs,
     sourceMetadata,
     outputMetadata,
-    encodedOutputAbsPath
+    outputAbsPath
 }) {
     const sourceSize = Number(sourceMetadata && sourceMetadata.fileSizeBytes || 0);
     const outputSize = Number(outputMetadata && outputMetadata.fileSizeBytes || 0);
@@ -1439,7 +1366,7 @@ function buildEncodingOutcomeReceipt({
         sizeDeltaPercent: sourceSize > 0 ? (sizeDeltaBytes / sourceSize) * 100 : null,
         bitrateDeltaBps,
         bitrateDeltaPercent: sourceBitrate > 0 ? (bitrateDeltaBps / sourceBitrate) * 100 : null,
-        encodedOutputAbsPath
+        outputAbsPath
     };
 }
 
@@ -1475,8 +1402,8 @@ function getInboxRelativeDir(fileAbsPath, inboxRootAbsPath) {
     return relativeDir === "." ? "" : relativeDir;
 }
 
-function buildItemId(inboxRelativePath) {
-    const normalizedPath = String(inboxRelativePath || "").trim().replace(/\\/g, "/");
+function buildItemId(inputAbsPath) {
+    const normalizedPath = String(inputAbsPath || "").trim();
     const hash = crypto.createHash("sha1").update(normalizedPath).digest("hex").slice(0, 16);
     return `enc_${hash}`;
 }
@@ -1550,6 +1477,16 @@ async function removeIfExists(targetAbsPath) {
     }
 }
 
+async function pathExists(targetAbsPath) {
+    try {
+        await fsp.access(targetAbsPath, fs.constants.F_OK);
+        return true;
+    }
+    catch (_error) {
+        return false;
+    }
+}
+
 async function moveFileIntoPlace(sourceAbsPath, destinationAbsPath) {
     await removeIfExists(destinationAbsPath);
 
@@ -1567,25 +1504,22 @@ async function moveFileIntoPlace(sourceAbsPath, destinationAbsPath) {
     await fsp.unlink(sourceAbsPath);
 }
 
-function getPendingItemRoot(paths, itemId) {
-    return path.join(paths.pending, sanitizeSegment(itemId));
-}
+async function buildUniqueRejectedOutputPath(rejectedDirAbs, outputAbsPath) {
+    const ext = path.extname(outputAbsPath || "");
+    const base = path.basename(outputAbsPath || "output", ext);
 
-function getEncodedItemRoot(paths, item) {
-    return path.join(paths.encoded, sanitizeSegment(item && item.id));
+    for (let index = 1; index < Number.MAX_SAFE_INTEGER; index += 1) {
+        const candidate = path.join(rejectedDirAbs, `${base}_rejected_${index}${ext}`);
+        if (!await pathExists(candidate)) {
+            return candidate;
+        }
+    }
+
+    throw new Error(`Unable to find an available rejected output path in ${rejectedDirAbs}`);
 }
 
 function getWorkingItemRoot(paths, itemId) {
     return path.join(paths.working, sanitizeSegment(itemId));
-}
-
-function getDiscardedSourceRoot(paths, item) {
-    return path.join(
-        paths.outbox,
-        "_sources",
-        "discarded",
-        normalizeRelativeDir(item && item.inboxRelativeDir)
-    );
 }
 
 function getDiscardBlockedMessage(status) {

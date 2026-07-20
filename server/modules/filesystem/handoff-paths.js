@@ -2,6 +2,8 @@ const path = require("path");
 const os = require("os");
 
 const ENCODER_SERVICE_ROOT = path.resolve(__dirname, "..", "..", "..");
+const APP_NAME = "Video Encoder";
+const APP_SLUG = "video-encoder";
 
 function getDefaultInboxRoot() {
     return path.join(os.homedir(), "Movies", "Video Encoder Inbox");
@@ -34,16 +36,31 @@ function getEncoderOutboxRoot(overridePath = null) {
 }
 
 function getEncoderInternalRoot() {
+    return getDefaultAppDataRoot();
+}
+
+function getEncoderCacheRoot() {
     return resolveEncoderPath(
-        process.env.ENCODER_INTERNAL_ROOT,
-        path.join(ENCODER_SERVICE_ROOT, ".internal")
+        process.env.ENCODER_CACHE_ROOT,
+        getDefaultCacheRoot()
+    );
+}
+
+function getEncoderLogsRoot() {
+    return resolveEncoderPath(
+        process.env.ENCODER_LOGS_ROOT,
+        getDefaultLogsRoot()
     );
 }
 
 function getEncoderPaths(options = {}) {
-    const internalRoot = options.internalRoot
-        ? resolveEncoderPath(options.internalRoot, getEncoderInternalRoot())
-        : getEncoderInternalRoot();
+    const internalRoot = getEncoderInternalRoot();
+    const cacheRoot = options.cacheRoot
+        ? resolveEncoderPath(options.cacheRoot, getEncoderCacheRoot())
+        : getEncoderCacheRoot();
+    const logsRoot = options.logsRoot
+        ? resolveEncoderPath(options.logsRoot, getEncoderLogsRoot())
+        : getEncoderLogsRoot();
     const inbox = options.inbox
         ? getEncoderInboxRoot(options.inbox)
         : getConfiguredDefaultInboxRoot();
@@ -56,11 +73,46 @@ function getEncoderPaths(options = {}) {
         internalRoot,
         inbox,
         outbox,
-        pending: path.join(internalRoot, "pending"),
-        working: path.join(internalRoot, "working"),
-        encoded: path.join(internalRoot, "encoded"),
-        logs: path.join(internalRoot, "logs")
+        working: path.join(cacheRoot, "working"),
+        uploads: path.join(cacheRoot, "uploads"),
+        logs: logsRoot
     };
+}
+
+function getDefaultAppDataRoot() {
+    if (process.platform === "darwin") {
+        return path.join(os.homedir(), "Library", "Application Support", APP_NAME);
+    }
+
+    if (process.platform === "win32") {
+        return path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), APP_NAME);
+    }
+
+    return path.join(os.homedir(), ".local", "share", APP_SLUG);
+}
+
+function getDefaultCacheRoot() {
+    if (process.platform === "darwin") {
+        return path.join(os.homedir(), "Library", "Caches", APP_NAME);
+    }
+
+    if (process.platform === "win32") {
+        return path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), APP_NAME, "Cache");
+    }
+
+    return path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"), APP_SLUG);
+}
+
+function getDefaultLogsRoot() {
+    if (process.platform === "darwin") {
+        return path.join(os.homedir(), "Library", "Logs", APP_NAME);
+    }
+
+    if (process.platform === "win32") {
+        return path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), APP_NAME, "Logs");
+    }
+
+    return path.join(getDefaultAppDataRoot(), "logs");
 }
 
 function resolveEncoderPath(targetPath, fallbackAbsPath) {
@@ -88,6 +140,11 @@ module.exports = {
     getEncoderInboxRoot,
     getEncoderOutboxRoot,
     getEncoderInternalRoot,
+    getEncoderCacheRoot,
+    getEncoderLogsRoot,
+    getDefaultAppDataRoot,
+    getDefaultCacheRoot,
+    getDefaultLogsRoot,
     getEncoderPaths
 };
 
