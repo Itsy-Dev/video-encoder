@@ -19,17 +19,16 @@ async function runMigrations(database) {
         const sql = await fs.promises.readFile(path.join(migrationsDir, file), "utf8");
         if (!sql.trim()) continue;
 
-        await database.query("START TRANSACTION");
         try {
-            await database.query(sql);
-            await database.query(
-                `INSERT INTO \`${MIGRATIONS_TABLE}\` (\`filename\`) VALUES (?)`,
-                [file]
-            );
-            await database.query("COMMIT");
+            await database.withTransaction(async executor => {
+                await executor.query(sql);
+                await executor.query(
+                    `INSERT INTO \`${MIGRATIONS_TABLE}\` (\`filename\`) VALUES (?)`,
+                    [file]
+                );
+            });
         }
         catch (error) {
-            await database.query("ROLLBACK").catch(() => {});
             throw error;
         }
     }
@@ -38,12 +37,10 @@ async function runMigrations(database) {
 async function ensureMigrationsTable(database) {
     await database.query(`
         CREATE TABLE IF NOT EXISTS \`${MIGRATIONS_TABLE}\` (
-            \`id\` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-            \`filename\` VARCHAR(255) NOT NULL,
-            \`applied_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (\`id\`),
-            UNIQUE KEY \`uq_${MIGRATIONS_TABLE}_filename\` (\`filename\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            \`id\` INTEGER PRIMARY KEY AUTOINCREMENT,
+            \`filename\` TEXT NOT NULL UNIQUE,
+            \`applied_at\` TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
     `);
 }
 

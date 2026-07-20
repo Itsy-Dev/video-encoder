@@ -80,6 +80,7 @@ module.exports = class EncodingService {
         this.workerPromise = null;
         this.scanTimer = null;
         this.scanLoopRunning = false;
+        this.isShuttingDown = false;
         this.safety = {
             cooldownUntil: null,
             cooldownReason: null,
@@ -587,6 +588,22 @@ module.exports = class EncodingService {
         return stopped;
     }
 
+    async shutdown() {
+        this.isShuttingDown = true;
+
+        if (this.scanTimer) {
+            clearTimeout(this.scanTimer);
+            this.scanTimer = null;
+        }
+
+        if (this.activeHandle) {
+            this.activeHandle.stop();
+        }
+
+        await this.ready.catch(() => {});
+        await this._waitForScanLoopToFinish();
+    }
+
     async _initialize() {
         const settings = await this._refreshRuntimeSettings();
         const paths = this._getEncoderPaths();
@@ -638,6 +655,10 @@ module.exports = class EncodingService {
     }
 
     _startInboxPolling() {
+        if (this.isShuttingDown) {
+            return;
+        }
+
         if (this.scanLoopRunning || this.scanTimer) {
             return;
         }
@@ -654,6 +675,9 @@ module.exports = class EncodingService {
             }
             finally {
                 this.scanLoopRunning = false;
+                if (this.isShuttingDown) {
+                    return;
+                }
                 const settings = await this._refreshRuntimeSettings().catch(() => this.runtimeSettings);
                 this._scheduleInboxPoll(runNext, this._getScanIntervalMs(settings));
             }
@@ -662,6 +686,12 @@ module.exports = class EncodingService {
         runNext().catch(error => {
             console.error("[POLLER] Inbox polling loop failed", error);
         });
+    }
+
+    async _waitForScanLoopToFinish() {
+        while (this.scanLoopRunning) {
+            await sleep(50);
+        }
     }
 
     _ensureWorkerRunning() {

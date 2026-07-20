@@ -468,11 +468,17 @@ module.exports = function encodingApi(app, database, fileIntake) {
         }));
     }));
 
-    settingsService.getSettings()
+    const startupReady = settingsService.getSettings()
         .then(applyFileIntakeSettings)
         .catch(error => {
             console.error("[SETTINGS] Failed to apply file intake settings on startup", error);
         });
+
+    return {
+        encodingService,
+        settingsService,
+        ready: Promise.all([encodingService.ready, startupReady])
+    };
 };
 
 function loadEncodingViews() {

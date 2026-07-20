@@ -1,7 +1,7 @@
 const path = require("path");
 const express = require("express");
 
-const { createDatabase } = require("./modules/database/mysql");
+const { createDatabase } = require("./modules/database/sqlite");
 const { runMigrations } = require("./modules/database/migrate");
 const { getEncoderPaths } = require("./modules/filesystem/handoff-paths");
 const { initFileLogger } = require("./modules/filesystem/logger");
@@ -38,7 +38,10 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
     app.locals.fileIntake = fileIntake;
 
     require("./api/health")(app, database);
-    require("./api/encoding")(app, database, fileIntake);
+    const encodingApiHandle = require("./api/encoding")(app, database, fileIntake);
+    if (encodingApiHandle && encodingApiHandle.ready) {
+        await encodingApiHandle.ready;
+    }
 
     const server = await new Promise((resolve, reject) => {
         const nextServer = app.listen(port, function onListen() {
@@ -49,7 +52,7 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
     });
 
     const address = `http://localhost:${server.address().port}`;
-    console.log("[SERVER] Encoder Server started at:", address.data);
+    console.log("[SERVER] Encoder Server started at:", address);
 
     let isShuttingDown = false;
 
@@ -58,6 +61,10 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
         isShuttingDown = true;
 
         console.log("[SERVER] Shutdown requested.");
+
+        if (encodingApiHandle && encodingApiHandle.encodingService) {
+            await encodingApiHandle.encodingService.shutdown();
+        }
 
         await new Promise(resolve => {
             server.close(function onClose() {
