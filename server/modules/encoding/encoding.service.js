@@ -1260,6 +1260,7 @@ module.exports = class EncodingService {
             paths.pending,
             paths.working,
             paths.encoded,
+            paths.uploads,
             paths.logs
         ];
 
