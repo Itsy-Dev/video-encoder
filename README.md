@@ -109,7 +109,9 @@ Create distributable macOS artifacts in `dist/`:
 npm run dist
 ```
 
-The packaged app keeps user data outside the app bundle in the macOS Library locations listed below.
+Install from the generated DMG by dragging `Video Encoder.app` into `Applications`. This local build is unsigned until Apple Developer signing/notarization is configured, so macOS may require right-clicking the app and choosing **Open** the first time.
+
+The packaged app keeps user data outside the app bundle in the macOS Library locations listed below. Replacing the app during an update should not remove history, settings, cache, logs, Inbox, or Outbox files.
 
 ## Runtime Layout
 

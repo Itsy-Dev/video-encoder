@@ -58,6 +58,28 @@
         "zip"
       ],
       "identity": null
+    },
+    "dmg": {
+      "title": "Video Encoder ${version}",
+      "icon": "desktop/assets/icon.icns",
+      "iconSize": 96,
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 160,
+          "y": 190,
+          "type": "file"
+        },
+        {
+          "x": 380,
+          "y": 190,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     }
   },
   "devDependencies": {
