@@ -54,14 +54,6 @@ Run database migrations manually:
 npm run migrate
 ```
 
-Import existing MySQL history into a fresh SQLite database:
-
-```bash
-npm run import:mysql-to-sqlite
-```
-
-The import script loads MySQL connection settings from the project `.env`. The import is a dry run by default. Add `-- --execute` to write SQLite data, or `-- --execute --replace` to recreate the SQLite database before importing.
-
 Launch the Electron shell:
 
 ```bash
