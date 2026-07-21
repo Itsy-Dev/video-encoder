@@ -59,7 +59,7 @@ function renderSourceLabel(item) {
 
 function renderAction(item, status) {
     if (["review", "rejected", "exported", "approved"].includes(status)) {
-        return `<a class="ui small basic compact icon button" href="/encoding/review/item?id=${encodeURIComponent(item.id)}" title="Open detail" aria-label="Open detail">
+        return `<a class="ui small basic compact icon button" href="/encoding/review/item?id=${encodeURIComponent(item.id)}&origin=history" title="Open detail" aria-label="Open detail">
           <i class="blue eye icon"></i>
         </a>`;
     }

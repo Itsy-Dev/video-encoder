@@ -347,6 +347,20 @@ module.exports = function renderPage({ title, heading, description, state, body,
           throw new Error(message || ("Request failed with status " + response.status));
         }
 
+        const origin = String(payload.origin || "").toLowerCase();
+        if (/\/(approve|reject)$/.test(form.action)) {
+          if (origin === "review") {
+            window.location.href = "/encoding/review/item";
+            return;
+          }
+
+          if (origin === "history") {
+            // Keep this branch explicit in case history should return elsewhere later.
+            window.location.reload();
+            return;
+          }
+        }
+
         window.location.reload();
       }
       catch (error) {
