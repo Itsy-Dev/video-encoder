@@ -148,7 +148,7 @@ function buildProfileArgs(profile, sourceMetadata, runtime = DEFAULT_FFMPEG_RUNT
     const args = [];
 
     const videoCodec = profile.videoCodec && profile.videoCodec.ffmpeg ? profile.videoCodec.ffmpeg : null;
-    const audioCodec = profile.audioCodec && profile.audioCodec.ffmpeg ? profile.audioCodec.ffmpeg : null;
+    const audioCodec = resolveAudioCodec(profile, sourceMetadata);
     const scalePlan = resolveScalePlan(profile, sourceMetadata || {});
     const videoFilter = videoCodec && videoCodec !== "copy"
         ? buildSafeScaleFilter({
@@ -231,6 +231,25 @@ function buildProfileArgs(profile, sourceMetadata, runtime = DEFAULT_FFMPEG_RUNT
     }
 
     return args;
+}
+
+function resolveAudioCodec(profile, sourceMetadata) {
+    const requestedAudioCodec = profile.audioCodec && profile.audioCodec.ffmpeg ? profile.audioCodec.ffmpeg : null;
+    if (requestedAudioCodec !== "copy") {
+        return requestedAudioCodec;
+    }
+
+    const containerId = String(profile && profile.container && profile.container.id || "").toLowerCase();
+    const sourceAudioCodec = String(sourceMetadata && sourceMetadata.audioCodec || "").toLowerCase();
+    if (containerId !== "mp4" || !sourceAudioCodec) {
+        return requestedAudioCodec;
+    }
+
+    if (["aac", "mp3"].includes(sourceAudioCodec)) {
+        return requestedAudioCodec;
+    }
+
+    return "aac";
 }
 
 function normalizeRuntimeOptions(runtimeOptions = null) {

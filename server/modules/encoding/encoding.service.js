@@ -1388,7 +1388,17 @@ async function walk(rootAbs, onFile) {
 }
 
 function buildOutputFilename(filename, profileId) {
-    return String(filename || "output.mp4");
+    const originalFilename = String(filename || "output.mp4");
+    const profile = profiles.getProfileById(profileId) || profiles.getProfileById("browser_compatibility");
+    const containerExtension = profile && profile.container && profile.container.extension
+        ? String(profile.container.extension)
+        : ".mp4";
+    const sourceExtension = path.extname(originalFilename);
+    const basename = sourceExtension
+        ? originalFilename.slice(0, -sourceExtension.length)
+        : originalFilename;
+
+    return `${basename || "output"}${containerExtension}`;
 }
 
 function buildEncodingOutcomeReceipt({
