@@ -361,6 +361,19 @@ module.exports = function renderPage({ title, heading, description, state, body,
           }
         }
 
+        if (/\/queue$/.test(form.action)) {
+          if (origin === "pending") {
+            window.location.href = "/encoding/setup";
+            return;
+          }
+
+          if (origin === "history") {
+            // Keep this branch explicit in case history should return elsewhere later.
+            window.location.reload();
+            return;
+          }
+        }
+
         window.location.reload();
       }
       catch (error) {

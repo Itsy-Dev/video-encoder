@@ -200,7 +200,7 @@ function renderQueueRowActions(item) {
 
     if (status === "queued") {
         return `<div class="ui compact basic icon buttons">
-          <a class="ui button" href="/encoding/setup?id=${encodeURIComponent(item.id)}" title="Update queue item" aria-label="Update queue item">
+          <a class="ui button" href="/encoding/setup?id=${encodeURIComponent(item.id)}&origin=queue" title="Update queue item" aria-label="Update queue item">
             <i class="fitted orange cog icon"></i>
           </a>
           <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/unqueue" data-api-form data-confirm="Remove this item from the queue and return it to pending setup?" style="display: inline-block;">
@@ -213,7 +213,7 @@ function renderQueueRowActions(item) {
 
     if (["failed", "cancelled"].includes(status)) {
         return `<div class="ui compact basic icon buttons">
-          <a class="ui button" href="/encoding/setup?id=${encodeURIComponent(item.id)}" title="Update queue item" aria-label="Update queue item">
+          <a class="ui button" href="/encoding/setup?id=${encodeURIComponent(item.id)}&origin=queue" title="Update queue item" aria-label="Update queue item">
             <i class="fitted orange cog icon"></i>
           </a>
           <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/unqueue" data-api-form data-confirm="Remove this item from the queue and return it to pending setup?" style="display: inline-block;">

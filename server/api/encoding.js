@@ -341,6 +341,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
         const state = await encodingService.getDashboardState();
         const settings = await settingsService.getSettings();
         const selectedId = String(req.query.id || "");
+        const origin = String(req.query.origin || "");
         const selected = state.items.find(item => item.id === selectedId) || state.actionableItems[0] || null;
         const selectedProfileId = String(req.query.profileId || (selected && (selected.profileId || selected.requestedProfileId)) || "browser_compatibility");
         const { renderPage, renderSetup } = loadEncodingViews();
@@ -352,6 +353,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
             state,
             body: renderSetup(selected, state.profiles, {
                 selectedProfileId,
+                origin,
                 sourcePreviewUrl: buildPendingSourceUrl(selected),
                 showVideoPlayerByDefault: resolveSetupToggle(req.query.showVideoPlayer, settings && settings.setup && settings.setup.showVideoPlayerByDefault),
                 queueToFrontByDefault: resolveSetupToggle(req.query.queueToFront, settings && settings.setup && settings.setup.queueToFrontByDefault)
@@ -363,12 +365,14 @@ module.exports = function encodingApi(app, database, fileIntake) {
         const state = await encodingService.getDashboardState();
         const settings = await settingsService.getSettings();
         const selectedId = String(req.query.id || "");
+        const origin = String(req.query.origin || "");
         const selected = state.items.find(item => item.id === selectedId) || state.actionableItems[0] || null;
         const selectedProfileId = String(req.query.profileId || (selected && (selected.profileId || selected.requestedProfileId)) || "browser_compatibility");
         const { renderSetup } = loadEncodingViews();
 
         res.send(renderSetup(selected, state.profiles, {
             selectedProfileId,
+            origin,
             sourcePreviewUrl: buildPendingSourceUrl(selected),
             showVideoPlayerByDefault: resolveSetupToggle(req.query.showVideoPlayer, settings && settings.setup && settings.setup.showVideoPlayerByDefault),
             queueToFrontByDefault: resolveSetupToggle(req.query.queueToFront, settings && settings.setup && settings.setup.queueToFrontByDefault)

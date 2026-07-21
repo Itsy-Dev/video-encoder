@@ -11,7 +11,7 @@ const {
     resolveScalePlan
 } = require("../../modules/encoding/scale-policy");
 
-module.exports = function renderSetup(item, profiles, { selectedProfileId, sourcePreviewUrl, showVideoPlayerByDefault = false, queueToFrontByDefault = false } = {}) {
+module.exports = function renderSetup(item, profiles, { selectedProfileId, origin = "", sourcePreviewUrl, showVideoPlayerByDefault = false, queueToFrontByDefault = false } = {}) {
     if (!item) {
         return `<section class="ui segment encoder-panel"><div class="ui placeholder segment"><div class="ui header">No discovered item is available for setup yet.</div></div></section>`;
     }
@@ -71,6 +71,7 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
 
         <form method="get" action="/encoding/setup/fragment" class="ui inverted form">
           <input type="hidden" name="id" value="${escapeHtml(item.id)}" />
+          <input type="hidden" name="origin" value="${escapeHtml(origin)}" />
           <input type="hidden" name="showVideoPlayer" value="${showVideoPlayerByDefault ? "true" : "false"}" data-setup-show-video-input />
           <input type="hidden" name="queueToFront" value="${queueToFrontByDefault ? "true" : "false"}" data-setup-queue-front-input />
           <div class="fields">
@@ -89,6 +90,7 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
 
         <form id="setup-queue-form" class="ui inverted form form-stack" method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/queue" data-api-form>
           <input type="hidden" name="profileId" value="${escapeHtml(selectedProfile && selectedProfile.id || "")}" />
+          <input type="hidden" name="origin" value="${escapeHtml(origin)}" />
           <input type="hidden" name="inboxRelativeDir" value="${escapeHtml(item.inboxRelativeDir || "")}" />
           <div class="four fields">
             ${renderDisabledField("CRF", selectedProfile && selectedProfile.crf != null ? selectedProfile.crf : "—")}
