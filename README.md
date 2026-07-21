@@ -26,10 +26,8 @@ The current UI includes:
 ## Requirements
 
 - Node.js 24.15.0 or newer
-- `ffmpeg`
-- `ffprobe`
 
-If `ffmpeg` or `ffprobe` are not on the default `PATH`, set:
+The app bundles `ffmpeg` and `ffprobe` for local and packaged runs. To override those binaries, set:
 
 - `ENCODER_FFMPEG_BIN`
 - `ENCODER_FFPROBE_BIN`
@@ -38,6 +36,7 @@ If `ffmpeg` or `ffprobe` are not on the default `PATH`, set:
 
 ```bash
 npm install
+cp .env.example .env
 ```
 
 ## Run
@@ -62,6 +61,66 @@ npm run desktop
 
 The server also applies pending SQL migrations automatically at startup.
 
+## Runtime Profiles
+
+Real `.env*` files are local-only and ignored by git. Commit only `.env.example` templates.
+
+Use the default/prod-style lane:
+
+```bash
+cp .env.example .env
+npm start
+```
+
+Use the isolated dev lane:
+
+```bash
+cp .env.dev.example .env.dev
+npm run start:dev
+```
+
+Use the isolated package-test lane from the repo:
+
+```bash
+cp .env.package-test.example .env.package-test
+npm run desktop:package-test
+```
+
+Each lane should use its own `ENCODER_PORT`, `ENCODER_APP_DATA_ROOT`, `ENCODER_CACHE_ROOT`, `ENCODER_LOGS_ROOT`, Inbox, and Outbox. This allows a stable encoder to keep running while repo or packaged builds are tested separately.
+
+To launch an unpacked packaged app against the package-test lane:
+
+```bash
+npm run pack:package-test
+npm run packaged:package-test
+```
+
+Do not use the normal `dist/Video Encoder.app` for package-test while a stable encoder is running. The dedicated package-test build has its own app name, bundle id, port, and Library defaults so Finder launches do not collide with the stable app.
+
+## Package
+
+Create an unpacked macOS app for local validation:
+
+```bash
+npm run pack
+```
+
+Create distributable macOS artifacts in `dist/`:
+
+```bash
+npm run dist
+```
+
+Create isolated package-test macOS artifacts in `dist-package-test/`:
+
+```bash
+npm run dist:package-test
+```
+
+Install from the generated DMG by dragging `Video Encoder.app` into `Applications`. This local build is unsigned until Apple Developer signing/notarization is configured, so macOS may require right-clicking the app and choosing **Open** the first time.
+
+The packaged app keeps user data outside the app bundle in the macOS Library locations listed below. Replacing the app during an update should not remove history, settings, cache, logs, Inbox, or Outbox files.
+
 ## Runtime Layout
 
 The app uses two operator-facing handoff folders plus OS-managed app storage.
@@ -82,10 +141,13 @@ Each checkout reads its own local `.env`.
 Important environment variables:
 
 - `ENCODER_PORT`
+- `ENCODER_APP_DATA_ROOT`
+- `ENCODER_CACHE_ROOT`
+- `ENCODER_LOGS_ROOT`
 - `ENCODER_DEFAULT_INBOX_ROOT`
 - `ENCODER_DEFAULT_OUTBOX_ROOT`
-- `ENCODER_FFMPEG_BIN`
-- `ENCODER_FFPROBE_BIN`
+- `ENCODER_FFMPEG_BIN` optional binary override
+- `ENCODER_FFPROBE_BIN` optional binary override
 
 Path values may be:
 

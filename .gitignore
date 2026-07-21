@@ -1,4 +1,7 @@
-.env
-node_modules/*
-.internal/*
-*/assets
+.env*
+!.env.example
+!.env.*.example
+node_modules/
+dist/
+dist-package-test/
+assets/

@@ -6,10 +6,11 @@ const { runMigrations } = require("./modules/database/migrate");
 const { getEncoderPaths } = require("./modules/filesystem/handoff-paths");
 const { initFileLogger } = require("./modules/filesystem/logger");
 const FileIntakeService = require("./modules/file-intake/file-intake.service");
+const { loadEncoderEnv } = require("./modules/config/env-loader");
+const { reservePort } = require("./modules/runtime/port-reservation");
+const { acquireRuntimeLock } = require("./modules/runtime/runtime-lock");
 
-require("dotenv").config({
-    path: path.join(__dirname, "..", ".env")
-});
+const loadedEnv = loadEncoderEnv();
 
 async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 4300) } = {}) {
     const app = express();
@@ -17,9 +18,6 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
     const desktopAssetsAbs = path.join(__dirname, "..", "desktop", "assets");
     const semanticRootAbs = path.dirname(require.resolve("fomantic-ui-css/semantic.min.css"));
     const jqueryRootAbs = path.dirname(require.resolve("jquery/dist/jquery.js"));
-    const fileIntake = new FileIntakeService({
-        tempRootAbsPath: encoderPaths.uploads
-    });
 
     app.use(express.json({ limit: "2mb" }));
     app.use(express.urlencoded({ extended: true }));
@@ -28,33 +26,69 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
     app.use("/shared/semantic", express.static(semanticRootAbs));
     app.use("/shared/jquery", express.static(jqueryRootAbs));
 
-    initFileLogger(encoderPaths.logs);
-    console.log("[SERVER] Server starting...");
+    let database = null;
+    let encodingApiHandle = null;
+    let fileIntake = null;
+    let server = null;
+    let portReservation = null;
+    let runtimeLock = null;
+    let isShuttingDown = false;
 
-    const database = createDatabase();
-    await runMigrations(database);
-
-    app.locals.database = database;
-    app.locals.fileIntake = fileIntake;
-
-    require("./api/health")(app, database);
-    const encodingApiHandle = require("./api/encoding")(app, database, fileIntake);
-    if (encodingApiHandle && encodingApiHandle.ready) {
-        await encodingApiHandle.ready;
-    }
-
-    const server = await new Promise((resolve, reject) => {
-        const nextServer = app.listen(port, function onListen() {
-            resolve(nextServer);
+    try {
+        portReservation = await reservePort(port);
+        runtimeLock = await acquireRuntimeLock(encoderPaths.internalRoot);
+        fileIntake = new FileIntakeService({
+            tempRootAbsPath: encoderPaths.uploads
         });
 
-        nextServer.once("error", reject);
-    });
+        initFileLogger(encoderPaths.logs);
+        console.log("[SERVER] Server starting...");
+        console.log(`[SERVER] Env file: ${loadedEnv.loaded ? loadedEnv.path : `${loadedEnv.path} (not loaded)`}`);
+        console.log(`[SERVER] Runtime lock: ${runtimeLock.path}`);
+        console.log(`[SERVER] Runtime paths: appData=${encoderPaths.internalRoot}`);
+        console.log(`[SERVER] Runtime paths: cache=${encoderPaths.cacheRoot}`);
+        console.log(`[SERVER] Runtime paths: logs=${encoderPaths.logs}`);
+        console.log(`[SERVER] Handoff paths: inbox=${encoderPaths.inbox}`);
+        console.log(`[SERVER] Handoff paths: outbox=${encoderPaths.outbox}`);
 
-    const address = `http://localhost:${server.address().port}`;
-    console.log("[SERVER] Encoder Server started at:", address);
+        database = createDatabase();
+        await runMigrations(database);
 
-    let isShuttingDown = false;
+        app.locals.database = database;
+        app.locals.fileIntake = fileIntake;
+
+        require("./api/health")(app, database);
+        encodingApiHandle = require("./api/encoding")(app, database, fileIntake);
+        if (encodingApiHandle && encodingApiHandle.ready) {
+            await encodingApiHandle.ready;
+        }
+
+        await portReservation.release();
+
+        server = await new Promise((resolve, reject) => {
+            const nextServer = app.listen(port, function onListen() {
+                resolve(nextServer);
+            });
+
+            nextServer.once("error", reject);
+        });
+
+        const address = `http://localhost:${server.address().port}`;
+        console.log("[SERVER] Encoder Server started at:", address);
+
+        return {
+            app,
+            server,
+            database,
+            address,
+            port: server.address().port,
+            shutdown
+        };
+    }
+    catch (error) {
+        await cleanupFailedStartup();
+        throw error;
+    }
 
     async function shutdown() {
         if (isShuttingDown) return;
@@ -66,24 +100,40 @@ async function startEncoderServer({ port = Number(process.env.ENCODER_PORT || 43
             await encodingApiHandle.encodingService.shutdown();
         }
 
-        await new Promise(resolve => {
-            server.close(function onClose() {
-                resolve();
-            });
-        }).catch(() => {});
+        if (server) {
+            await new Promise(resolve => {
+                server.close(function onClose() {
+                    resolve();
+                });
+            }).catch(() => {});
+        }
 
-        await database.close().catch(() => {});
+        if (database) {
+            await database.close().catch(() => {});
+        }
+        if (runtimeLock) {
+            await runtimeLock.release().catch(() => {});
+        }
         console.log("[SERVER] Shutdown complete.");
     }
 
-    return {
-        app,
-        server,
-        database,
-        address,
-        port: server.address().port,
-        shutdown
-    };
+    async function cleanupFailedStartup() {
+        if (encodingApiHandle && encodingApiHandle.encodingService) {
+            await encodingApiHandle.encodingService.shutdown().catch(() => {});
+        }
+        if (server) {
+            await new Promise(resolve => server.close(() => resolve())).catch(() => {});
+        }
+        if (database) {
+            await database.close().catch(() => {});
+        }
+        if (portReservation) {
+            await portReservation.release().catch(() => {});
+        }
+        if (runtimeLock) {
+            await runtimeLock.release().catch(() => {});
+        }
+    }
 }
 
 module.exports = {

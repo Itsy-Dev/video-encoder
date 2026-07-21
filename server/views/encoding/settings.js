@@ -7,11 +7,13 @@ const SETTINGS_LAYOUT = Object.freeze({
     fieldHeaderStyle: "margin-bottom: 0;"
 });
 
-module.exports = function renderSettings(profiles, settings) {
+module.exports = function renderSettings(profiles, settings, options = {}) {
     const current = normalizeSettings(settings, profiles);
+    const settingsState = options.settingsState || {};
 
     return `<section class="ui inverted segment encoder-settings-panel">
       <form method="post" action="/api/encoding/settings" data-api-form>
+        ${renderFirstRunStorageNotice(settingsState)}
         <div class="ui inverted charcoal segment">
           <div class="ui stackable grid">
             <div class="ten wide column">
@@ -170,6 +172,17 @@ function renderSettingsSection(title, description, fields) {
       <div class="ui inverted small form">
         ${joinWithDividers(fields)}
       </div>
+    </div>`;
+}
+
+function renderFirstRunStorageNotice(settingsState) {
+    if (!settingsState || !settingsState.firstRun) {
+        return "";
+    }
+
+    return `<div class="ui yellow message">
+      <div class="header">Confirm your Inbox and Outbox folders</div>
+      <p>This looks like the first time storage settings are being used for this profile. The folders below are safe defaults; review them, adjust if needed, then save settings to make them explicit.</p>
     </div>`;
 }
 
