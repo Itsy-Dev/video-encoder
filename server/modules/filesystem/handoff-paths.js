@@ -36,7 +36,10 @@ function getEncoderOutboxRoot(overridePath = null) {
 }
 
 function getEncoderInternalRoot() {
-    return getDefaultAppDataRoot();
+    return resolveEncoderPath(
+        process.env.ENCODER_APP_DATA_ROOT,
+        getDefaultAppDataRoot()
+    );
 }
 
 function getEncoderCacheRoot() {
@@ -71,6 +74,7 @@ function getEncoderPaths(options = {}) {
     return {
         handoffRoot: findCommonParent(inbox, outbox),
         internalRoot,
+        cacheRoot,
         inbox,
         outbox,
         working: path.join(cacheRoot, "working"),

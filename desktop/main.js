@@ -3,12 +3,14 @@ const { spawn } = require("child_process");
 
 const { app, dialog, Menu, Tray, nativeImage, shell } = require("electron");
 
-const { startEncoderServer } = require("../server/app");
-
-const APP_NAME = "Encoder";
+const APP_NAME = process.env.ENCODER_APP_NAME || app.getName() || "Video Encoder";
 const APP_URL_PATH = "/encoding/pending";
 const APP_ICON_ABS = path.join(__dirname, "assets", "icon.png");
 const APP_TRAY_ICON_ABS = path.join(__dirname, "assets", "trayTemplate.png");
+
+applyPackagedRuntimeDefaults(APP_NAME);
+
+const { startEncoderServer } = require("../server/app");
 
 let encoderServer = null;
 let tray = null;
@@ -217,5 +219,28 @@ function setDockIcon() {
     const image = nativeImage.createFromPath(APP_ICON_ABS);
     if (!image.isEmpty()) {
         app.dock.setIcon(image);
+    }
+}
+
+function applyPackagedRuntimeDefaults(appName) {
+    const profile = process.env.ENCODER_DISTRIBUTION_PROFILE || (
+        String(appName || "").toLowerCase().includes("package test") ? "package-test" : ""
+    );
+
+    if (profile !== "package-test") {
+        return;
+    }
+
+    setEnvDefault("ENCODER_PORT", "14310");
+    setEnvDefault("ENCODER_APP_DATA_ROOT", "~/Library/Application Support/Video Encoder Package Test");
+    setEnvDefault("ENCODER_CACHE_ROOT", "~/Library/Caches/Video Encoder Package Test");
+    setEnvDefault("ENCODER_LOGS_ROOT", "~/Library/Logs/Video Encoder Package Test");
+    setEnvDefault("ENCODER_DEFAULT_INBOX_ROOT", "~/Movies/Video Encoder Package Test Inbox");
+    setEnvDefault("ENCODER_DEFAULT_OUTBOX_ROOT", "~/Movies/Video Encoder Package Test Outbox");
+}
+
+function setEnvDefault(key, value) {
+    if (!process.env[key]) {
+        process.env[key] = value;
     }
 }

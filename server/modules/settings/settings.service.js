@@ -128,19 +128,35 @@ module.exports = class SettingsService {
     }
 
     async getSettings() {
+        const { values } = await this.getSettingsState();
+        return values;
+    }
+
+    async getSettingsState() {
         const saved = await this.repository.list();
         const savedMap = new Map(saved.map(entry => [entry.key, entry.value]));
         const effective = {};
+        const sources = {};
 
         for (const definition of SETTINGS_DEFINITIONS) {
+            const savedEntry = saved.find(entry => entry.key === definition.key) || null;
             const nextValue = savedMap.has(definition.key)
                 ? normalizeValue(savedMap.get(definition.key), definition)
                 : cloneValue(definition.defaultValue);
 
             setNestedValue(effective, definition.key, nextValue);
+            setNestedValue(sources, definition.key, {
+                source: savedMap.has(definition.key) ? "database" : getDefaultSource(definition.key),
+                saved: Boolean(savedEntry),
+                updatedAt: savedEntry && savedEntry.updatedAt || null
+            });
         }
 
-        return effective;
+        return {
+            values: effective,
+            sources,
+            firstRun: !savedMap.has("storage.inboxRoot") || !savedMap.has("storage.outboxRoot")
+        };
     }
 
     async updateSettings(input) {
@@ -174,6 +190,22 @@ function defineSetting(key, defaultValue, options = {}) {
         defaultValue,
         ...options
     });
+}
+
+function getDefaultSource(key) {
+    if (key === "storage.inboxRoot") {
+        return process.env.ENCODER_DEFAULT_INBOX_ROOT || process.env.ENCODER_INBOX_ROOT
+            ? "env"
+            : "system";
+    }
+
+    if (key === "storage.outboxRoot") {
+        return process.env.ENCODER_DEFAULT_OUTBOX_ROOT || process.env.ENCODER_OUTBOX_ROOT
+            ? "env"
+            : "system";
+    }
+
+    return "default";
 }
 
 function flattenInput(input, prefix = "", entries = new Map()) {

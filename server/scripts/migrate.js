@@ -1,8 +1,6 @@
-const path = require("path");
+const { loadEncoderEnv } = require("../modules/config/env-loader");
 
-require("dotenv").config({
-    path: path.join(__dirname, "..", "..", ".env")
-});
+loadEncoderEnv();
 
 const { createDatabase } = require("../modules/database/sqlite");
 const { runMigrations } = require("../modules/database/migrate");

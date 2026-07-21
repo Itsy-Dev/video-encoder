@@ -1,27 +1,98 @@
 {
-  "name": "@video-encoder",
+  "name": "video-encoder",
   "version": "0.5.0",
+  "description": "A local macOS video encoding workflow app.",
+  "author": "Itsy Dev",
   "private": true,
   "engines": {
     "node": ">=24.15.0",
     "npm": ">=10"
   },
-  "main": "server/server.js",
+  "main": "desktop/main.js",
   "scripts": {
     "check:runtime": "node server/scripts/check-node-runtime.js",
     "prestart": "npm run check:runtime",
     "start": "node server/server.js",
+    "start:dev": "ENCODER_ENV_FILE=.env.dev npm start",
     "premigrate": "npm run check:runtime",
     "migrate": "node server/scripts/migrate.js",
+    "migrate:dev": "ENCODER_ENV_FILE=.env.dev npm run migrate",
+    "migrate:package-test": "ENCODER_ENV_FILE=.env.package-test npm run migrate",
+    "pack": "npm run check:runtime && electron-builder --dir",
+    "dist": "npm run check:runtime && electron-builder",
+    "pack:package-test": "npm run check:runtime && electron-builder --dir --config electron-builder.package-test.js",
+    "dist:package-test": "npm run check:runtime && electron-builder --config electron-builder.package-test.js",
     "predesktop": "npm run check:runtime",
-    "desktop": "electron desktop/main.js"
+    "desktop": "electron desktop/main.js",
+    "desktop:dev": "ENCODER_ENV_FILE=.env.dev npm run desktop",
+    "desktop:package-test": "ENCODER_ENV_FILE=.env.package-test npm run desktop",
+    "packaged:package-test": "node server/scripts/launch-packaged-package-test.js"
+  },
+  "build": {
+    "appId": "dev.itsy.videoencoder",
+    "productName": "Video Encoder",
+    "copyright": "Copyright © 2026 Itsy Dev",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**",
+      "node_modules/ffprobe-static/**"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "desktop/assets"
+    },
+    "files": [
+      "desktop/**/*",
+      "server/**/*",
+      "package.json",
+      "!desktop/launch-electron-app.command",
+      "!**/.env*",
+      "!**/.internal/**",
+      "!dist/**",
+      "!TEST_PLAN.md"
+    ],
+    "mac": {
+      "category": "public.app-category.video",
+      "icon": "desktop/assets/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "identity": null
+    },
+    "dmg": {
+      "title": "Video Encoder ${version}",
+      "icon": "desktop/assets/icon.icns",
+      "iconSize": 96,
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 160,
+          "y": 190,
+          "type": "file"
+        },
+        {
+          "x": 380,
+          "y": 190,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
   },
   "devDependencies": {
-    "electron": "^43.1.1"
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0",
     "fomantic-ui-css": "^2.9.4",
     "jquery": "^3.7.1",
     "multer": "^1.4.5-lts.1"

@@ -1,11 +1,12 @@
 const { spawn, spawnSync } = require("child_process");
+const { getFfprobeBin } = require("./media-binaries");
 
-const FFPROBE_BIN = process.env.ENCODER_FFPROBE_BIN || "ffprobe";
+const FFPROBE_BIN = getFfprobeBin();
 
 (function ensureFfprobe() {
     const result = spawnSync(FFPROBE_BIN, ["-version"], { stdio: "ignore" });
     if (result.status !== 0) {
-        throw new Error(`ffprobe not found at '${FFPROBE_BIN}'. Install ffmpeg or set ENCODER_FFPROBE_BIN.`);
+        throw new Error(`ffprobe could not be started at '${FFPROBE_BIN}'. Set ENCODER_FFPROBE_BIN to a valid executable or reinstall the app.`);
     }
 })();
 
