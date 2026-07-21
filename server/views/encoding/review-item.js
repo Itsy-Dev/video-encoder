@@ -42,10 +42,15 @@ module.exports = function renderReviewItem(item, {
 };
 
 function renderHeader(item, outcome, canReview) {
+    const displayFilename = item && item.outputFilename
+        ? item.outputFilename
+        : item && item.originalFilename
+            ? item.originalFilename
+            : "Encoded Output";
     return `
       <h3 class="ui inverted header">
         <div class="content">
-          ${escapeHtml(item.originalFilename || "Encoded Output")}
+          ${escapeHtml(displayFilename)}
           ${!canReview && outcome
             ? `<span class="sub header">Attempt ${escapeHtml(String(outcome.attemptNumber || 1))} · ${escapeHtml(item.profileId || outcome.profileId || "—")}</span>`
             : ""

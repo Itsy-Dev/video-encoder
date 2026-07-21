@@ -34,6 +34,11 @@ module.exports = function renderReview(items) {
 };
 
 function renderRow(item) {
+  const displayFilename = item && item.outputFilename
+    ? item.outputFilename
+    : item && item.originalFilename
+      ? item.originalFilename
+      : "—";
   return `<tr>
       <td class="center aligned">
         <a class="ui mini compact basic icon button" href="/encoding/review/item?id=${encodeURIComponent(item.id)}" title="Open review item" aria-label="Open review item">
@@ -42,7 +47,7 @@ function renderRow(item) {
       </td>
       <td>${renderSourceLabel(item)}</td>
       <td title="${escapeHtml(item.outputAbsPath || item.inputAbsPath || "")}">
-        <div>${escapeHtml(item.originalFilename || "—")}</div>
+        <div>${escapeHtml(displayFilename)}</div>
       </td>
       <td>${escapeHtml(item.profileId || "—")}</td>
       <td class="right aligned">${escapeHtml(formatDateTime(item.queuedAt || item.requestedAt || item.createdAt))}</td>
