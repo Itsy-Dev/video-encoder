@@ -99,6 +99,8 @@ Do not use the normal `dist/Video Encoder.app` for package-test while a stable e
 
 ## Package
 
+See [RELEASE.md](RELEASE.md) for the full lane-safe release process.
+
 Create an unpacked macOS app for local validation:
 
 ```bash
