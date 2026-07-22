@@ -1,5 +1,5 @@
 const { buildOriginUrl } = require("../../modules/encoding/navigation");
-const { escapeHtml, formatBytes, renderDiscardButton, renderTable } = require("./helpers");
+const { escapeHtml, formatBytes, pill, renderDiscardButton, renderTable } = require("./helpers");
 
 module.exports = function renderPending(items, options = {}) {
   const intake = normalizeIntakeOptions(options);
@@ -75,6 +75,7 @@ module.exports = function renderPending(items, options = {}) {
         </div>
       </div>
       ${renderTable(items, [
+        ["", item => pill(item && item.status || "unknown"), { width: "one" }],
         ["Actions", item => `
           <div class="ui mini icon buttons">
             <a class="ui compact basic icon button" href="${escapeHtml(buildOriginUrl("/encoding/setup", { id: item.id, source: "pending" }))}" title="Open setup" aria-label="Open setup">

@@ -362,7 +362,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
         res.send(renderPage({
             title: "Pending",
             heading: "Pending Items",
-            description: "Discovered, stopped, failed, and rejected items awaiting profile selection and queue decisions.",
+            description: "Discovered, stopped, failed, rejected, and source-retained completed items awaiting profile selection or re-queue decisions.",
             state,
             body: renderPending(state.actionableItems, {
                 enabled: Boolean(settings && settings.intake && settings.intake.browserFileIntakeEnabled)
@@ -556,7 +556,7 @@ function clearEncodingViewCache() {
 }
 
 function buildPendingSourceUrl(item) {
-    if (!item || !item.inputAbsPath) return null;
+    if (!item || !item.inputAbsPath || item.sourceAvailable === false) return null;
     return `/api/encoding/items/${encodeURIComponent(item.id)}/source`;
 }
 

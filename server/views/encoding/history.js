@@ -59,25 +59,23 @@ function renderSourceLabel(item) {
 }
 
 function renderAction(item, status) {
+    const actions = [];
+
     if (["review", "rejected", "exported", "approved"].includes(status)) {
-        return `<a class="ui small basic compact icon button" href="${escapeHtml(buildOriginUrl("/encoding/review/item", { id: item.id, source: "history" }))}" title="Open detail" aria-label="Open detail">
+        actions.push(`<a class="ui small basic compact icon button" href="${escapeHtml(buildOriginUrl("/encoding/review/item", { id: item.id, source: "history" }))}" title="Open detail" aria-label="Open detail">
           <i class="blue eye icon"></i>
-        </a>`;
+        </a>`);
     }
 
-    if (["rejected", "failed", "cancelled"].includes(status)) {
-        return `<div class="ui mini basic buttons">
-          <a class="ui compact icon button" href="${escapeHtml(buildOriginUrl("/encoding/setup", { id: item.id, source: "history" }))}" title="Open setup" aria-label="Open setup">
-            <i class="teal redo icon"></i>
-          </a>
-        </div>`;
+    if (canOpenSetupFromHistory(item, status)) {
+        actions.push(`<a class="ui compact icon button" href="${escapeHtml(buildOriginUrl("/encoding/setup", { id: item.id, source: "history" }))}" title="Open setup" aria-label="Open setup">
+          <i class="teal redo icon"></i>
+        </a>`);
     }
 
-    if (status === "discarded") {
-        return "—";
-    }
-
-    return "—";
+    return actions.length
+        ? `<div class="ui mini basic buttons">${actions.join("")}</div>`
+        : "—";
 }
 
 function historyDetail(item, status) {
@@ -104,4 +102,16 @@ function compareDates(left, right) {
     const rightMs = new Date(right || 0).getTime();
     if (leftMs === rightMs) return 0;
     return leftMs < rightMs ? -1 : 1;
+}
+
+function canOpenSetupFromHistory(item, status) {
+    if (["rejected", "failed", "cancelled"].includes(status)) {
+        return true;
+    }
+
+    if (["approved", "exported"].includes(status)) {
+        return Boolean(item && item.sourceAvailable);
+    }
+
+    return false;
 }

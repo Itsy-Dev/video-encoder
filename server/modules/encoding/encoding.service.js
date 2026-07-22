@@ -17,6 +17,7 @@ const SettingsService = require("../settings/settings.service");
 
 const PENDING_STATES = new Set(["pending"]);
 const ACTIONABLE_STATES = new Set(["pending", "rejected", "failed", "cancelled"]);
+const RESETUP_SOURCE_REQUIRED_STATES = new Set(["approved", "exported"]);
 const REVIEW_STATES = new Set(["review"]);
 const HISTORY_STATES = new Set(["approved", "rejected", "failed", "exported", "cancelled", "discarded"]);
 const DISCARDABLE_STATES = new Set(["pending", "queued", "rejected", "failed", "cancelled"]);
@@ -100,7 +101,10 @@ module.exports = class EncodingService {
     async getDashboardState() {
         await this.ready;
         await this._refreshRuntimeSettings();
-        const items = await this.repository.list();
+        const items = (await this.repository.list()).map(item => ({
+            ...item,
+            sourceAvailable: hasAvailableSource(item)
+        }));
         const worker = this.getWorkerStatus();
         const queuedItems = sortQueuedItems(items, worker.activeItemId);
 
@@ -108,14 +112,14 @@ module.exports = class EncodingService {
             items,
             queuedItems,
             pendingItems: items.filter(item => PENDING_STATES.has(item.status)),
-            actionableItems: items.filter(item => ACTIONABLE_STATES.has(item.status)),
+            actionableItems: items.filter(canSetupItem),
             reviewItems: items.filter(item => REVIEW_STATES.has(item.status)),
             historyItems: items.filter(item => HISTORY_STATES.has(item.status)),
             profiles,
             queuePositionStrategy: QUEUE_POSITION_STRATEGY_ID,
             worker,
             counts: {
-                pending: items.filter(item => PENDING_STATES.has(item.status)).length,
+                pending: items.filter(canSetupItem).length,
                 queued: items.filter(item => ["queued"].includes(item.status)).length,
                 encoding: items.filter(item => ["encoding", "paused"].includes(item.status)).length,
                 review: items.filter(item => REVIEW_STATES.has(item.status)).length,
@@ -1691,6 +1695,33 @@ function getUnqueueBlockedMessage(status) {
     }
 
     return `Item with status "${status}" cannot be removed from the queue.`;
+}
+
+function canSetupItem(item) {
+    const status = String(item && item.status || "").toLowerCase();
+    if (ACTIONABLE_STATES.has(status)) {
+        return true;
+    }
+
+    if (RESETUP_SOURCE_REQUIRED_STATES.has(status)) {
+        return hasAvailableSource(item);
+    }
+
+    return false;
+}
+
+function hasAvailableSource(item) {
+    const inputAbsPath = String(item && item.inputAbsPath || "").trim();
+    if (!inputAbsPath) {
+        return false;
+    }
+
+    try {
+        return fs.existsSync(inputAbsPath);
+    }
+    catch (_error) {
+        return false;
+    }
 }
 
 async function pruneEmptyDirectories(rootAbsPath) {
