@@ -33,6 +33,18 @@ fs.mkdirSync(currentOutputDir, { recursive: true });
 console.log(`[PREP PROD] Prepared ${currentOutputDir}`);
 
 function parseVersionFromArtifactName(filename) {
-    const match = String(filename || "").match(/-(\d+\.\d+\.\d+)-[^-]+\.(dmg)$/i);
-    return match ? match[1] : "";
+    const match = String(filename || "").match(/-(\d+(?:\.\d+)+)-[^-]+\.(dmg)$/i);
+    if (!match) {
+        return "";
+    }
+
+    const segments = String(match[1] || "")
+        .split(".")
+        .filter(Boolean);
+
+    if (segments.length < 3) {
+        return "";
+    }
+
+    return segments.slice(0, 3).join(".");
 }
