@@ -25,7 +25,7 @@ module.exports = function renderHistory(items) {
             <th class="two wide">Profile</th>
             <th class="two wide right aligned">Completed</th>
             <th class="two wide right aligned">Updated</th>
-            <th class="two wide center aligned">Action</th>
+            <th class="one wide center aligned">Action</th>
           </tr>
         </thead>
         <tbody>
