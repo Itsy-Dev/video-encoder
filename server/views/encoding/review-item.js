@@ -5,6 +5,7 @@ const {
     formatDateTime,
     formatDuration
 } = require("./helpers");
+const { buildOriginUrl } = require("../../modules/encoding/navigation");
 
 module.exports = function renderReviewItem(item, {
     encodedPreviewUrl,
@@ -166,7 +167,7 @@ function renderActions(item, canReview, retainSourceByDefault) {
           </div>
         </div>
         <div class="nine wide right aligned column">
-          <a class="ui blue button" href="/encoding/setup?id=${encodeURIComponent(item.id)}&origin=review" title="Redo keeps the current output until the replacement encode succeeds.">
+          <a class="ui blue button" href="${escapeHtml(buildOriginUrl("/encoding/setup", { id: item.id, source: "review" }))}" title="Redo keeps the current output until the replacement encode succeeds.">
             <i class="redo icon"></i>
             Redo
           </a>

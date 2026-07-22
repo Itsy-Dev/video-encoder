@@ -5,6 +5,10 @@ const multer = require("multer");
 
 const EncodingService = require("../modules/encoding/encoding.service");
 const SettingsService = require("../modules/settings/settings.service");
+const {
+    normalizeNavigationSource,
+    resolveRedirectUrl
+} = require("../modules/encoding/navigation");
 const { getEncoderPaths } = require("../modules/filesystem/handoff-paths");
 const { readEncoderLogs } = require("../modules/filesystem/log-reader");
 
@@ -13,12 +17,6 @@ const IS_DEV_VIEW_HOT_RELOAD = process.env.NODE_ENV !== "production";
 const asyncRoute = handler => function wrappedRoute(req, res, next) {
     Promise.resolve(handler(req, res, next)).catch(next);
 };
-
-const SETUP_ORIGIN_PENDING = "pending";
-const SETUP_ORIGIN_QUEUE = "queue";
-const SETUP_ORIGIN_HISTORY = "history";
-const SETUP_ORIGIN_REVIEW = "review";
-const DEFAULT_SETUP_REDIRECT_URL = "/encoding/queue";
 
 module.exports = function encodingApi(app, database, fileIntake) {
     const encodingService = new EncodingService(database);
@@ -209,14 +207,15 @@ module.exports = function encodingApi(app, database, fileIntake) {
             inboxRelativeDir: req.body.inboxRelativeDir,
             queuePlacement: req.body.queueToFront ? "front" : "back"
         });
-        const setupOrigin = normalizeSetupOrigin(req.body && req.body.setupOrigin);
-        const nextSetupUrl = setupOrigin === SETUP_ORIGIN_PENDING
-            ? await buildPendingSetupRedirectUrl(encodingService)
-            : null;
+        const origin = normalizeNavigationSource(req.body && req.body.origin);
         res.json({
             ok: true,
             item,
-            redirectUrl: nextSetupUrl || buildDefaultSetupRedirectUrl(setupOrigin)
+            redirectUrl: await resolveRedirectUrl({
+                flow: "setupSubmit",
+                source: origin,
+                encodingService
+            })
         });
     }));
 
@@ -355,7 +354,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
         const state = await encodingService.getDashboardState();
         const settings = await settingsService.getSettings();
         const selectedId = String(req.query.id || "");
-        const setupOrigin = normalizeSetupOrigin(req.query.origin);
+        const origin = normalizeNavigationSource(req.query.origin);
         const selected = state.items.find(item => item.id === selectedId) || state.actionableItems[0] || null;
         const selectedProfileId = String(req.query.profileId || (selected && (selected.profileId || selected.requestedProfileId)) || "browser_compatibility");
         const { renderPage, renderSetup } = loadEncodingViews();
@@ -367,7 +366,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
             state,
             body: renderSetup(selected, state.profiles, {
                 selectedProfileId,
-                setupOrigin,
+                origin,
                 sourcePreviewUrl: buildPendingSourceUrl(selected),
                 showVideoPlayerByDefault: resolveSetupToggle(req.query.showVideoPlayer, settings && settings.setup && settings.setup.showVideoPlayerByDefault),
                 queueToFrontByDefault: resolveSetupToggle(req.query.queueToFront, settings && settings.setup && settings.setup.queueToFrontByDefault)
@@ -379,14 +378,14 @@ module.exports = function encodingApi(app, database, fileIntake) {
         const state = await encodingService.getDashboardState();
         const settings = await settingsService.getSettings();
         const selectedId = String(req.query.id || "");
-        const setupOrigin = normalizeSetupOrigin(req.query.origin);
+        const origin = normalizeNavigationSource(req.query.origin);
         const selected = state.items.find(item => item.id === selectedId) || state.actionableItems[0] || null;
         const selectedProfileId = String(req.query.profileId || (selected && (selected.profileId || selected.requestedProfileId)) || "browser_compatibility");
         const { renderSetup } = loadEncodingViews();
 
         res.send(renderSetup(selected, state.profiles, {
             selectedProfileId,
-            setupOrigin,
+            origin,
             sourcePreviewUrl: buildPendingSourceUrl(selected),
             showVideoPlayerByDefault: resolveSetupToggle(req.query.showVideoPlayer, settings && settings.setup && settings.setup.showVideoPlayerByDefault),
             queueToFrontByDefault: resolveSetupToggle(req.query.queueToFront, settings && settings.setup && settings.setup.queueToFrontByDefault)
@@ -507,41 +506,6 @@ module.exports = function encodingApi(app, database, fileIntake) {
         ready: Promise.all([encodingService.ready, startupReady])
     };
 };
-
-function normalizeSetupOrigin(value) {
-    const normalized = String(value || "").trim().toLowerCase();
-    if (normalized === SETUP_ORIGIN_PENDING) return SETUP_ORIGIN_PENDING;
-    if (normalized === SETUP_ORIGIN_QUEUE) return SETUP_ORIGIN_QUEUE;
-    if (normalized === SETUP_ORIGIN_HISTORY) return SETUP_ORIGIN_HISTORY;
-    if (normalized === SETUP_ORIGIN_REVIEW) return SETUP_ORIGIN_REVIEW;
-    return "";
-}
-
-async function buildPendingSetupRedirectUrl(encodingService) {
-    const state = await encodingService.getDashboardState();
-    const nextItem = Array.isArray(state && state.actionableItems) ? state.actionableItems[0] : null;
-    if (!nextItem || !nextItem.id) {
-        return "/encoding/pending";
-    }
-
-    const searchParams = new URLSearchParams({
-        id: String(nextItem.id),
-        origin: SETUP_ORIGIN_PENDING
-    });
-    return `/encoding/setup?${searchParams.toString()}`;
-}
-
-function buildDefaultSetupRedirectUrl(setupOrigin) {
-    if (setupOrigin === SETUP_ORIGIN_PENDING) {
-        return "/encoding/pending";
-    }
-
-    if (setupOrigin === SETUP_ORIGIN_REVIEW) {
-        return "/encoding/review";
-    }
-
-    return DEFAULT_SETUP_REDIRECT_URL;
-}
 
 function loadEncodingViews() {
     if (IS_DEV_VIEW_HOT_RELOAD) {

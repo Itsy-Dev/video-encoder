@@ -1,3 +1,4 @@
+const { buildOriginUrl } = require("../../modules/encoding/navigation");
 const { escapeHtml, formatDateTime, pill } = require("./helpers");
 
 module.exports = function renderHistory(items) {
@@ -66,7 +67,7 @@ function renderAction(item, status) {
 
     if (["rejected", "failed", "cancelled"].includes(status)) {
         return `<div class="ui mini basic buttons">
-          <a class="ui compact icon button" href="/encoding/setup?id=${encodeURIComponent(item.id)}&origin=history" title="Open setup" aria-label="Open setup">
+          <a class="ui compact icon button" href="${escapeHtml(buildOriginUrl("/encoding/setup", { id: item.id, source: "history" }))}" title="Open setup" aria-label="Open setup">
             <i class="teal redo icon"></i>
           </a>
         </div>`;
