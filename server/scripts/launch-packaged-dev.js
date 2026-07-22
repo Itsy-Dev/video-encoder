@@ -6,7 +6,8 @@ const projectRoot = path.resolve(__dirname, "..", "..");
 const envPath = path.join(projectRoot, ".env.dev");
 const appExecutable = path.join(
     projectRoot,
-    "dist-dev",
+    "dist",
+    "dev",
     "mac-arm64",
     "Video Encoder Dev.app",
     "Contents",

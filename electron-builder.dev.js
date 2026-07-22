@@ -1,13 +1,14 @@
 const basePackage = require("./package.json");
+const { getDevOutputDir } = require("./build-output-paths");
 
 module.exports = {
     ...basePackage.build,
     appId: "dev.itsy.videoencoder.dev",
     productName: "Video Encoder Dev",
-    artifactName: "${productName}-${version}-${arch}.${ext}",
+    artifactName: "${productName}-${arch}.${ext}",
     directories: {
         ...basePackage.build.directories,
-        output: "dist-dev"
+        output: getDevOutputDir()
     },
     extraMetadata: {
         name: "video-encoder-dev",
@@ -15,6 +16,6 @@ module.exports = {
     },
     dmg: {
         ...basePackage.build.dmg,
-        title: "Video Encoder Dev ${version}"
+        title: "Video Encoder Dev"
     }
 };
