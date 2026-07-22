@@ -566,6 +566,32 @@ class EncodingRepository {
 
         return Array.isArray(results) && results.length ? mapRowToOutcome(results[0]) : null;
     }
+
+    async listOutcomesWithItems() {
+        const { results } = await this.database.query(`
+            SELECT
+                eo.*,
+                ei.id AS item_id,
+                ei.status AS item_status,
+                ei.original_filename AS item_original_filename,
+                ei.input_abs_path AS item_input_abs_path,
+                ei.inbox_relative_dir AS item_inbox_relative_dir,
+                ei.output_filename AS item_output_filename,
+                ei.output_abs_path AS item_output_abs_path,
+                ei.last_error AS item_last_error,
+                ei.attempt_count AS item_attempt_count,
+                ei.completed_at AS item_completed_at,
+                ei.approved_at AS item_approved_at,
+                ei.rejected_at AS item_rejected_at,
+                ei.updated_at AS item_updated_at
+            FROM encoding_outcome eo
+            INNER JOIN encoding_item ei
+                ON ei.id = eo.encoding_item_id
+            ORDER BY eo.created_at DESC, eo.attempt_number DESC, eo.id DESC
+        `);
+
+        return Array.isArray(results) ? results.map(mapRowToHistoryOutcome) : [];
+    }
 }
 
 function mapRowToItem(row) {
@@ -674,6 +700,63 @@ function mapRowToOutcome(row) {
             probeJson: parseJsonOrNull(row.output_probe_json)
         },
         createdAt: toIsoOrNull(row.created_at)
+    };
+}
+
+function mapRowToHistoryOutcome(row) {
+    const attemptNumber = Number(row.attempt_number || 0);
+    const currentAttemptCount = Number(row.item_attempt_count || 0);
+    const currentStatus = String(row.item_status || "").toLowerCase();
+    const isLatestAttempt = currentAttemptCount === attemptNumber;
+    const status = isLatestAttempt && ["review", "approved", "rejected"].includes(currentStatus)
+        ? currentStatus
+        : "completed";
+
+    return {
+        id: `outcome:${row.id}`,
+        historyRowType: "outcome",
+        encodingItemId: row.encoding_item_id,
+        attemptNumber,
+        isLatestAttempt,
+        status,
+        originalFilename: row.item_original_filename || row.item_output_filename || null,
+        inputAbsPath: row.item_input_abs_path || null,
+        inboxRelativeDir: row.item_inbox_relative_dir || "",
+        profileId: row.profile_id || null,
+        outputFilename: row.item_output_filename || null,
+        outputAbsPath: row.output_abs_path || row.item_output_abs_path || null,
+        lastError: row.item_last_error || null,
+        completedAt: toIsoOrNull(row.encoding_finished_at),
+        approvedAt: toIsoOrNull(row.item_approved_at),
+        rejectedAt: toIsoOrNull(row.item_rejected_at),
+        updatedAt: toIsoOrNull(row.created_at),
+        createdAt: toIsoOrNull(row.created_at),
+        currentItemStatus: currentStatus || null,
+        currentAttemptCount,
+        sourceMetadata: {
+            durationMs: numberOrNull(row.source_duration_ms),
+            fileSizeBytes: numberOrNull(row.source_file_size_bytes),
+            width: numberOrNull(row.source_width),
+            height: numberOrNull(row.source_height),
+            frameRate: decimalOrNull(row.source_frame_rate),
+            bitRate: numberOrNull(row.source_bit_rate),
+            videoCodec: row.source_video_codec || null,
+            audioCodec: row.source_audio_codec || null,
+            container: row.source_container || null,
+            probeJson: parseJsonOrNull(row.source_probe_json)
+        },
+        outputMetadata: {
+            durationMs: numberOrNull(row.output_duration_ms),
+            fileSizeBytes: numberOrNull(row.output_file_size_bytes),
+            width: numberOrNull(row.output_width),
+            height: numberOrNull(row.output_height),
+            frameRate: decimalOrNull(row.output_frame_rate),
+            bitRate: numberOrNull(row.output_bit_rate),
+            videoCodec: row.output_video_codec || null,
+            audioCodec: row.output_audio_codec || null,
+            container: row.output_container || null,
+            probeJson: parseJsonOrNull(row.output_probe_json)
+        }
     };
 }
 

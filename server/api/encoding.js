@@ -5,6 +5,10 @@ const multer = require("multer");
 
 const EncodingService = require("../modules/encoding/encoding.service");
 const SettingsService = require("../modules/settings/settings.service");
+const {
+    normalizeNavigationSource,
+    resolveRedirectUrl
+} = require("../modules/encoding/navigation");
 const { getEncoderPaths } = require("../modules/filesystem/handoff-paths");
 const { readEncoderLogs } = require("../modules/filesystem/log-reader");
 
@@ -203,7 +207,16 @@ module.exports = function encodingApi(app, database, fileIntake) {
             inboxRelativeDir: req.body.inboxRelativeDir,
             queuePlacement: req.body.queueToFront ? "front" : "back"
         });
-        res.json({ ok: true, item });
+        const origin = normalizeNavigationSource(req.body && req.body.origin);
+        res.json({
+            ok: true,
+            item,
+            redirectUrl: await resolveRedirectUrl({
+                flow: "setupSubmit",
+                source: origin,
+                encodingService
+            })
+        });
     }));
 
     app.post("/api/encoding/items/:id/complete", asyncRoute(async function (req, res) {
@@ -253,7 +266,17 @@ module.exports = function encodingApi(app, database, fileIntake) {
             reviewer: req.body.reviewer || "operator",
             sourceAction: req.body.sourceAction || "retain"
         });
-        res.json({ ok: true, item });
+        const origin = normalizeNavigationSource(req.body && req.body.origin);
+        res.json({
+            ok: true,
+            item,
+            redirectUrl: await resolveRedirectUrl({
+                flow: "reviewApprove",
+                source: origin,
+                encodingService,
+                itemId: item && item.id
+            })
+        });
     }));
 
     app.post("/api/encoding/items/:id/reject", asyncRoute(async function (req, res) {
@@ -261,7 +284,17 @@ module.exports = function encodingApi(app, database, fileIntake) {
             reviewer: req.body.reviewer || "operator",
             notes: req.body.notes || null
         });
-        res.json({ ok: true, item });
+        const origin = normalizeNavigationSource(req.body && req.body.origin);
+        res.json({
+            ok: true,
+            item,
+            redirectUrl: await resolveRedirectUrl({
+                flow: "reviewReject",
+                source: origin,
+                encodingService,
+                itemId: item && item.id
+            })
+        });
     }));
 
     app.post("/api/encoding/items/:id/discard", asyncRoute(async function (req, res) {
@@ -329,7 +362,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
         res.send(renderPage({
             title: "Pending",
             heading: "Pending Items",
-            description: "Discovered, stopped, failed, and rejected items awaiting profile selection and queue decisions.",
+            description: "Discovered, stopped, failed, rejected, and source-retained completed items awaiting profile selection or re-queue decisions.",
             state,
             body: renderPending(state.actionableItems, {
                 enabled: Boolean(settings && settings.intake && settings.intake.browserFileIntakeEnabled)
@@ -341,6 +374,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
         const state = await encodingService.getDashboardState();
         const settings = await settingsService.getSettings();
         const selectedId = String(req.query.id || "");
+        const origin = normalizeNavigationSource(req.query.origin);
         const selected = state.items.find(item => item.id === selectedId) || state.actionableItems[0] || null;
         const selectedProfileId = String(req.query.profileId || (selected && (selected.profileId || selected.requestedProfileId)) || "browser_compatibility");
         const { renderPage, renderSetup } = loadEncodingViews();
@@ -352,6 +386,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
             state,
             body: renderSetup(selected, state.profiles, {
                 selectedProfileId,
+                origin,
                 sourcePreviewUrl: buildPendingSourceUrl(selected),
                 showVideoPlayerByDefault: resolveSetupToggle(req.query.showVideoPlayer, settings && settings.setup && settings.setup.showVideoPlayerByDefault),
                 queueToFrontByDefault: resolveSetupToggle(req.query.queueToFront, settings && settings.setup && settings.setup.queueToFrontByDefault)
@@ -363,12 +398,14 @@ module.exports = function encodingApi(app, database, fileIntake) {
         const state = await encodingService.getDashboardState();
         const settings = await settingsService.getSettings();
         const selectedId = String(req.query.id || "");
+        const origin = normalizeNavigationSource(req.query.origin);
         const selected = state.items.find(item => item.id === selectedId) || state.actionableItems[0] || null;
         const selectedProfileId = String(req.query.profileId || (selected && (selected.profileId || selected.requestedProfileId)) || "browser_compatibility");
         const { renderSetup } = loadEncodingViews();
 
         res.send(renderSetup(selected, state.profiles, {
             selectedProfileId,
+            origin,
             sourcePreviewUrl: buildPendingSourceUrl(selected),
             showVideoPlayerByDefault: resolveSetupToggle(req.query.showVideoPlayer, settings && settings.setup && settings.setup.showVideoPlayerByDefault),
             queueToFrontByDefault: resolveSetupToggle(req.query.queueToFront, settings && settings.setup && settings.setup.queueToFrontByDefault)
@@ -404,6 +441,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
         const state = await encodingService.getDashboardState();
         const settings = await settingsService.getSettings();
         const selectedId = String(req.query.id || "");
+        const origin = normalizeNavigationSource(req.query.origin);
         const selected = state.items.find(item => item.id === selectedId) || state.reviewItems[0] || null;
         const outcome = selected ? await encodingService.getLatestOutcome(selected.id) : null;
         const { renderPage, renderReviewItem } = loadEncodingViews();
@@ -422,6 +460,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
             body: renderReviewItem(selected, {
                 encodedPreviewUrl,
                 outcome,
+                origin,
                 retainSourceByDefault: Boolean(settings && settings.review && settings.review.retainSourceByDefault)
             })
         }));
@@ -433,7 +472,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
         res.send(renderPage({
             title: "History",
             heading: "History",
-            description: "Approved, rejected, failed, and exported records.",
+            description: "Approved, rejected, failed, cancelled, and discarded records.",
             state,
             body: renderHistory(state.historyItems)
         }));
@@ -517,7 +556,7 @@ function clearEncodingViewCache() {
 }
 
 function buildPendingSourceUrl(item) {
-    if (!item || !item.inputAbsPath) return null;
+    if (!item || !item.inputAbsPath || item.sourceAvailable === false) return null;
     return `/api/encoding/items/${encodeURIComponent(item.id)}/source`;
 }
 
