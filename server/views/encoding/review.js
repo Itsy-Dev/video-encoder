@@ -1,3 +1,4 @@
+const { buildOriginUrl } = require("../../modules/encoding/navigation");
 const { escapeHtml, formatDateTime } = require("./helpers");
 
 module.exports = function renderReview(items) {
@@ -41,7 +42,7 @@ function renderRow(item) {
       : "—";
   return `<tr>
       <td class="center aligned">
-        <a class="ui mini compact basic icon button" href="/encoding/review/item?id=${encodeURIComponent(item.id)}" title="Open review item" aria-label="Open review item">
+        <a class="ui mini compact basic icon button" href="${escapeHtml(buildOriginUrl("/encoding/review/item", { id: item.id, source: "review" }))}" title="Open review item" aria-label="Open review item">
           <i class="large fitted inverted violet eye icon"></i>
         </a>
       </td>

@@ -40,12 +40,20 @@ function buildOriginUrl(basePath, { id, source, query } = {}) {
     return search ? `${basePath}?${search}` : basePath;
 }
 
-async function resolveRedirectUrl({ flow, source, encodingService } = {}) {
+async function resolveRedirectUrl({ flow, source, encodingService, itemId } = {}) {
     const normalizedSource = normalizeNavigationSource(source);
     const normalizedFlow = String(flow || "").trim();
 
     if (normalizedFlow === "setupSubmit") {
         return resolveQueueSubmissionRedirectUrl(normalizedSource, encodingService);
+    }
+
+    if (normalizedFlow === "reviewApprove") {
+        return resolveReviewApproveRedirectUrl(normalizedSource, encodingService);
+    }
+
+    if (normalizedFlow === "reviewReject") {
+        return resolveReviewRejectRedirectUrl(normalizedSource, itemId);
     }
 
     return DEFAULT_REDIRECT_URL;
@@ -73,6 +81,38 @@ async function buildNextActionableSetupUrl(encodingService) {
     return buildOriginUrl("/encoding/setup", {
         id: nextItem.id,
         source: NAVIGATION_SOURCE_PENDING
+    });
+}
+
+async function resolveReviewApproveRedirectUrl(source, encodingService) {
+    if (source === NAVIGATION_SOURCE_HISTORY) {
+        return "/encoding/history";
+    }
+
+    return buildNextReviewItemUrl(encodingService);
+}
+
+function resolveReviewRejectRedirectUrl(source, itemId) {
+    const setupSource = source === NAVIGATION_SOURCE_HISTORY
+        ? NAVIGATION_SOURCE_HISTORY
+        : NAVIGATION_SOURCE_REVIEW;
+
+    return buildOriginUrl("/encoding/setup", {
+        id: itemId,
+        source: setupSource
+    });
+}
+
+async function buildNextReviewItemUrl(encodingService) {
+    const state = await encodingService.getDashboardState();
+    const nextItem = Array.isArray(state && state.reviewItems) ? state.reviewItems[0] : null;
+    if (!nextItem || !nextItem.id) {
+        return "/encoding/review";
+    }
+
+    return buildOriginUrl("/encoding/review/item", {
+        id: nextItem.id,
+        source: NAVIGATION_SOURCE_REVIEW
     });
 }
 

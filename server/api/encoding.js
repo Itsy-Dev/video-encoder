@@ -266,7 +266,17 @@ module.exports = function encodingApi(app, database, fileIntake) {
             reviewer: req.body.reviewer || "operator",
             sourceAction: req.body.sourceAction || "retain"
         });
-        res.json({ ok: true, item });
+        const origin = normalizeNavigationSource(req.body && req.body.origin);
+        res.json({
+            ok: true,
+            item,
+            redirectUrl: await resolveRedirectUrl({
+                flow: "reviewApprove",
+                source: origin,
+                encodingService,
+                itemId: item && item.id
+            })
+        });
     }));
 
     app.post("/api/encoding/items/:id/reject", asyncRoute(async function (req, res) {
@@ -274,7 +284,17 @@ module.exports = function encodingApi(app, database, fileIntake) {
             reviewer: req.body.reviewer || "operator",
             notes: req.body.notes || null
         });
-        res.json({ ok: true, item });
+        const origin = normalizeNavigationSource(req.body && req.body.origin);
+        res.json({
+            ok: true,
+            item,
+            redirectUrl: await resolveRedirectUrl({
+                flow: "reviewReject",
+                source: origin,
+                encodingService,
+                itemId: item && item.id
+            })
+        });
     }));
 
     app.post("/api/encoding/items/:id/discard", asyncRoute(async function (req, res) {
@@ -421,6 +441,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
         const state = await encodingService.getDashboardState();
         const settings = await settingsService.getSettings();
         const selectedId = String(req.query.id || "");
+        const origin = normalizeNavigationSource(req.query.origin);
         const selected = state.items.find(item => item.id === selectedId) || state.reviewItems[0] || null;
         const outcome = selected ? await encodingService.getLatestOutcome(selected.id) : null;
         const { renderPage, renderReviewItem } = loadEncodingViews();
@@ -439,6 +460,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
             body: renderReviewItem(selected, {
                 encodedPreviewUrl,
                 outcome,
+                origin,
                 retainSourceByDefault: Boolean(settings && settings.review && settings.review.retainSourceByDefault)
             })
         }));
