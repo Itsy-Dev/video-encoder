@@ -60,15 +60,19 @@ function renderSourceLabel(item) {
 
 function renderAction(item, status) {
     const actions = [];
+    const canActOnCurrentAttempt = item && item.historyRowType !== "outcome"
+        ? true
+        : Boolean(item && item.isLatestAttempt);
+    const targetItemId = item && (item.encodingItemId || item.id);
 
-    if (["review", "rejected", "approved"].includes(status)) {
-        actions.push(`<a class="ui small basic compact icon button" href="${escapeHtml(buildOriginUrl("/encoding/review/item", { id: item.id, source: "history" }))}" title="Open detail" aria-label="Open detail">
+    if (canActOnCurrentAttempt && targetItemId && ["review", "rejected", "approved"].includes(status)) {
+        actions.push(`<a class="ui small basic compact icon button" href="${escapeHtml(buildOriginUrl("/encoding/review/item", { id: targetItemId, source: "history" }))}" title="Open detail" aria-label="Open detail">
           <i class="blue eye icon"></i>
         </a>`);
     }
 
-    if (canOpenSetupFromHistory(item, status)) {
-        actions.push(`<a class="ui compact icon button" href="${escapeHtml(buildOriginUrl("/encoding/setup", { id: item.id, source: "history" }))}" title="Open setup" aria-label="Open setup">
+    if (canActOnCurrentAttempt && targetItemId && canOpenSetupFromHistory(item, status)) {
+        actions.push(`<a class="ui compact icon button" href="${escapeHtml(buildOriginUrl("/encoding/setup", { id: targetItemId, source: "history" }))}" title="Open setup" aria-label="Open setup">
           <i class="teal redo icon"></i>
         </a>`);
     }
@@ -79,15 +83,27 @@ function renderAction(item, status) {
 }
 
 function historyDetail(item, status) {
+    const attemptLabel = item && item.attemptNumber
+        ? `Attempt ${item.attemptNumber}`
+        : "";
+
     if (status === "approved") {
-        return "Approved";
+        return joinHistoryParts(attemptLabel, "Approved");
+    }
+
+    if (status === "review") {
+        return joinHistoryParts(attemptLabel, "Awaiting review");
+    }
+
+    if (status === "completed") {
+        return joinHistoryParts(attemptLabel, "Completed encode attempt");
     }
 
     if (status === "discarded") {
-        return "Discarded from active flow";
+        return joinHistoryParts(attemptLabel, "Discarded from active flow");
     }
 
-    return item.lastError || "—";
+    return joinHistoryParts(attemptLabel, item.lastError || "—");
 }
 
 function compareHistoryItems(left, right) {
@@ -114,4 +130,8 @@ function canOpenSetupFromHistory(item, status) {
     }
 
     return false;
+}
+
+function joinHistoryParts(...parts) {
+    return parts.filter(Boolean).join(" · ");
 }

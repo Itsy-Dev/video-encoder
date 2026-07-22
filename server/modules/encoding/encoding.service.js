@@ -105,6 +105,10 @@ module.exports = class EncodingService {
             ...item,
             sourceAvailable: hasAvailableSource(item)
         }));
+        const historyOutcomeItems = (await this.repository.listOutcomesWithItems()).map(item => ({
+            ...item,
+            sourceAvailable: hasAvailableSource(item)
+        }));
         const worker = this.getWorkerStatus();
         const queuedItems = sortQueuedItems(items, worker.activeItemId);
 
@@ -114,7 +118,7 @@ module.exports = class EncodingService {
             pendingItems: items.filter(item => PENDING_STATES.has(item.status)),
             actionableItems: items.filter(canSetupItem),
             reviewItems: items.filter(item => REVIEW_STATES.has(item.status)),
-            historyItems: items.filter(item => HISTORY_STATES.has(item.status)),
+            historyItems: buildHistoryItems(historyOutcomeItems, items),
             profiles,
             queuePositionStrategy: QUEUE_POSITION_STRATEGY_ID,
             worker,
@@ -1722,6 +1726,20 @@ function hasAvailableSource(item) {
     catch (_error) {
         return false;
     }
+}
+
+function buildHistoryItems(historyOutcomeItems, items) {
+    const fallbackHistoryItems = (Array.isArray(items) ? items : [])
+        .filter(item => ["failed", "cancelled", "discarded"].includes(String(item && item.status || "").toLowerCase()))
+        .map(item => ({
+            ...item,
+            historyRowType: "item"
+        }));
+
+    return [
+        ...(Array.isArray(historyOutcomeItems) ? historyOutcomeItems : []),
+        ...fallbackHistoryItems
+    ];
 }
 
 async function pruneEmptyDirectories(rootAbsPath) {
