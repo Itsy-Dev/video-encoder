@@ -17,16 +17,14 @@
     "premigrate": "npm run check:runtime",
     "migrate": "node server/scripts/migrate.js",
     "migrate:dev": "ENCODER_ENV_FILE=.env.dev npm run migrate",
-    "migrate:package-test": "ENCODER_ENV_FILE=.env.package-test npm run migrate",
-    "pack": "npm run check:runtime && electron-builder --dir",
-    "dist": "npm run check:runtime && electron-builder",
-    "pack:package-test": "npm run check:runtime && electron-builder --dir --config electron-builder.package-test.js",
-    "dist:package-test": "npm run check:runtime && electron-builder --config electron-builder.package-test.js",
+    "pack": "npm run check:runtime && electron-builder --dir --config electron-builder.prod.js",
+    "dist": "npm run check:runtime && electron-builder --config electron-builder.prod.js && node server/scripts/archive-production-dmg.js",
+    "pack:dev": "npm run check:runtime && electron-builder --dir --config electron-builder.dev.js",
+    "dist:dev": "npm run check:runtime && electron-builder --config electron-builder.dev.js",
     "predesktop": "npm run check:runtime",
     "desktop": "electron desktop/main.js",
     "desktop:dev": "ENCODER_ENV_FILE=.env.dev npm run desktop",
-    "desktop:package-test": "ENCODER_ENV_FILE=.env.package-test npm run desktop",
-    "packaged:package-test": "node server/scripts/launch-packaged-package-test.js"
+    "packaged:dev": "node server/scripts/launch-packaged-dev.js"
   },
   "build": {
     "appId": "dev.itsy.videoencoder",

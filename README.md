@@ -79,23 +79,22 @@ cp .env.dev.example .env.dev
 npm run start:dev
 ```
 
-Use the isolated package-test lane from the repo:
+Use the same dev lane for the Electron app:
 
 ```bash
-cp .env.package-test.example .env.package-test
-npm run desktop:package-test
+npm run desktop:dev
 ```
 
-Each lane should use its own `ENCODER_PORT`, `ENCODER_APP_DATA_ROOT`, `ENCODER_CACHE_ROOT`, `ENCODER_LOGS_ROOT`, Inbox, and Outbox. This allows a stable encoder to keep running while repo or packaged builds are tested separately.
+Each lane should use its own `ENCODER_PORT`, `ENCODER_APP_DATA_ROOT`, `ENCODER_CACHE_ROOT`, `ENCODER_LOGS_ROOT`, Inbox, and Outbox. This allows a stable encoder to keep running while dev or packaged dev builds are tested separately.
 
-To launch an unpacked packaged app against the package-test lane:
+To launch an unpacked packaged app against the dev lane:
 
 ```bash
-npm run pack:package-test
-npm run packaged:package-test
+npm run pack:dev
+npm run packaged:dev
 ```
 
-Do not use the normal `dist/Video Encoder.app` for package-test while a stable encoder is running. The dedicated package-test build has its own app name, bundle id, port, and Library defaults so Finder launches do not collide with the stable app.
+Do not use the normal `dist/Video Encoder.app` for development while a stable encoder is running. The dedicated dev build has its own app name, bundle id, port, and Library defaults so Finder launches do not collide with the stable app.
 
 ## Package
 
@@ -113,10 +112,10 @@ Create distributable macOS artifacts in `dist/`:
 npm run dist
 ```
 
-Create isolated package-test macOS artifacts in `dist-package-test/`:
+Create isolated dev macOS artifacts in `dist-dev/`:
 
 ```bash
-npm run dist:package-test
+npm run dist:dev
 ```
 
 Install from the generated DMG by dragging `Video Encoder.app` into `Applications`. This local build is unsigned until Apple Developer signing/notarization is configured, so macOS may require right-clicking the app and choosing **Open** the first time.
