@@ -166,7 +166,7 @@ function renderActions(item, canReview, retainSourceByDefault) {
           </div>
         </div>
         <div class="nine wide right aligned column">
-          <a class="ui blue button" href="/encoding/setup?id=${encodeURIComponent(item.id)}" title="Redo keeps the current output until the replacement encode succeeds.">
+          <a class="ui blue button" href="/encoding/setup?id=${encodeURIComponent(item.id)}&origin=review" title="Redo keeps the current output until the replacement encode succeeds.">
             <i class="redo icon"></i>
             Redo
           </a>

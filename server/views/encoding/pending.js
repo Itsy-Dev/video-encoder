@@ -76,7 +76,7 @@ module.exports = function renderPending(items, options = {}) {
       ${renderTable(items, [
         ["Actions", item => `
           <div class="ui mini icon buttons">
-            <a class="ui compact basic icon button" href="/encoding/setup?id=${encodeURIComponent(item.id)}" title="Open setup" aria-label="Open setup">
+            <a class="ui compact basic icon button" href="/encoding/setup?id=${encodeURIComponent(item.id)}&origin=pending" title="Open setup" aria-label="Open setup">
               <i class="large fitted orange cog icon"></i>
             </a>
             ${renderDiscardButton(item, { basic: true, compact: true, iconOnly: true })}
