@@ -353,6 +353,12 @@ module.exports = function renderPage({ title, heading, description, state, body,
           throw new Error(message || ("Request failed with status " + response.status));
         }
 
+        const result = await response.json();
+        if (result && typeof result.redirectUrl === "string" && result.redirectUrl) {
+          window.location.href = result.redirectUrl;
+          return;
+        }
+
         window.location.reload();
       }
       catch (error) {

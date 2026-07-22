@@ -5,10 +5,12 @@ const {
     formatDateTime,
     formatDuration
 } = require("./helpers");
+const { buildOriginUrl } = require("../../modules/encoding/navigation");
 
 module.exports = function renderReviewItem(item, {
     encodedPreviewUrl,
     outcome = null,
+    origin = "",
     retainSourceByDefault = true
 } = {}) {
     if (!item) {
@@ -37,7 +39,7 @@ module.exports = function renderReviewItem(item, {
         ? renderReviewData(item, outcome, source, encoded)
         : renderOutcomeData(item, outcome, source, encoded)
       }
-      ${renderActions(item, canReview, retainSourceByDefault)}
+      ${renderActions(item, canReview, retainSourceByDefault, origin)}
     </section>`;
 };
 
@@ -135,13 +137,14 @@ function renderReceiptData(item, outcome) {
       </div>`;
 }
 
-function renderActions(item, canReview, retainSourceByDefault) {
+function renderActions(item, canReview, retainSourceByDefault, origin) {
     if (!canReview) {
         return ``;
     }
 
     const disabledClass = "";
     const sourceAction = retainSourceByDefault ? "retain" : "delete";
+    const setupSource = origin === "history" ? "history" : "review";
 
     return `<section class="ui inverted horizontally fitted segment">
       <div class="ui stackable bottom aligned grid">
@@ -166,12 +169,13 @@ function renderActions(item, canReview, retainSourceByDefault) {
           </div>
         </div>
         <div class="nine wide right aligned column">
-          <a class="ui blue button" href="/encoding/setup?id=${encodeURIComponent(item.id)}" title="Redo keeps the current output until the replacement encode succeeds.">
+          <a class="ui blue button" href="${escapeHtml(buildOriginUrl("/encoding/setup", { id: item.id, source: setupSource }))}" title="Redo keeps the current output until the replacement encode succeeds.">
             <i class="redo icon"></i>
             Redo
           </a>
           <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/reject" data-api-form data-confirm="Reject this encode? The output will be moved to Outbox/rejected and the source receipt will stay available for requeue." style="display: inline-block;">
             <input type="hidden" name="reviewer" value="operator" />
+            <input type="hidden" name="origin" value="${escapeHtml(origin)}" />
             <button type="submit" class="ui red ${disabledClass} button" ${canReview ? "" : "disabled"}>
               <i class="ban icon"></i>
               Reject
@@ -179,6 +183,7 @@ function renderActions(item, canReview, retainSourceByDefault) {
           </form>
           <form method="post" action="/api/encoding/items/${encodeURIComponent(item.id)}/approve" data-api-form data-confirm="Approve this encode and apply the selected source handling?" style="display: inline-block;">
             <input type="hidden" name="reviewer" value="operator" />
+            <input type="hidden" name="origin" value="${escapeHtml(origin)}" />
             <input type="hidden" name="sourceAction" value="${escapeHtml(sourceAction)}" data-source-action-input />
             <button type="submit" class="ui green ${disabledClass} button" ${canReview ? "" : "disabled"}>
               <i class="check icon"></i>
