@@ -1,6 +1,9 @@
 const { escapeHtml } = require("./helpers");
+const { getAppMeta } = require("./app-meta");
 
 module.exports = function renderPage({ title, heading, description, state, body, autoRefreshMs = 0 }) {
+    const appMeta = getAppMeta();
+
     const nav = [
         ["Pending", "/encoding/pending"],
         ["Setup", "/encoding/setup"],
@@ -177,6 +180,9 @@ module.exports = function renderPage({ title, heading, description, state, body,
       </div>
     </section>
     ${body}
+    <section class="ui basic fitted segment" style="padding-top: 0; text-align: right;">
+      <span class="ui small disabled grey text">${escapeHtml(appMeta.versionLabel)}</span>
+    </section>
   </div>
 
   <script src="/shared/jquery/jquery.js"></script>
