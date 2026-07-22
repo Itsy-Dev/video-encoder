@@ -472,7 +472,7 @@ module.exports = function encodingApi(app, database, fileIntake) {
         res.send(renderPage({
             title: "History",
             heading: "History",
-            description: "Approved, rejected, failed, and exported records.",
+            description: "Approved, rejected, failed, cancelled, and discarded records.",
             state,
             body: renderHistory(state.historyItems)
         }));

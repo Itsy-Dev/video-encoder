@@ -79,8 +79,8 @@ function getDiscardBlockedReason(item) {
         return "Review items must be approved or rejected.";
     }
 
-    if (status === "approved" || status === "exported") {
-        return "Already approved/exported.";
+    if (status === "approved") {
+        return "Already approved.";
     }
 
     if (status === "discarded") {
@@ -273,7 +273,6 @@ function statusPillColor(value) {
         paused: "yellow",
         review: "violet",
         approved: "teal",
-        exported: "teal",
         rejected: "red",
         failed: "red",
         cancelled: "grey",

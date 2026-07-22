@@ -17,9 +17,9 @@ const SettingsService = require("../settings/settings.service");
 
 const PENDING_STATES = new Set(["pending"]);
 const ACTIONABLE_STATES = new Set(["pending", "rejected", "failed", "cancelled"]);
-const RESETUP_SOURCE_REQUIRED_STATES = new Set(["approved", "exported"]);
+const RESETUP_SOURCE_REQUIRED_STATES = new Set(["approved"]);
 const REVIEW_STATES = new Set(["review"]);
-const HISTORY_STATES = new Set(["approved", "rejected", "failed", "exported", "cancelled", "discarded"]);
+const HISTORY_STATES = new Set(["approved", "rejected", "failed", "cancelled", "discarded"]);
 const DISCARDABLE_STATES = new Set(["pending", "queued", "rejected", "failed", "cancelled"]);
 const UNQUEUEABLE_STATES = new Set(["queued", "failed", "cancelled", "rejected"]);
 const QUEUE_RELATED_STATES = new Set(["encoding", "paused", "queued", "cancelled", "failed"]);
@@ -123,7 +123,7 @@ module.exports = class EncodingService {
                 queued: items.filter(item => ["queued"].includes(item.status)).length,
                 encoding: items.filter(item => ["encoding", "paused"].includes(item.status)).length,
                 review: items.filter(item => REVIEW_STATES.has(item.status)).length,
-                approved: items.filter(item => ["approved", "exported"].includes(item.status)).length
+                approved: items.filter(item => ["approved"].includes(item.status)).length
             }
         };
     }
@@ -382,16 +382,16 @@ module.exports = class EncodingService {
             await removeIfExists(item.inputAbsPath);
         }
 
-        const exported = await this.repository.upsert({
+        const approved = await this.repository.upsert({
             ...item,
-            status: "exported",
+            status: "approved",
             approvedAt: new Date().toISOString(),
-            lastError: `Exported by ${reviewer || "operator"} with source ${normalizedSourceAction}`
+            lastError: `Approved by ${reviewer || "operator"} with source ${normalizedSourceAction}`
         });
 
-        await this._cleanupApprovedItemFiles(exported, paths);
-        console.log(`[REVIEW] Item approved and exported. id=${exported.id} outbox=${item.outputAbsPath} sourceAction=${normalizedSourceAction}`);
-        return exported;
+        await this._cleanupApprovedItemFiles(approved, paths);
+        console.log(`[REVIEW] Item approved. id=${approved.id} output=${item.outputAbsPath} sourceAction=${normalizedSourceAction}`);
+        return approved;
     }
 
     async rejectItem(id, { reviewer, notes } = {}) {
@@ -1618,8 +1618,8 @@ function getDiscardBlockedMessage(status) {
         return "Item in review must be approved or rejected instead of discarded.";
     }
 
-    if (status === "approved" || status === "exported") {
-        return "Item has already been approved/exported and can no longer be discarded.";
+    if (status === "approved") {
+        return "Item has already been approved and can no longer be discarded.";
     }
 
     if (status === "discarded") {
@@ -1690,7 +1690,7 @@ function getUnqueueBlockedMessage(status) {
         return "Items in review cannot be removed from the queue.";
     }
 
-    if (status === "approved" || status === "exported" || status === "discarded") {
+    if (status === "approved" || status === "discarded") {
         return "Completed items cannot be removed from the queue.";
     }
 

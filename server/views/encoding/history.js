@@ -61,7 +61,7 @@ function renderSourceLabel(item) {
 function renderAction(item, status) {
     const actions = [];
 
-    if (["review", "rejected", "exported", "approved"].includes(status)) {
+    if (["review", "rejected", "approved"].includes(status)) {
         actions.push(`<a class="ui small basic compact icon button" href="${escapeHtml(buildOriginUrl("/encoding/review/item", { id: item.id, source: "history" }))}" title="Open detail" aria-label="Open detail">
           <i class="blue eye icon"></i>
         </a>`);
@@ -79,8 +79,8 @@ function renderAction(item, status) {
 }
 
 function historyDetail(item, status) {
-    if (status === "exported" || status === "approved") {
-        return "Exported to outbox";
+    if (status === "approved") {
+        return "Approved";
     }
 
     if (status === "discarded") {
@@ -109,7 +109,7 @@ function canOpenSetupFromHistory(item, status) {
         return true;
     }
 
-    if (["approved", "exported"].includes(status)) {
+    if (["approved"].includes(status)) {
         return Boolean(item && item.sourceAvailable);
     }
 
