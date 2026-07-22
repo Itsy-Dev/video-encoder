@@ -224,19 +224,19 @@ function setDockIcon() {
 
 function applyPackagedRuntimeDefaults(appName) {
     const profile = process.env.ENCODER_DISTRIBUTION_PROFILE || (
-        String(appName || "").toLowerCase().includes("package test") ? "package-test" : ""
+        String(appName || "").toLowerCase().includes("video encoder dev") ? "dev" : ""
     );
 
-    if (profile !== "package-test") {
+    if (profile !== "dev") {
         return;
     }
 
     setEnvDefault("ENCODER_PORT", "14310");
-    setEnvDefault("ENCODER_APP_DATA_ROOT", "~/Library/Application Support/Video Encoder Package Test");
-    setEnvDefault("ENCODER_CACHE_ROOT", "~/Library/Caches/Video Encoder Package Test");
-    setEnvDefault("ENCODER_LOGS_ROOT", "~/Library/Logs/Video Encoder Package Test");
-    setEnvDefault("ENCODER_DEFAULT_INBOX_ROOT", "~/Movies/Video Encoder Package Test Inbox");
-    setEnvDefault("ENCODER_DEFAULT_OUTBOX_ROOT", "~/Movies/Video Encoder Package Test Outbox");
+    setEnvDefault("ENCODER_APP_DATA_ROOT", "~/Library/Application Support/Video Encoder Dev");
+    setEnvDefault("ENCODER_CACHE_ROOT", "~/Library/Caches/Video Encoder Dev");
+    setEnvDefault("ENCODER_LOGS_ROOT", "~/Library/Logs/Video Encoder Dev");
+    setEnvDefault("ENCODER_DEFAULT_INBOX_ROOT", "~/Movies/Video Encoder Dev Inbox");
+    setEnvDefault("ENCODER_DEFAULT_OUTBOX_ROOT", "~/Movies/Video Encoder Dev Outbox");
 }
 
 function setEnvDefault(key, value) {

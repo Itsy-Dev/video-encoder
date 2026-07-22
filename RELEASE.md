@@ -1,16 +1,15 @@
 # Release Workflow
 
-This project has three runtime lanes. Keep them separate so development and package testing never interrupt a stable production encode.
+This project has two runtime lanes. Keep them separate so development never interrupts a stable production encode.
 
 ## Lanes
 
 | Lane | Command/build | Port | App data | Purpose |
 | --- | --- | --- | --- | --- |
 | Production | `npm run dist` / `Video Encoder.app` | `4300` | `~/Library/Application Support/Video Encoder` | Real operator app and history |
-| Dev | `npm run start:dev` or `npm run desktop:dev` | `14300` | `~/Library/Application Support/Video Encoder Dev` | Repo development |
-| Package test | `npm run dist:package-test` / `Video Encoder Package Test.app` | `14310` | `~/Library/Application Support/Video Encoder Package Test` | Testing packaged app behavior safely |
+| Dev | `npm run start:dev`, `npm run desktop:dev`, or `npm run dist:dev` / `Video Encoder Dev.app` | `14300` for repo dev, `14310` for packaged dev | `~/Library/Application Support/Video Encoder Dev` | Repo and packaged development |
 
-Never launch the production packaged app while the current production encoder is active. Use the package-test app for packaged validation while production is still working.
+Never launch the production packaged app while the current production encoder is active. Use the dev lane for repo or packaged validation while production is still working.
 
 ## Before A Release
 
@@ -37,14 +36,13 @@ cp .env.dev.example .env.dev
 npm run desktop:dev
 ```
 
-4. Run the packaged app in the package-test lane if packaging changed.
+4. Run the packaged app in the dev lane if packaging changed.
 
 ```zsh
-cp .env.package-test.example .env.package-test
-npm run dist:package-test
+npm run dist:dev
 ```
 
-Install or launch only `Video Encoder Package Test.app` for this step. It must use port `14310` and the `Video Encoder Package Test` Library folders.
+Install or launch only `Video Encoder Dev.app` for this step. It must use port `14310` and the `Video Encoder Dev` Library folders.
 
 ## Build Production Artifacts
 
@@ -107,7 +105,7 @@ If the tag already exists, stop and inspect before changing anything.
 Start Windows packaging after the macOS release workflow is repeatable:
 
 1. Production app installs and runs from `/Applications`.
-2. Dev and package-test lanes are isolated from production.
+2. Dev lane is isolated from production.
 3. Release steps are documented and followed without terminal archaeology.
 4. SQLite, runtime paths, logs, cache, bundled ffmpeg, and startup locking are stable on macOS.
 
