@@ -21,7 +21,8 @@ const {
     SubtitleMode,
     TierFallback,
     Tune,
-    VideoCodec
+    VideoCodec,
+    X264Tune
 } = EncodingOptions;
 
 const profileList = [
@@ -50,7 +51,8 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.AUTO
+        scaling: ScalingAlgorithm.AUTO,
+        x264Params: X264Tune.BROWSER_COMPATIBILITY
     },
     {
         id: "library_optimize",
@@ -77,7 +79,8 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.AUTO
+        scaling: ScalingAlgorithm.AUTO,
+        x264Params: X264Tune.BALANCED
     },
     {
         id: "premium_qhd",
@@ -104,7 +107,8 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.LANCZOS
+        scaling: ScalingAlgorithm.LANCZOS,
+        x264Params: X264Tune.PREMIUM
     },
     {
         id: "balanced_qhd",
@@ -131,7 +135,8 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.LANCZOS
+        scaling: ScalingAlgorithm.LANCZOS,
+        x264Params: X264Tune.BALANCED
     },
     {
         id: "premium_hd",
@@ -158,7 +163,8 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.LANCZOS
+        scaling: ScalingAlgorithm.LANCZOS,
+        x264Params: X264Tune.PREMIUM
     },
     {
         id: "balanced_hd",
@@ -185,7 +191,8 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.LANCZOS
+        scaling: ScalingAlgorithm.LANCZOS,
+        x264Params: X264Tune.BALANCED
     },
     {
         id: "balanced_compression",
@@ -212,7 +219,8 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.AUTO
+        scaling: ScalingAlgorithm.AUTO,
+        x264Params: X264Tune.BALANCED_COMPRESSION
     },
     {
         id: "archive_hd",
@@ -239,7 +247,8 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.AUTO
+        scaling: ScalingAlgorithm.AUTO,
+        x264Params: X264Tune.ARCHIVE
     },
     {
         id: "extreme_archive",
@@ -266,7 +275,8 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.AUTO
+        scaling: ScalingAlgorithm.AUTO,
+        x264Params: X264Tune.EXTREME_ARCHIVE
     },
     {
         id: "copy_container",

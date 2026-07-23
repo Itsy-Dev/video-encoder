@@ -242,6 +242,16 @@ const ScalingAlgorithm = {
     SPLINE: { id: "spline", label: "Spline" }
 };
 
+const X264Tune = Object.freeze({
+    BROWSER_COMPATIBILITY: "aq-mode=1:aq-strength=0.6:rc-lookahead=20",
+    PREMIUM: "aq-mode=1:aq-strength=0.8:psy-rd=1.0,0.15:rc-lookahead=40",
+    BALANCED: "aq-mode=1:aq-strength=0.7:psy-rd=0.9,0.10:rc-lookahead=30",
+    BALANCED_COMPRESSION: "aq-mode=1:aq-strength=0.65:psy-rd=0.8,0.05:rc-lookahead=30",
+    ARCHIVE: "aq-mode=1:aq-strength=0.6:psy-rd=0.8,0.00:rc-lookahead=30",
+    EXTREME_ARCHIVE: "aq-mode=1:aq-strength=0.5:rc-lookahead=20",
+    LEGACY: "aq-mode=1:aq-strength=0.6:psy-rd=0.7,0.00:rc-lookahead=20"
+});
+
 const familyOrder = [
     AspectFamily.CINEMA_17_9,
     AspectFamily.LANDSCAPE_16_10,
@@ -312,6 +322,7 @@ const EncodingOptions = {
     ThreadMode,
     CRF,
     ScalingAlgorithm,
+    X264Tune,
     getAspectFamilies,
     getAspectFamilyById,
     getResolutionTiers,
