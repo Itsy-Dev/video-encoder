@@ -1,6 +1,6 @@
 # Video Encoder
 
-Standalone video intake, encoding, review, and export app with a browser UI, background worker, persistent settings, and operator-focused logging.
+Standalone video intake, browser-compatibility encoding, review, and export app with a browser UI, background worker, persistent settings, and operator-focused logging.
 
 ## Status
 
@@ -16,6 +16,8 @@ The app is built around a simple operator workflow:
 4. run one active encode worker at a time
 5. review the output
 6. approve to `outbox/`, reject it, or stop it into `outbox/cancelled/`
+
+Its purpose is to convert videos into browser-compatible outputs across different quality and compression priorities, from high-quality downscales to more storage-focused compression profiles.
 
 The current UI includes:
 
