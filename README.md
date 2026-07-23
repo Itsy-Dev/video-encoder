@@ -39,6 +39,8 @@ npm install
 cp .env.example .env
 ```
 
+The first packaged build also prepares vendored `ffmpeg` and `ffprobe` binaries automatically for the target platform. A fresh checkout may need network access during that media-prepare step.
+
 ## Run
 
 Start the web server:
@@ -131,6 +133,8 @@ npm run dist:dev:win
 ```
 
 macOS installs from the generated DMG by dragging `Video Encoder.app` into `Applications`. Windows installs from the generated `.exe` installer. Local builds are unsigned until signing is configured, so the OS may show first-launch warnings.
+
+Packaged build commands run the media sync step automatically, so a fresh environment does not need committed vendor binaries as long as it can fetch the required platform binaries once.
 
 The packaged app keeps user data outside the app bundle in OS-managed locations. Replacing the app during an update should not remove history, settings, cache, logs, Inbox, or Outbox files.
 
