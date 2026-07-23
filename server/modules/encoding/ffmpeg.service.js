@@ -207,6 +207,10 @@ function buildProfileArgs(profile, sourceMetadata, runtime = DEFAULT_FFMPEG_RUNT
         args.push("-level:v", String(profile.level.id));
     }
 
+    if (profile.x264Params && videoCodec === "libx264") {
+        args.push("-x264-params", String(profile.x264Params));
+    }
+
     if (videoFilter) {
         args.push(
             "-vf",

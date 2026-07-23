@@ -21,7 +21,8 @@ const {
     SubtitleMode,
     TierFallback,
     Tune,
-    VideoCodec
+    VideoCodec,
+    X264Tune
 } = EncodingOptions;
 
 const profileList = [
@@ -50,7 +51,8 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.AUTO
+        scaling: ScalingAlgorithm.AUTO,
+        x264Params: X264Tune.BROWSER_COMPATIBILITY
     },
     {
         id: "library_optimize",
@@ -77,7 +79,36 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.AUTO
+        scaling: ScalingAlgorithm.AUTO,
+        x264Params: X264Tune.BALANCED
+    },
+    {
+        id: "legacy_optimize",
+        label: "Legacy Optimize",
+        description: "Recompresses older or already limited 720p and 1080p sources more gently so existing artifacts are less likely to be emphasized.",
+        intent: ProfileIntent.RECOMPRESS,
+        scaleMode: ScaleMode.PRESERVE_SOURCE,
+        targetTier: ResolutionTier.ORIGINAL,
+        tierFallback: TierFallback.PRESERVE_SOURCE,
+        customFamilyFallback: CustomFamilyFallback.PRESERVE_SOURCE,
+        container: Container.MP4,
+        videoCodec: VideoCodec.H264,
+        audioCodec: AudioCodec.COPY,
+        crf: 20,
+        preset: Preset.SLOW,
+        tune: Tune.NONE,
+        pixelFormat: PixelFormat.YUV420P,
+        profile: Profile.HIGH,
+        level: Level.AUTO,
+        audioBitrate: AudioBitrate.COPY,
+        audioChannels: AudioChannels.COPY,
+        sampleRate: SampleRate.COPY,
+        fastStart: FastStart.ON,
+        metadata: Metadata.COPY,
+        chapters: Chapters.COPY,
+        subtitleMode: SubtitleMode.REMOVE,
+        scaling: ScalingAlgorithm.AUTO,
+        x264Params: X264Tune.LEGACY
     },
     {
         id: "premium_qhd",
@@ -104,7 +135,8 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.LANCZOS
+        scaling: ScalingAlgorithm.LANCZOS,
+        x264Params: X264Tune.PREMIUM
     },
     {
         id: "balanced_qhd",
@@ -131,7 +163,8 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.LANCZOS
+        scaling: ScalingAlgorithm.LANCZOS,
+        x264Params: X264Tune.BALANCED
     },
     {
         id: "premium_hd",
@@ -158,7 +191,8 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.LANCZOS
+        scaling: ScalingAlgorithm.LANCZOS,
+        x264Params: X264Tune.PREMIUM
     },
     {
         id: "balanced_hd",
@@ -185,7 +219,8 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.LANCZOS
+        scaling: ScalingAlgorithm.LANCZOS,
+        x264Params: X264Tune.BALANCED
     },
     {
         id: "balanced_compression",
@@ -212,7 +247,8 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.AUTO
+        scaling: ScalingAlgorithm.AUTO,
+        x264Params: X264Tune.BALANCED_COMPRESSION
     },
     {
         id: "archive_hd",
@@ -239,7 +275,8 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.AUTO
+        scaling: ScalingAlgorithm.AUTO,
+        x264Params: X264Tune.ARCHIVE
     },
     {
         id: "extreme_archive",
@@ -266,7 +303,8 @@ const profileList = [
         metadata: Metadata.COPY,
         chapters: Chapters.COPY,
         subtitleMode: SubtitleMode.REMOVE,
-        scaling: ScalingAlgorithm.AUTO
+        scaling: ScalingAlgorithm.AUTO,
+        x264Params: X264Tune.EXTREME_ARCHIVE
     },
     {
         id: "copy_container",
