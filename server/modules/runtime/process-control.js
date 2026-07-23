@@ -75,29 +75,42 @@ public static class ProcessThreadControl
 }
 "@
 
-$operation = $args[0]
-$processId = [int]$args[1]
+function Invoke-ProcessControl {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Operation,
+        [Parameter(Mandatory = $true)]
+        [int]$ProcessId
+    )
 
-if ($operation -eq 'suspend') {
-    [ProcessThreadControl]::SuspendProcess($processId)
-    exit 0
+    if ($Operation -eq 'suspend') {
+        [ProcessThreadControl]::SuspendProcess($ProcessId)
+        return
+    }
+
+    if ($Operation -eq 'resume') {
+        [ProcessThreadControl]::ResumeProcess($ProcessId)
+        return
+    }
+
+    throw "Unsupported process control operation: $Operation"
 }
-
-if ($operation -eq 'resume') {
-    [ProcessThreadControl]::ResumeProcess($processId)
-    exit 0
-}
-
-throw "Unsupported process control operation: $operation"
 `;
 
 const WINDOWS_PRIORITY_SCRIPT = `
 $ErrorActionPreference = 'Stop'
 
-$processId = [int]$args[0]
-$priority = [string]$args[1]
-$process = Get-Process -Id $processId
-$process.PriorityClass = $priority
+function Set-ProcessPriorityClass {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$ProcessId,
+        [Parameter(Mandatory = $true)]
+        [string]$Priority
+    )
+
+    $process = Get-Process -Id $ProcessId
+    $process.PriorityClass = $Priority
+}
 `;
 
 function suspendProcess(pid) {
@@ -161,15 +174,16 @@ function applyProcessPriority(pid, priority) {
 }
 
 function runWindowsProcessControl(operation, pid) {
-    const command = Buffer.from(WINDOWS_SUSPEND_RESUME_SCRIPT, "utf16le").toString("base64");
+    const command = encodePowerShellCommand([
+        WINDOWS_SUSPEND_RESUME_SCRIPT,
+        `Invoke-ProcessControl -Operation ${toPowerShellStringLiteral(operation)} -ProcessId ${Number(pid)}`
+    ].join("\n"));
     const result = spawnSync("powershell.exe", [
         "-NoLogo",
         "-NoProfile",
         "-NonInteractive",
         "-ExecutionPolicy", "Bypass",
-        "-EncodedCommand", command,
-        operation,
-        String(pid)
+        "-EncodedCommand", command
     ], {
         encoding: "utf8"
     });
@@ -185,15 +199,16 @@ function runWindowsProcessControl(operation, pid) {
 }
 
 function runWindowsPriorityControl(pid, priorityClass) {
-    const command = Buffer.from(WINDOWS_PRIORITY_SCRIPT, "utf16le").toString("base64");
+    const command = encodePowerShellCommand([
+        WINDOWS_PRIORITY_SCRIPT,
+        `Set-ProcessPriorityClass -ProcessId ${Number(pid)} -Priority ${toPowerShellStringLiteral(priorityClass)}`
+    ].join("\n"));
     const result = spawnSync("powershell.exe", [
         "-NoLogo",
         "-NoProfile",
         "-NonInteractive",
         "-ExecutionPolicy", "Bypass",
-        "-EncodedCommand", command,
-        String(pid),
-        String(priorityClass)
+        "-EncodedCommand", command
     ], {
         encoding: "utf8"
     });
@@ -232,6 +247,14 @@ function mapWindowsPriorityClass(priority) {
 
 function isValidPid(pid) {
     return Number.isInteger(pid) && pid > 0;
+}
+
+function encodePowerShellCommand(script) {
+    return Buffer.from(String(script || ""), "utf16le").toString("base64");
+}
+
+function toPowerShellStringLiteral(value) {
+    return `'${String(value == null ? "" : value).replace(/'/g, "''")}'`;
 }
 
 module.exports = {

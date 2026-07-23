@@ -809,7 +809,7 @@ module.exports = class EncodingService {
 
             if (ffmpegResult && ffmpegResult.stopped) {
                 const partialOutput = await preserveStoppedOutputFile({
-                    outputAbsPath,
+                    sourceOutputAbsPath: workingOutputAbsPath,
                     outboxRootAbsPath: paths.outbox,
                     inboxRelativeDir: encodingItem.inboxRelativeDir
                 });
@@ -1451,11 +1451,11 @@ function buildOutputFilename(filename, profileId) {
     return `${basename || "output"}${containerExtension}`;
 }
 
-async function preserveStoppedOutputFile({ outputAbsPath, outboxRootAbsPath, inboxRelativeDir }) {
+async function preserveStoppedOutputFile({ sourceOutputAbsPath, outboxRootAbsPath, inboxRelativeDir }) {
     const cancelledDirAbs = path.join(outboxRootAbsPath, "cancelled", normalizeRelativeDir(inboxRelativeDir));
     await fsp.mkdir(cancelledDirAbs, { recursive: true });
-    const partialOutputAbsPath = await buildUniquePartialOutputPath(cancelledDirAbs, outputAbsPath);
-    await moveFileIntoPlace(outputAbsPath, partialOutputAbsPath);
+    const partialOutputAbsPath = await buildUniquePartialOutputPath(cancelledDirAbs, sourceOutputAbsPath);
+    await moveFileIntoPlace(sourceOutputAbsPath, partialOutputAbsPath);
 
     return {
         outputAbsPath: partialOutputAbsPath,
