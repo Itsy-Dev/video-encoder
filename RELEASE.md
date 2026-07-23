@@ -6,8 +6,8 @@ This project has two runtime lanes. Keep them separate so development never inte
 
 | Lane | Command/build | Port | App data | Purpose |
 | --- | --- | --- | --- | --- |
-| Production | `npm run dist` / `Video Encoder.app` | `4300` | `~/Library/Application Support/Video Encoder` | Real operator app and history |
-| Dev | `npm run start:dev`, `npm run desktop:dev`, or `npm run dist:dev` / `Video Encoder Dev.app` | `14300` for repo dev, `14310` for packaged dev | `~/Library/Application Support/Video Encoder Dev` | Repo and packaged development |
+| Production | `npm run dist` or `npm run dist:win` | `4300` | OS-native app data root for the production lane | Real operator app and history |
+| Dev | `npm run start:dev`, `npm run desktop:dev`, `npm run dist:dev`, or `npm run dist:dev:win` | `14300` for repo dev, `14310` for packaged dev | OS-native app data root for the dev lane | Repo and packaged development |
 
 Never launch the production packaged app while the current production encoder is active. Use the dev lane for repo or packaged validation while production is still working.
 
@@ -42,7 +42,7 @@ npm run desktop:dev
 npm run dist:dev
 ```
 
-Install or launch only `Video Encoder Dev.app` for this step. It must use port `14310` and the `Video Encoder Dev` Library folders.
+Install or launch only the packaged dev build for this step. It must use port `14310` and the dev-lane OS storage roots.
 
 ## Build Production Artifacts
 
@@ -58,6 +58,18 @@ Expected artifacts:
 ```text
 dist/Video Encoder-<version>-arm64.dmg
 dist/Video Encoder-<version>-arm64.zip
+```
+
+Windows artifacts are produced with:
+
+```zsh
+npm run dist:win
+```
+
+Expected Windows artifact:
+
+```text
+dist/Video Encoder-<version>-x64.exe
 ```
 
 Do not open the production app yet if the current production encoder is still running.
@@ -85,6 +97,14 @@ Runtime paths: cache=/Users/<user>/Library/Caches/Video Encoder
 Runtime paths: logs=/Users/<user>/Library/Logs/Video Encoder
 ```
 
+On Windows, verify the same startup log lines point to the Windows production lane:
+
+```text
+Runtime paths: appData=C:\Users\<user>\AppData\Roaming\Video Encoder
+Runtime paths: cache=C:\Users\<user>\AppData\Local\Video Encoder\Cache
+Runtime paths: logs=C:\Users\<user>\AppData\Local\Video Encoder\Logs
+```
+
 The production app should use port `4300`. If another process is already using that port, the app must refuse to start before database recovery or working-file cleanup runs.
 
 ## Tagging
@@ -100,13 +120,18 @@ git push origin v<version>
 
 If the tag already exists, stop and inspect before changing anything.
 
-## Windows Timing
+## Windows Workflow
 
-Start Windows packaging after the macOS release workflow is repeatable:
+Use this after the macOS release workflow is repeatable:
 
 1. Production app installs and runs from `/Applications`.
 2. Dev lane is isolated from production.
 3. Release steps are documented and followed without terminal archaeology.
 4. SQLite, runtime paths, logs, cache, bundled ffmpeg, and startup locking are stable on macOS.
 
-Windows work should begin by validating the same abstractions on Windows app data, cache, logs, ports, SQLite path, bundled ffmpeg, installer identity, and runtime lock behavior.
+Then validate the same abstractions on Windows:
+
+1. Build with `npm run dist:win` or `npm run dist:dev:win`.
+2. Install from the generated `.exe`.
+3. Confirm startup paths, runtime lock behavior, bundled ffmpeg, and SQLite location.
+4. Test intake, encode, pause, resume, stop, review, export, and logs on Windows 11.

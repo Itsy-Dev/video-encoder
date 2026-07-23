@@ -8,13 +8,13 @@ const appExecutable = resolvePackagedDevExecutable();
 
 if (!fs.existsSync(envPath)) {
     console.error(`[PACKAGED DEV] Missing ${envPath}`);
-    console.error("[PACKAGED DEV] Create it first with: cp .env.dev.example .env.dev");
+    console.error(`[PACKAGED DEV] Create it first with: ${getEnvSetupCommand()}`);
     process.exit(1);
 }
 
 if (!fs.existsSync(appExecutable)) {
     console.error(`[PACKAGED DEV] Missing packaged app executable: ${appExecutable}`);
-    console.error("[PACKAGED DEV] Build it first with: npm run pack:dev");
+    console.error(`[PACKAGED DEV] Build it first with: ${getPackagedDevBuildCommand()}`);
     process.exit(1);
 }
 
@@ -57,4 +57,20 @@ function resolvePackagedDevExecutable() {
 
     const existing = candidates.find(candidate => fs.existsSync(candidate));
     return existing || candidates[0];
+}
+
+function getEnvSetupCommand() {
+    if (process.platform === "win32") {
+        return "copy .env.dev.example .env.dev";
+    }
+
+    return "cp .env.dev.example .env.dev";
+}
+
+function getPackagedDevBuildCommand() {
+    if (process.platform === "win32") {
+        return "npm run pack:dev:win";
+    }
+
+    return "npm run pack:dev";
 }

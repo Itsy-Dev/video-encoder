@@ -7,7 +7,7 @@ const { getDistributionProfile } = require("../server/modules/config/runtime-pro
 const APP_NAME = process.env.ENCODER_APP_NAME || app.getName() || "Video Encoder";
 const APP_URL_PATH = "/encoding/pending";
 const APP_ICON_ABS = path.join(__dirname, "assets", "icon.png");
-const APP_TRAY_ICON_ABS = path.join(__dirname, "assets", "trayTemplate.png");
+const APP_TRAY_ICON_ABS = resolveTrayIconPath();
 
 applyRuntimeProfile(APP_NAME);
 
@@ -231,4 +231,12 @@ function setEnvDefault(key, value) {
     if (!process.env[key]) {
         process.env[key] = value;
     }
+}
+
+function resolveTrayIconPath() {
+    if (process.platform === "darwin") {
+        return path.join(__dirname, "assets", "trayTemplate.png");
+    }
+
+    return APP_ICON_ABS;
 }

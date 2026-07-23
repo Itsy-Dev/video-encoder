@@ -15,7 +15,9 @@ Add Windows 11 support for Video Encoder in a way that works for internal use fi
 
 - Completed: Windows packaging targets and installer setup
 - Completed: runtime profile defaults now resolve by lane and OS at runtime
-- In progress: Windows-safe ffmpeg job controls
+- Completed: Windows-safe ffmpeg job controls
+- Completed: Windows process priority mapping
+- In progress: Windows desktop app behavior cleanup
 
 ## Game Plan
 
@@ -96,6 +98,12 @@ Summary:
 - map process priority controls to Windows equivalents
 - avoid settings that can make the machine unstable or unresponsive
 
+Current status:
+
+- ffmpeg thread settings continue to apply cross-platform
+- Windows process priority now maps to Windows-native priority classes
+- UI label is now platform-neutral instead of Unix-specific
+
 ### 8. Finish Windows app behavior
 
 Make the desktop app feel natural on Windows during launch and normal use.
@@ -105,6 +113,11 @@ Summary:
 - remove mac-only assumptions from startup behavior
 - make browser opening behave correctly on Windows
 - ensure tray and packaged app behavior are Windows-safe
+
+Current status:
+
+- Windows now uses the normal app icon for tray behavior instead of the macOS template tray image
+- packaged dev launcher instructions now switch to Windows-friendly commands when run on Windows
 
 ### 9. Update documentation
 

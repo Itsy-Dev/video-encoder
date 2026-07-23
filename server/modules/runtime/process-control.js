@@ -91,6 +91,15 @@ if ($operation -eq 'resume') {
 throw "Unsupported process control operation: $operation"
 `;
 
+const WINDOWS_PRIORITY_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+
+$processId = [int]$args[0]
+$priority = [string]$args[1]
+$process = Get-Process -Id $processId
+$process.PriorityClass = $priority
+`;
+
 function suspendProcess(pid) {
     if (!isValidPid(pid)) {
         throw new Error("suspendProcess requires a valid pid");
@@ -133,6 +142,24 @@ function terminateProcess(pid) {
     return true;
 }
 
+function applyProcessPriority(pid, priority) {
+    if (!isValidPid(pid)) {
+        return false;
+    }
+
+    if (priority == null || priority === "") {
+        return false;
+    }
+
+    if (process.platform === "win32") {
+        const priorityClass = mapWindowsPriorityClass(priority);
+        runWindowsPriorityControl(pid, priorityClass);
+        return true;
+    }
+
+    return false;
+}
+
 function runWindowsProcessControl(operation, pid) {
     const command = Buffer.from(WINDOWS_SUSPEND_RESUME_SCRIPT, "utf16le").toString("base64");
     const result = spawnSync("powershell.exe", [
@@ -157,6 +184,52 @@ function runWindowsProcessControl(operation, pid) {
     }
 }
 
+function runWindowsPriorityControl(pid, priorityClass) {
+    const command = Buffer.from(WINDOWS_PRIORITY_SCRIPT, "utf16le").toString("base64");
+    const result = spawnSync("powershell.exe", [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy", "Bypass",
+        "-EncodedCommand", command,
+        String(pid),
+        String(priorityClass)
+    ], {
+        encoding: "utf8"
+    });
+
+    if (result.error) {
+        throw result.error;
+    }
+
+    if (result.status !== 0) {
+        const details = String(result.stderr || result.stdout || "").trim() || `exit code ${result.status}`;
+        throw new Error(`Windows process priority update failed for pid ${pid}: ${details}`);
+    }
+}
+
+function mapWindowsPriorityClass(priority) {
+    const value = Number(priority);
+
+    if (!Number.isFinite(value)) {
+        return "BelowNormal";
+    }
+
+    if (value >= 15) {
+        return "Idle";
+    }
+
+    if (value >= 10) {
+        return "BelowNormal";
+    }
+
+    if (value >= 0) {
+        return "Normal";
+    }
+
+    return "AboveNormal";
+}
+
 function isValidPid(pid) {
     return Number.isInteger(pid) && pid > 0;
 }
@@ -164,5 +237,6 @@ function isValidPid(pid) {
 module.exports = {
     suspendProcess,
     resumeProcess,
-    terminateProcess
+    terminateProcess,
+    applyProcessPriority
 };

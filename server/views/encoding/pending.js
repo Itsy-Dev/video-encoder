@@ -18,7 +18,7 @@ module.exports = function renderPending(items, options = {}) {
                 <div>
                   <i class="large cloud download icon"></i>
                   <div class="content" style="margin-top: 0.5rem;">Drop Video Files Here</div>
-                                <span class="ui small grey text">Drop videos from Finder here or choose them from disk, </br> then route them into a subdirectory like <code>library</code>.</span>
+                                <span class="ui small grey text">Drop videos here or choose them from disk, </br> then route them into a subdirectory like <code>library</code>.</span>
 
                 </div>
               </div>

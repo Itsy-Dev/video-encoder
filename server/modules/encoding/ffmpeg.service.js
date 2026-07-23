@@ -3,7 +3,7 @@ const fsp = fs.promises;
 const path = require("path");
 const EventEmitter = require("events");
 const { spawn, spawnSync } = require("child_process");
-const { suspendProcess, resumeProcess, terminateProcess } = require("../runtime/process-control");
+const { suspendProcess, resumeProcess, terminateProcess, applyProcessPriority } = require("../runtime/process-control");
 const encodingProfiles = require("./encoding-profiles");
 const { buildSafeScaleFilter, resolveScalePlan } = require("./scale-policy");
 const { getFfmpegBin } = require("./media-binaries");
@@ -298,6 +298,15 @@ function createEncodingHandle({ command, args, outputAbsPath, profileId, process
     const child = spawn(spawnCommand, spawnArgs, {
         stdio: ["pipe", "pipe", "pipe"]
     });
+
+    if (process.platform === "win32" && processPriority != null) {
+        try {
+            applyProcessPriority(child.pid, processPriority);
+        }
+        catch (error) {
+            console.warn(`[FFMPEG] Unable to apply Windows process priority for pid=${child.pid}: ${error.message || error}`);
+        }
+    }
 
     let stdout = "";
     let stderr = "";
