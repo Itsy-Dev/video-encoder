@@ -1,24 +1,29 @@
 const fs = require("fs");
 const path = require("path");
 
-const { getProductionCurrentOutputDir } = require("../../build-output-paths");
+const {
+    getProductionArchiveOutputDir,
+    getProductionCurrentOutputDir,
+    resolveBuildPlatform
+} = require("../../build-output-paths");
 
 const projectRoot = path.resolve(__dirname, "..", "..");
-const currentOutputDir = path.join(projectRoot, getProductionCurrentOutputDir());
-const archiveRootDir = path.join(projectRoot, "dist", "production", "archive");
+const targetPlatform = resolveBuildPlatform();
+const currentOutputDir = path.join(projectRoot, getProductionCurrentOutputDir(targetPlatform));
+const archiveOutputDir = path.join(projectRoot, getProductionArchiveOutputDir(targetPlatform));
 
-const existingDmgFiles = fs.existsSync(currentOutputDir)
-    ? fs.readdirSync(currentOutputDir).filter(name => name.toLowerCase().endsWith(".dmg"))
+const existingArtifacts = fs.existsSync(currentOutputDir)
+    ? fs.readdirSync(currentOutputDir).filter(name => isArchiveableArtifact(name))
     : [];
 
-for (const filename of existingDmgFiles) {
+for (const filename of existingArtifacts) {
     const version = parseVersionFromArtifactName(filename);
     if (!version) {
-        console.warn(`[PREP PROD] Skipping DMG with unrecognized version pattern: ${filename}`);
+        console.warn(`[PREP PROD] Skipping artifact with unrecognized version pattern: ${filename}`);
         continue;
     }
 
-    const archiveDir = path.join(archiveRootDir, version);
+    const archiveDir = path.join(path.dirname(archiveOutputDir), version);
     fs.mkdirSync(archiveDir, { recursive: true });
 
     const sourceAbsPath = path.join(currentOutputDir, filename);
@@ -32,8 +37,12 @@ fs.mkdirSync(currentOutputDir, { recursive: true });
 
 console.log(`[PREP PROD] Prepared ${currentOutputDir}`);
 
+function isArchiveableArtifact(filename) {
+    return /\.(dmg|zip|exe|appx|msi|blockmap|ya?ml)$/i.test(String(filename || ""));
+}
+
 function parseVersionFromArtifactName(filename) {
-    const match = String(filename || "").match(/-(\d+(?:\.\d+)+)-[^-]+\.(dmg)$/i);
+    const match = String(filename || "").match(/-(\d+(?:\.\d+)+)-[^-]+\.[^.]+$/i);
     if (!match) {
         return "";
     }

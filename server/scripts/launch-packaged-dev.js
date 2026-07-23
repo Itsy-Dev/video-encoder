@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
+const { getDevOutputDir } = require("../../build-output-paths");
 
 const projectRoot = path.resolve(__dirname, "..", "..");
 const envPath = path.join(projectRoot, ".env.dev");
@@ -45,14 +46,15 @@ child.on("exit", (code, signal) => {
 });
 
 function resolvePackagedDevExecutable() {
+    const devOutputDir = path.join(projectRoot, getDevOutputDir());
     const candidates = process.platform === "win32"
         ? [
-            path.join(projectRoot, "dist", "dev", "win-unpacked", "Video Encoder Dev.exe")
+            path.join(devOutputDir, "win-unpacked", "Video Encoder Dev.exe")
         ]
         : [
-            path.join(projectRoot, "dist", "dev", "mac-arm64", "Video Encoder Dev.app", "Contents", "MacOS", "Video Encoder Dev"),
-            path.join(projectRoot, "dist", "dev", "mac", "Video Encoder Dev.app", "Contents", "MacOS", "Video Encoder Dev"),
-            path.join(projectRoot, "dist", "dev", "mac-x64", "Video Encoder Dev.app", "Contents", "MacOS", "Video Encoder Dev")
+            path.join(devOutputDir, "mac-arm64", "Video Encoder Dev.app", "Contents", "MacOS", "Video Encoder Dev"),
+            path.join(devOutputDir, "mac", "Video Encoder Dev.app", "Contents", "MacOS", "Video Encoder Dev"),
+            path.join(devOutputDir, "mac-x64", "Video Encoder Dev.app", "Contents", "MacOS", "Video Encoder Dev")
         ];
 
     const existing = candidates.find(candidate => fs.existsSync(candidate));
