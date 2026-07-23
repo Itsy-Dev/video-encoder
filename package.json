@@ -1,6 +1,6 @@
 {
   "name": "video-encoder",
-  "version": "0.6.4",
+  "version": "0.7.0",
   "description": "A local macOS video encoding workflow app.",
   "author": "Itsy Dev",
   "private": true,
