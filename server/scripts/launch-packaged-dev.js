@@ -1,29 +1,21 @@
 const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
+const { getDevOutputDir } = require("../../build-output-paths");
 
 const projectRoot = path.resolve(__dirname, "..", "..");
 const envPath = path.join(projectRoot, ".env.dev");
-const appExecutable = path.join(
-    projectRoot,
-    "dist",
-    "dev",
-    "mac-arm64",
-    "Video Encoder Dev.app",
-    "Contents",
-    "MacOS",
-    "Video Encoder Dev"
-);
+const appExecutable = resolvePackagedDevExecutable();
 
 if (!fs.existsSync(envPath)) {
     console.error(`[PACKAGED DEV] Missing ${envPath}`);
-    console.error("[PACKAGED DEV] Create it first with: cp .env.dev.example .env.dev");
+    console.error(`[PACKAGED DEV] Create it first with: ${getEnvSetupCommand()}`);
     process.exit(1);
 }
 
 if (!fs.existsSync(appExecutable)) {
     console.error(`[PACKAGED DEV] Missing packaged app executable: ${appExecutable}`);
-    console.error("[PACKAGED DEV] Build it first with: npm run pack:dev");
+    console.error(`[PACKAGED DEV] Build it first with: ${getPackagedDevBuildCommand()}`);
     process.exit(1);
 }
 
@@ -34,7 +26,8 @@ const child = spawn(appExecutable, {
     env: {
         ...process.env,
         ENCODER_ENV_FILE: envPath,
-        ENCODER_DISTRIBUTION_PROFILE: "dev"
+        ENCODER_DISTRIBUTION_PROFILE: "dev",
+        ENCODER_PORT: "14310"
     }
 });
 
@@ -51,3 +44,35 @@ child.on("exit", (code, signal) => {
 
     process.exit(code == null ? 1 : code);
 });
+
+function resolvePackagedDevExecutable() {
+    const devOutputDir = path.join(projectRoot, getDevOutputDir());
+    const candidates = process.platform === "win32"
+        ? [
+            path.join(devOutputDir, "win-unpacked", "Video Encoder Dev.exe")
+        ]
+        : [
+            path.join(devOutputDir, "mac-arm64", "Video Encoder Dev.app", "Contents", "MacOS", "Video Encoder Dev"),
+            path.join(devOutputDir, "mac", "Video Encoder Dev.app", "Contents", "MacOS", "Video Encoder Dev"),
+            path.join(devOutputDir, "mac-x64", "Video Encoder Dev.app", "Contents", "MacOS", "Video Encoder Dev")
+        ];
+
+    const existing = candidates.find(candidate => fs.existsSync(candidate));
+    return existing || candidates[0];
+}
+
+function getEnvSetupCommand() {
+    if (process.platform === "win32") {
+        return "copy .env.dev.example .env.dev";
+    }
+
+    return "cp .env.dev.example .env.dev";
+}
+
+function getPackagedDevBuildCommand() {
+    if (process.platform === "win32") {
+        return "npm run pack:dev:win";
+    }
+
+    return "npm run pack:dev";
+}

@@ -122,8 +122,25 @@ function parseJsonOrText(value) {
 
 function toIsoOrNull(value) {
     if (!value) return null;
-    const date = new Date(value);
+    const date = new Date(normalizeSqlDatetime(value));
     return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function normalizeSqlDatetime(value) {
+    if (value instanceof Date) {
+        return value.toISOString();
+    }
+
+    const text = String(value || "").trim();
+    if (!text) {
+        return text;
+    }
+
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text)) {
+        return `${text.replace(" ", "T")}Z`;
+    }
+
+    return text;
 }
 
 module.exports = SettingsRepository;

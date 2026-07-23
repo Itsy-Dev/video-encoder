@@ -722,10 +722,27 @@ function clamp(value, min, max) {
 function formatResponseTimestamp(value) {
     if (!value) return "No timestamp";
 
-    const date = new Date(value);
+    const date = parseDisplayDate(value);
     if (Number.isNaN(date.getTime())) {
         return String(value);
     }
 
     return date.toLocaleString();
+}
+
+function parseDisplayDate(value) {
+    if (value instanceof Date) {
+        return value;
+    }
+
+    const text = String(value || "").trim();
+    if (!text) {
+        return new Date(NaN);
+    }
+
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text)) {
+        return new Date(`${text.replace(" ", "T")}Z`);
+    }
+
+    return new Date(text);
 }

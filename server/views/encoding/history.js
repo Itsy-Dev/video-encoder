@@ -65,7 +65,7 @@ function renderAction(item, status) {
         : Boolean(item && item.isLatestAttempt);
     const targetItemId = item && (item.encodingItemId || item.id);
 
-    if (canActOnCurrentAttempt && targetItemId && ["review", "rejected", "approved"].includes(status)) {
+    if (canActOnCurrentAttempt && targetItemId && ["review", "rejected", "approved", "cancelled"].includes(status) && item.outputAbsPath) {
         actions.push(`<a class="ui small basic compact icon button" href="${escapeHtml(buildOriginUrl("/encoding/review/item", { id: targetItemId, source: "history" }))}" title="Open detail" aria-label="Open detail">
           <i class="blue eye icon"></i>
         </a>`);
@@ -97,6 +97,10 @@ function historyDetail(item, status) {
 
     if (status === "completed") {
         return joinHistoryParts(attemptLabel, "Completed encode attempt");
+    }
+
+    if (status === "cancelled") {
+        return joinHistoryParts(attemptLabel, item.lastError || "Stopped early; partial output saved");
     }
 
     if (status === "discarded") {
