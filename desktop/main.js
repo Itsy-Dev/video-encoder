@@ -2,13 +2,14 @@ const path = require("path");
 const { spawn } = require("child_process");
 
 const { app, dialog, Menu, Tray, nativeImage, shell } = require("electron");
+const { getDistributionProfile } = require("../server/modules/config/runtime-profile");
 
 const APP_NAME = process.env.ENCODER_APP_NAME || app.getName() || "Video Encoder";
 const APP_URL_PATH = "/encoding/pending";
 const APP_ICON_ABS = path.join(__dirname, "assets", "icon.png");
 const APP_TRAY_ICON_ABS = path.join(__dirname, "assets", "trayTemplate.png");
 
-applyPackagedRuntimeDefaults(APP_NAME);
+applyRuntimeProfile(APP_NAME);
 
 const { startEncoderServer } = require("../server/app");
 
@@ -222,21 +223,8 @@ function setDockIcon() {
     }
 }
 
-function applyPackagedRuntimeDefaults(appName) {
-    const profile = process.env.ENCODER_DISTRIBUTION_PROFILE || (
-        String(appName || "").toLowerCase().includes("video encoder dev") ? "dev" : ""
-    );
-
-    if (profile !== "dev") {
-        return;
-    }
-
-    setEnvDefault("ENCODER_PORT", "14310");
-    setEnvDefault("ENCODER_APP_DATA_ROOT", "~/Library/Application Support/Video Encoder Dev");
-    setEnvDefault("ENCODER_CACHE_ROOT", "~/Library/Caches/Video Encoder Dev");
-    setEnvDefault("ENCODER_LOGS_ROOT", "~/Library/Logs/Video Encoder Dev");
-    setEnvDefault("ENCODER_DEFAULT_INBOX_ROOT", "~/Movies/Video Encoder Dev Inbox");
-    setEnvDefault("ENCODER_DEFAULT_OUTBOX_ROOT", "~/Movies/Video Encoder Dev Outbox");
+function applyRuntimeProfile(appName) {
+    setEnvDefault("ENCODER_DISTRIBUTION_PROFILE", getDistributionProfile({ appName }));
 }
 
 function setEnvDefault(key, value) {

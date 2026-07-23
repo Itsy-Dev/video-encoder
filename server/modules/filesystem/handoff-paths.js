@@ -1,16 +1,15 @@
 const path = require("path");
 const os = require("os");
+const runtimeProfile = require("../config/runtime-profile");
 
 const ENCODER_SERVICE_ROOT = path.resolve(__dirname, "..", "..", "..");
-const APP_NAME = "Video Encoder";
-const APP_SLUG = "video-encoder";
 
 function getDefaultInboxRoot() {
-    return path.join(os.homedir(), "Movies", "Video Encoder Inbox");
+    return runtimeProfile.getDefaultInboxRoot();
 }
 
 function getDefaultOutboxRoot() {
-    return path.join(os.homedir(), "Movies", "Video Encoder Outbox");
+    return runtimeProfile.getDefaultOutboxRoot();
 }
 
 function getConfiguredDefaultInboxRoot() {
@@ -84,39 +83,19 @@ function getEncoderPaths(options = {}) {
 }
 
 function getDefaultAppDataRoot() {
-    if (process.platform === "darwin") {
-        return path.join(os.homedir(), "Library", "Application Support", APP_NAME);
-    }
-
-    if (process.platform === "win32") {
-        return path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), APP_NAME);
-    }
-
-    return path.join(os.homedir(), ".local", "share", APP_SLUG);
+    return runtimeProfile.getDefaultAppDataRoot();
 }
 
 function getDefaultCacheRoot() {
-    if (process.platform === "darwin") {
-        return path.join(os.homedir(), "Library", "Caches", APP_NAME);
-    }
-
-    if (process.platform === "win32") {
-        return path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), APP_NAME, "Cache");
-    }
-
-    return path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"), APP_SLUG);
+    return runtimeProfile.getDefaultCacheRoot();
 }
 
 function getDefaultLogsRoot() {
-    if (process.platform === "darwin") {
-        return path.join(os.homedir(), "Library", "Logs", APP_NAME);
-    }
+    return runtimeProfile.getDefaultLogsRoot();
+}
 
-    if (process.platform === "win32") {
-        return path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), APP_NAME, "Logs");
-    }
-
-    return path.join(getDefaultAppDataRoot(), "logs");
+function getDefaultMediaRoot() {
+    return runtimeProfile.getDefaultMediaRoot();
 }
 
 function resolveEncoderPath(targetPath, fallbackAbsPath) {
@@ -149,6 +128,7 @@ module.exports = {
     getDefaultAppDataRoot,
     getDefaultCacheRoot,
     getDefaultLogsRoot,
+    getDefaultMediaRoot,
     getEncoderPaths
 };
 

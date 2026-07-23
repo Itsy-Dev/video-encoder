@@ -4,16 +4,7 @@ const { spawn } = require("child_process");
 
 const projectRoot = path.resolve(__dirname, "..", "..");
 const envPath = path.join(projectRoot, ".env.dev");
-const appExecutable = path.join(
-    projectRoot,
-    "dist",
-    "dev",
-    "mac-arm64",
-    "Video Encoder Dev.app",
-    "Contents",
-    "MacOS",
-    "Video Encoder Dev"
-);
+const appExecutable = resolvePackagedDevExecutable();
 
 if (!fs.existsSync(envPath)) {
     console.error(`[PACKAGED DEV] Missing ${envPath}`);
@@ -34,7 +25,8 @@ const child = spawn(appExecutable, {
     env: {
         ...process.env,
         ENCODER_ENV_FILE: envPath,
-        ENCODER_DISTRIBUTION_PROFILE: "dev"
+        ENCODER_DISTRIBUTION_PROFILE: "dev",
+        ENCODER_PORT: "14310"
     }
 });
 
@@ -51,3 +43,18 @@ child.on("exit", (code, signal) => {
 
     process.exit(code == null ? 1 : code);
 });
+
+function resolvePackagedDevExecutable() {
+    const candidates = process.platform === "win32"
+        ? [
+            path.join(projectRoot, "dist", "dev", "win-unpacked", "Video Encoder Dev.exe")
+        ]
+        : [
+            path.join(projectRoot, "dist", "dev", "mac-arm64", "Video Encoder Dev.app", "Contents", "MacOS", "Video Encoder Dev"),
+            path.join(projectRoot, "dist", "dev", "mac", "Video Encoder Dev.app", "Contents", "MacOS", "Video Encoder Dev"),
+            path.join(projectRoot, "dist", "dev", "mac-x64", "Video Encoder Dev.app", "Contents", "MacOS", "Video Encoder Dev")
+        ];
+
+    const existing = candidates.find(candidate => fs.existsSync(candidate));
+    return existing || candidates[0];
+}
