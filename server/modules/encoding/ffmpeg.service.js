@@ -332,6 +332,9 @@ function createEncodingHandle({ command, args, outputAbsPath, profileId, process
                 child.on("close", code => {
                     clearStopTimer(handle);
                     if (code === 0) {
+                        if (handle && handle.stopRequested) {
+                            return resolve({ stdout, stderr, stopped: true });
+                        }
                         return resolve({ stdout, stderr });
                     }
 
@@ -349,7 +352,7 @@ function createEncodingHandle({ command, args, outputAbsPath, profileId, process
             await removeIfExists(outputAbsPath);
             await fsp.rename(tempOutputAbsPath, outputAbsPath);
             if (handle) {
-                handle.state = "completed";
+                handle.state = result && result.stopped ? "stopped" : "completed";
                 handle.emit("state", handle.state);
             }
             return {

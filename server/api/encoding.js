@@ -455,7 +455,9 @@ module.exports = function encodingApi(app, database, fileIntake) {
             heading: "Review Completed Encodes",
             description: canReview
                 ? "Review the encoded output, compare it against the source, then commit, reject, or redo."
-                : "Review the saved encode outcome and timing data captured when the encode finished.",
+                : String(selected && selected.status || "").toLowerCase() === "cancelled"
+                    ? "Review the saved partial output and timing data captured when the encode was stopped early."
+                    : "Review the saved encode outcome and timing data captured when the encode finished.",
             state,
             body: renderReviewItem(selected, {
                 encodedPreviewUrl,

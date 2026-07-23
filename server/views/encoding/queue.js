@@ -104,7 +104,7 @@ function renderActiveButtons(activeItem, worker, showForceWakeButton) {
           <span class="ui inverted ${escapeHtml(pauseColor)} text">${escapeHtml(pauseLabel)}</span>
         </button>
       </form>
-      <form method="post" action="/api/encoding/control/stop" data-api-form data-confirm="Stop the active encode? The current encoded output will be discarded and the source item will need to be queued again." style="display: inline-block;">
+      <form method="post" action="/api/encoding/control/stop" data-api-form data-confirm="Stop the active encode? The encoder will finalize what it has, save a watchable partial file with a .part name under Outbox/cancelled." style="display: inline-block;">
         <button type="submit" class="ui compact inverted secondary button">
           <i class="inverted red stop icon"></i>
           <span class="ui inverted red text">Stop</span>
@@ -214,6 +214,9 @@ function renderQueueRowActions(item) {
 
     if (["failed", "cancelled"].includes(status)) {
         return `<div class="ui compact basic icon buttons">
+          ${item.outputAbsPath ? `<a class="ui button" href="${escapeHtml(buildOriginUrl("/encoding/review/item", { id: item.id, source: "queue" }))}" title="Open saved output" aria-label="Open saved output">
+            <i class="fitted blue eye icon"></i>
+          </a>` : ""}
           <a class="ui button" href="${escapeHtml(buildOriginUrl("/encoding/setup", { id: item.id, source: "queue" }))}" title="Update queue item" aria-label="Update queue item">
             <i class="fitted orange cog icon"></i>
           </a>
