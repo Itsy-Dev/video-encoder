@@ -122,6 +122,7 @@ module.exports = function renderSetup(item, profiles, { selectedProfileId, sourc
             ${renderDisabledField("Scale Policy", describeScalePolicy(selectedProfile))}
             ${renderDisabledField("Decision", buildScaleDecision(scalePlan))}
           </div>
+          ${renderAdvancedProfileFields(selectedProfile)}
         </form>
       </div>
 
@@ -240,6 +241,20 @@ function renderDisabledField(label, value) {
     </div>`;
 }
 
+function renderAdvancedProfileFields(profile) {
+    const settings = parseX264Params(profile && profile.x264Params);
+    if (!settings) {
+        return "";
+    }
+
+    return `<div class="four fields">
+      ${renderDisabledField("AQ Strength", settings.aqStrength || "—")}
+      ${renderDisabledField("Perceptual Detail", settings.psyRdStrength || "—")}
+      ${renderDisabledField("Detail Bias", settings.psyTrellis || "—")}
+      ${renderDisabledField("Look Ahead", settings.lookAhead || "—")}
+    </div>`;
+}
+
 function renderOutcomeMetric(label, before, after, color = null, change = null) {
     const afterClass = color ? `ui inverted ${color} text` : "ui inverted text";
     const current = before == null ? "—" : String(before);
@@ -261,6 +276,43 @@ function renderInfoLabel(label, helpText) {
     const safeHelpText = escapeHtml(helpText);
 
     return `${escapeHtml(label)} <i class="info circle icon" title="${safeHelpText}" aria-label="${safeHelpText}" style="margin-left: 4px; opacity: 0.8; cursor: help;"></i>`;
+}
+
+function parseX264Params(value) {
+    const raw = String(value || "").trim();
+    if (!raw) {
+        return null;
+    }
+
+    const entries = raw.split(":")
+        .map(part => part.trim())
+        .filter(Boolean)
+        .reduce((result, part) => {
+            const separatorIndex = part.indexOf("=");
+            if (separatorIndex <= 0) {
+                return result;
+            }
+
+            const key = part.slice(0, separatorIndex).trim();
+            const entryValue = part.slice(separatorIndex + 1).trim();
+            if (key) {
+                result[key] = entryValue;
+            }
+            return result;
+        }, {});
+
+    const psyValues = String(entries["psy-rd"] || "")
+        .split(",")
+        .map(part => part.trim())
+        .filter(Boolean);
+
+    return {
+        aqMode: entries["aq-mode"] || null,
+        aqStrength: entries["aq-strength"] || null,
+        psyRdStrength: psyValues[0] || null,
+        psyTrellis: psyValues[1] || null,
+        lookAhead: entries["rc-lookahead"] || null
+    };
 }
 
 function renderBrowserCompatibilityStatusBadge(status) {
