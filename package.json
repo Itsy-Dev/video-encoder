@@ -1,7 +1,7 @@
 {
   "name": "video-encoder",
   "version": "0.7.1",
-  "description": "A local macOS video encoding workflow app.",
+  "description": "A local browser-compatibility video encoding workflow app for macOS and Windows.",
   "author": "Itsy Dev",
   "private": true,
   "engines": {
@@ -51,11 +51,9 @@
       "desktop/**/*",
       "server/**/*",
       "package.json",
-      "!desktop/launch-electron-app.command",
       "!**/.env*",
       "!**/.internal/**",
-      "!dist/**",
-      "!TEST_PLAN.md"
+      "!dist/**"
     ],
     "mac": {
       "category": "public.app-category.video",
