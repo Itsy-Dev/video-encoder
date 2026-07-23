@@ -133,8 +133,17 @@ module.exports = {
 };
 
 function findCommonParent(leftPath, rightPath) {
-    const leftParts = path.resolve(leftPath).split(path.sep).filter(Boolean);
-    const rightParts = path.resolve(rightPath).split(path.sep).filter(Boolean);
+    const leftResolved = path.resolve(leftPath);
+    const rightResolved = path.resolve(rightPath);
+    const leftRoot = path.parse(leftResolved).root || path.sep;
+    const rightRoot = path.parse(rightResolved).root || path.sep;
+
+    if (leftRoot.toLowerCase() !== rightRoot.toLowerCase()) {
+        return leftRoot;
+    }
+
+    const leftParts = stripRootSegments(leftResolved, leftRoot);
+    const rightParts = stripRootSegments(rightResolved, rightRoot);
     const shared = [];
     const limit = Math.min(leftParts.length, rightParts.length);
 
@@ -146,8 +155,17 @@ function findCommonParent(leftPath, rightPath) {
     }
 
     if (!shared.length) {
-        return path.parse(path.resolve(leftPath)).root || path.sep;
+        return leftRoot;
     }
 
-    return path.join(path.parse(path.resolve(leftPath)).root, ...shared);
+    return path.join(leftRoot, ...shared);
+}
+
+function stripRootSegments(resolvedPath, rootPath) {
+    const relativeToRoot = path.relative(rootPath, resolvedPath);
+    if (!relativeToRoot) {
+        return [];
+    }
+
+    return relativeToRoot.split(path.sep).filter(Boolean);
 }
