@@ -800,17 +800,59 @@ module.exports = class EncodingService {
         });
 
         try {
-            await this.activeHandle.done;
+            const ffmpegResult = await this.activeHandle.done;
             await restLoop;
-            await moveFileIntoPlace(workingOutputAbsPath, outputAbsPath);
-
-            const encodedStat = await fsp.stat(outputAbsPath);
-            const encodedMetadata = await this.ffprobeService.probeFile(outputAbsPath, encodedStat);
             const encodingFinishedAt = new Date().toISOString();
             const pausedMs = this._getTotalPausedMs();
             const wallClockMs = calculateElapsedMs(encodingStartedAt, encodingFinishedAt);
             const activeEncodingMs = wallClockMs == null ? null : Math.max(0, wallClockMs - pausedMs);
 
+            if (ffmpegResult && ffmpegResult.stopped) {
+                const partialOutput = await preserveStoppedOutputFile({
+                    outputAbsPath,
+                    outboxRootAbsPath: paths.outbox,
+                    inboxRelativeDir: encodingItem.inboxRelativeDir
+                });
+                const encodedStat = await fsp.stat(partialOutput.outputAbsPath);
+                const encodedMetadata = await this.ffprobeService.probeFile(partialOutput.outputAbsPath, encodedStat);
+
+                await this.repository.upsert({
+                    ...encodingItem,
+                    profileId,
+                    outputFilename: partialOutput.outputFilename,
+                    outputAbsPath: partialOutput.outputAbsPath,
+                    status: "cancelled",
+                    encodingStartedAt,
+                    pausedAt: null,
+                    completedAt: encodingFinishedAt,
+                    attemptCount: nextAttemptCount,
+                    encodedMetadata,
+                    lastError: "Encoding was stopped early. Partial output was saved."
+                });
+
+                await this.repository.upsertOutcome(buildEncodingOutcomeReceipt({
+                    item: encodingItem,
+                    attemptNumber: nextAttemptCount,
+                    profileId,
+                    encodingStartedAt,
+                    encodingFinishedAt,
+                    activeEncodingMs,
+                    pausedMs,
+                    wallClockMs,
+                    sourceMetadata: encodingItem.sourceMetadata,
+                    outputMetadata: encodedMetadata,
+                    outputAbsPath: partialOutput.outputAbsPath
+                }));
+
+                this.safety.lastItemFinishedAt = new Date().toISOString();
+                console.log(`[WORKER] Worker stopped item and saved partial output. id=${encodingItem.id} output=${partialOutput.outputAbsPath}`);
+                return;
+            }
+
+            await moveFileIntoPlace(workingOutputAbsPath, outputAbsPath);
+
+            const encodedStat = await fsp.stat(outputAbsPath);
+            const encodedMetadata = await this.ffprobeService.probeFile(outputAbsPath, encodedStat);
             await this.repository.upsert({
                 ...encodingItem,
                 profileId,
@@ -1409,6 +1451,18 @@ function buildOutputFilename(filename, profileId) {
     return `${basename || "output"}${containerExtension}`;
 }
 
+async function preserveStoppedOutputFile({ outputAbsPath, outboxRootAbsPath, inboxRelativeDir }) {
+    const cancelledDirAbs = path.join(outboxRootAbsPath, "cancelled", normalizeRelativeDir(inboxRelativeDir));
+    await fsp.mkdir(cancelledDirAbs, { recursive: true });
+    const partialOutputAbsPath = await buildUniquePartialOutputPath(cancelledDirAbs, outputAbsPath);
+    await moveFileIntoPlace(outputAbsPath, partialOutputAbsPath);
+
+    return {
+        outputAbsPath: partialOutputAbsPath,
+        outputFilename: path.basename(partialOutputAbsPath)
+    };
+}
+
 function buildEncodingOutcomeReceipt({
     item,
     attemptNumber,
@@ -1603,6 +1657,21 @@ async function buildUniqueRejectedOutputPath(rejectedDirAbs, outputAbsPath) {
     }
 
     throw new Error(`Unable to find an available rejected output path in ${rejectedDirAbs}`);
+}
+
+async function buildUniquePartialOutputPath(targetDirAbs, outputAbsPath) {
+    const ext = path.extname(outputAbsPath || "");
+    const base = path.basename(outputAbsPath || "output", ext);
+
+    for (let index = 0; index < Number.MAX_SAFE_INTEGER; index += 1) {
+        const suffix = index === 0 ? ".part" : `.part_${index + 1}`;
+        const candidate = path.join(targetDirAbs, `${base}${suffix}${ext}`);
+        if (!await pathExists(candidate)) {
+            return candidate;
+        }
+    }
+
+    throw new Error(`Unable to find an available partial output path in ${targetDirAbs}`);
 }
 
 function getWorkingItemRoot(paths, itemId) {

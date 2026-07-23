@@ -39,6 +39,8 @@ npm install
 cp .env.example .env
 ```
 
+The first packaged build also prepares vendored `ffmpeg` and `ffprobe` binaries automatically for the target platform. A fresh checkout may need network access during that media-prepare step.
+
 ## Run
 
 Start the web server:
@@ -85,7 +87,7 @@ Use the same dev lane for the Electron app:
 npm run desktop:dev
 ```
 
-Each lane should use its own `ENCODER_PORT`, `ENCODER_APP_DATA_ROOT`, `ENCODER_CACHE_ROOT`, `ENCODER_LOGS_ROOT`, Inbox, and Outbox. This allows a stable encoder to keep running while dev or packaged dev builds are tested separately.
+Each lane should use its own `ENCODER_PORT`, app data root, cache root, log root, Inbox, and Outbox. This allows a stable encoder to keep running while dev or packaged dev builds are tested separately.
 
 To launch an unpacked packaged app against the dev lane:
 
@@ -94,7 +96,7 @@ npm run pack:dev
 npm run packaged:dev
 ```
 
-Do not use the normal `dist/Video Encoder.app` for development while a stable encoder is running. The dedicated dev build has its own app name, bundle id, port, and Library defaults so Finder launches do not collide with the stable app.
+Do not use the normal production packaged app for development while a stable encoder is running. The dedicated dev build has its own app name, bundle id, port, and OS-native storage defaults so launches do not collide with the stable app.
 
 ## Package
 
@@ -118,9 +120,23 @@ Create isolated dev macOS artifacts in `dist-dev/`:
 npm run dist:dev
 ```
 
-Install from the generated DMG by dragging `Video Encoder.app` into `Applications`. This local build is unsigned until Apple Developer signing/notarization is configured, so macOS may require right-clicking the app and choosing **Open** the first time.
+Create Windows artifacts with:
 
-The packaged app keeps user data outside the app bundle in the macOS Library locations listed below. Replacing the app during an update should not remove history, settings, cache, logs, Inbox, or Outbox files.
+```bash
+npm run dist:win
+```
+
+Create isolated dev Windows artifacts with:
+
+```bash
+npm run dist:dev:win
+```
+
+macOS installs from the generated DMG by dragging `Video Encoder.app` into `Applications`. Windows installs from the generated `.exe` installer. Local builds are unsigned until signing is configured, so the OS may show first-launch warnings.
+
+Packaged build commands run the media sync step automatically, so a fresh environment does not need committed vendor binaries as long as it can fetch the required platform binaries once.
+
+The packaged app keeps user data outside the app bundle in OS-managed locations. Replacing the app during an update should not remove history, settings, cache, logs, Inbox, or Outbox files.
 
 ## Runtime Layout
 
@@ -128,10 +144,12 @@ The app uses two operator-facing handoff folders plus OS-managed app storage.
 
 - `inbox/`: operator import location
 - `outbox/`: completed output location
-- `~/Library/Application Support/Video Encoder`: persistent app-managed state
-- `~/Library/Caches/Video Encoder/uploads`: browser upload temp storage
-- `~/Library/Caches/Video Encoder/working`: active encode working files
-- `~/Library/Logs/Video Encoder`: persistent logs
+- macOS app data: `~/Library/Application Support/Video Encoder`
+- macOS cache: `~/Library/Caches/Video Encoder`
+- macOS logs: `~/Library/Logs/Video Encoder`
+- Windows app data: `%APPDATA%\Video Encoder`
+- Windows cache: `%LOCALAPPDATA%\Video Encoder\Cache`
+- Windows logs: `%LOCALAPPDATA%\Video Encoder\Logs`
 
 Operators should treat only Inbox and Outbox as manual workflow folders. Cache and log storage is app-managed.
 
@@ -155,16 +173,20 @@ Path values may be:
 - absolute paths
 - repo-relative paths
 - `~/...` paths
+- Windows paths such as `C:\Users\<user>\Videos\Video Encoder Inbox`
 
 Inbox/outbox precedence is:
 
 1. database setting
 2. `.env` default
-3. hardcoded Movies fallback
+3. OS-native fallback
 
 Once settings exist, `storage.inboxRoot` and `storage.outboxRoot` in the database become the runtime source of truth.
 
-The app stores its SQLite database at `~/Library/Application Support/Video Encoder/encoder.sqlite`.
+The app stores its SQLite database in the active app data root, such as:
+
+- macOS: `~/Library/Application Support/Video Encoder/encoder.sqlite`
+- Windows: `%APPDATA%\Video Encoder\encoder.sqlite`
 
 ## Core Workflow
 
@@ -207,7 +229,7 @@ The app stores its SQLite database at `~/Library/Application Support/Video Encod
 
 ### Logs
 
-- the Logs page reads the same app log files written under `~/Library/Logs/Video Encoder`
+- the Logs page reads the same app log files written under the active OS log root
 - multiline errors are grouped as a single log item
 - log entries display both severity and subsystem badges
 

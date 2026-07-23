@@ -212,14 +212,14 @@ function formatBitrate(bps) {
 
 function formatDateTime(value) {
     if (!value) return "—";
-    const date = new Date(value);
+    const date = parseDisplayDate(value);
     if (Number.isNaN(date.getTime())) return String(value);
     return date.toLocaleString();
 }
 
 function formatDate(value) {
     if (!value) return "—";
-    const date = new Date(value);
+    const date = parseDisplayDate(value);
     if (Number.isNaN(date.getTime())) return String(value);
     return date.toLocaleDateString("en-US", {
         month: "2-digit",
@@ -247,6 +247,23 @@ function formatAspectRatio(widthOrMetadata, height) {
     const wholeHeight = Math.round(safeHeight);
     const divisor = gcd(wholeWidth, wholeHeight);
     return `${wholeWidth / divisor}:${wholeHeight / divisor}`;
+}
+
+function parseDisplayDate(value) {
+    if (value instanceof Date) {
+        return value;
+    }
+
+    const text = String(value || "").trim();
+    if (!text) {
+        return new Date(NaN);
+    }
+
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text)) {
+        return new Date(`${text.replace(" ", "T")}Z`);
+    }
+
+    return new Date(text);
 }
 
 function buildColumnClassName(options = {}) {

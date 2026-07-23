@@ -60,7 +60,7 @@ module.exports = function renderSettings(profiles, settings, options = {}) {
             ${renderSettingsSection("Performance", "Controls that affect ffmpeg execution and defaults for newly discovered items.", [
                 renderNumberField("FFmpeg Threads", "performance.ffmpegThreads", current.performance.ffmpegThreads, "threads"),
                 renderNumberField("Filter Threads", "performance.filterThreads", current.performance.filterThreads, "threads"),
-                renderNumberField("Process Priority / Nice", "performance.processPriority", current.performance.processPriority, "nice")
+                renderNumberField("Process Priority", "performance.processPriority", current.performance.processPriority, "priority")
             ])}
           </div>
 
