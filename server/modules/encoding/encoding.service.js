@@ -1629,6 +1629,7 @@ async function pathExists(targetAbsPath) {
 }
 
 async function moveFileIntoPlace(sourceAbsPath, destinationAbsPath) {
+    await fsp.mkdir(path.dirname(destinationAbsPath), { recursive: true });
     await removeIfExists(destinationAbsPath);
 
     try {
