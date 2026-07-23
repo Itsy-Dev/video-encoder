@@ -11,6 +11,12 @@ Add Windows 11 support for Video Encoder in a way that works for internal use fi
 - Internal-use rollout first
 - Standard Windows app behavior and paths
 
+## Progress
+
+- Completed: Windows packaging targets and installer setup
+- Completed: runtime profile defaults now resolve by lane and OS at runtime
+- In progress: Windows-safe ffmpeg job controls
+
 ## Game Plan
 
 ### 1. Define the Windows release target
@@ -73,6 +79,12 @@ Summary:
 - `Resume` should continue the same encode
 - `Stop` should end the encode cleanly
 - emergency kill remains a last-resort action
+
+Current status:
+
+- graceful stop now uses ffmpeg stdin control instead of direct termination
+- process pause and resume are now isolated behind a shared process-control layer
+- Windows pause and resume use a dedicated Windows thread suspend/resume helper
 
 ### 7. Map performance controls to Windows
 

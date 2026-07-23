@@ -3,11 +3,13 @@ const fsp = fs.promises;
 const path = require("path");
 const EventEmitter = require("events");
 const { spawn, spawnSync } = require("child_process");
+const { suspendProcess, resumeProcess, terminateProcess } = require("../runtime/process-control");
 const encodingProfiles = require("./encoding-profiles");
 const { buildSafeScaleFilter, resolveScalePlan } = require("./scale-policy");
 const { getFfmpegBin } = require("./media-binaries");
 
 const FFMPEG_BIN = getFfmpegBin();
+const STOP_GRACE_TIMEOUT_MS = 15000;
 const DEFAULT_FFMPEG_RUNTIME = Object.freeze({
     PROCESS_PRIORITY: 15,
     THREADS: 1,
@@ -69,6 +71,7 @@ class EncodingProcessHandle extends EventEmitter {
         this.profileId = profileId;
         this.state = "running";
         this.stopRequested = false;
+        this.stopTimer = null;
         this.progress = {
             frame: null,
             fps: null,
@@ -99,7 +102,7 @@ class EncodingProcessHandle extends EventEmitter {
             return false;
         }
 
-        process.kill(this.child.pid, "SIGSTOP");
+        suspendProcess(this.child.pid);
         this.state = "paused";
         this.emit("state", this.state);
         return true;
@@ -110,7 +113,7 @@ class EncodingProcessHandle extends EventEmitter {
             return false;
         }
 
-        process.kill(this.child.pid, "SIGCONT");
+        resumeProcess(this.child.pid);
         this.state = "running";
         this.emit("state", this.state);
         return true;
@@ -127,7 +130,19 @@ class EncodingProcessHandle extends EventEmitter {
         }
         this.state = "stopping";
         this.emit("state", this.state);
-        this.child.kill("SIGTERM");
+        if (!requestGracefulStop(this.child)) {
+            this.kill();
+            return true;
+        }
+
+        this.stopTimer = setTimeout(() => {
+            if (!this.child || this.child.exitCode != null) {
+                return;
+            }
+
+            this.kill();
+        }, STOP_GRACE_TIMEOUT_MS);
+
         return true;
     }
 
@@ -139,7 +154,8 @@ class EncodingProcessHandle extends EventEmitter {
         this.stopRequested = true;
         this.state = "killed";
         this.emit("state", this.state);
-        this.child.kill("SIGKILL");
+        clearStopTimer(this);
+        terminateProcess(this.child.pid);
         return true;
     }
 }
@@ -273,13 +289,14 @@ function createEncodingHandle({ command, args, outputAbsPath, profileId, process
     fs.mkdirSync(path.dirname(outputAbsPath), { recursive: true });
     fs.rmSync(tempOutputAbsPath, { force: true, recursive: true });
 
-    const spawnCommand = processPriority != null ? "nice" : command;
-    const spawnArgs = processPriority != null
+    const shouldUseNice = process.platform !== "win32" && processPriority != null;
+    const spawnCommand = shouldUseNice ? "nice" : command;
+    const spawnArgs = shouldUseNice
         ? ["-n", String(processPriority), command].concat(args, ["-progress", "pipe:1", tempOutputAbsPath])
         : args.concat(["-progress", "pipe:1", tempOutputAbsPath]);
 
     const child = spawn(spawnCommand, spawnArgs, {
-        stdio: ["ignore", "pipe", "pipe"]
+        stdio: ["pipe", "pipe", "pipe"]
     });
 
     let stdout = "";
@@ -304,6 +321,7 @@ function createEncodingHandle({ command, args, outputAbsPath, profileId, process
                 child.on("error", reject);
 
                 child.on("close", code => {
+                    clearStopTimer(handle);
                     if (code === 0) {
                         return resolve({ stdout, stderr });
                     }
@@ -359,6 +377,24 @@ function parseOptionalNumber(value, fallback) {
 
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function requestGracefulStop(child) {
+    if (!child || !child.stdin || child.stdin.destroyed || !child.stdin.writable) {
+        return false;
+    }
+
+    child.stdin.write("q\n");
+    return true;
+}
+
+function clearStopTimer(handle) {
+    if (!handle || !handle.stopTimer) {
+        return;
+    }
+
+    clearTimeout(handle.stopTimer);
+    handle.stopTimer = null;
 }
 
 function buildTempOutputAbsPath(outputAbsPath) {
