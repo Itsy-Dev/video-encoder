@@ -354,7 +354,7 @@ function formatElapsedMs(ms) {
 
 function formatDateTime(value) {
     if (!value) return "—";
-    const date = new Date(value);
+    const date = parseDisplayDate(value);
     if (Number.isNaN(date.getTime())) return String(value);
     return date.toLocaleString();
 }
@@ -481,7 +481,7 @@ function isUsablePastTimestamp(value) {
 }
 
 function normalizeDisplayTimestamp(value) {
-    const parsedMs = new Date(value).getTime();
+    const parsedMs = parseDisplayDate(value).getTime();
     if (!Number.isFinite(parsedMs)) {
         return NaN;
     }
@@ -493,4 +493,21 @@ function normalizeDisplayTimestamp(value) {
     const timezoneOffsetMs = new Date().getTimezoneOffset() * 60 * 1000;
     const shiftedMs = parsedMs - timezoneOffsetMs;
     return shiftedMs <= Date.now() ? shiftedMs : parsedMs;
+}
+
+function parseDisplayDate(value) {
+    if (value instanceof Date) {
+        return value;
+    }
+
+    const text = String(value || "").trim();
+    if (!text) {
+        return new Date(NaN);
+    }
+
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text)) {
+        return new Date(`${text.replace(" ", "T")}Z`);
+    }
+
+    return new Date(text);
 }
