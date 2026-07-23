@@ -11,7 +11,7 @@ The app is built around a simple operator workflow:
 3. choose an encoding profile in Setup
 4. run one active encode worker at a time
 5. review the output
-6. approve to `outbox/` or reject/discard the item
+6. approve to `outbox/`, reject it, or stop it into `outbox/cancelled/`
 
 The current UI includes:
 
@@ -143,7 +143,8 @@ The packaged app keeps user data outside the app bundle in OS-managed locations.
 The app uses two operator-facing handoff folders plus OS-managed app storage.
 
 - `inbox/`: operator import location
-- `outbox/`: completed output location
+- `outbox/`: operator handoff output location
+- `outbox/cancelled/`: saved partial outputs from manually stopped encodes
 - macOS app data: `~/Library/Application Support/Video Encoder`
 - macOS cache: `~/Library/Caches/Video Encoder`
 - macOS logs: `~/Library/Logs/Video Encoder`
@@ -225,6 +226,7 @@ The app stores its SQLite database in the active app data root, such as:
 - operators can approve or reject outputs
 - approval confirms the existing Outbox output
 - reject moves the output to `Outbox/rejected` and keeps the source receipt available for requeue
+- stop finalizes the current partial output into `Outbox/cancelled` with a `.part` filename and marks the item as `cancelled`
 - previously rejected items can be rediscovered from `inbox/` and returned to pending setup when scanned again
 
 ### Logs

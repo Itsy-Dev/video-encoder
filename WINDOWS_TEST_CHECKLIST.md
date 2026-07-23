@@ -93,6 +93,8 @@ Verify:
 - encode ends cleanly
 - job does not remain stuck in `stopping`
 - partial output is not promoted as completed output
+- partial output is saved under `Outbox/cancelled/...`
+- partial output filename includes a `.part` suffix before the extension
 - item ends in the expected interrupted/cancelled state
 
 ### Forced Recovery

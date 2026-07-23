@@ -70,8 +70,9 @@ Recommended order for implementation:
 ### Stop / Cancel
 
 - `stop` cancels active ffmpeg work
-- `stop` removes partial encoded output
-- `stop` removes partial working output
+- `stop` keeps a watchable partial encoded output
+- `stop` moves the partial output to `outbox/cancelled/<relative-subdir>/`
+- `stop` renames the partial output with a `.part` filename suffix
 - `stop` keeps source material in `pending/<item-id>`
 - `stop` returns the item to an actionable state
 
@@ -193,5 +194,5 @@ If only a small first batch is implemented, start here:
 2. queue wakes worker
 3. approve exports file and cleans internals
 4. reject removes encoded output and keeps source
-5. stop removes partial output and keeps source
+5. stop saves a partial output in `outbox/cancelled` and keeps source
 6. restart resumes queued items and clears stale temp files

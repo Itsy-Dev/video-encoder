@@ -122,16 +122,12 @@ If the tag already exists, stop and inspect before changing anything.
 
 ## Windows Workflow
 
-Use this after the macOS release workflow is repeatable:
+Windows release packaging is part of the normal release flow now.
 
-1. Production app installs and runs from `/Applications`.
-2. Dev lane is isolated from production.
-3. Release steps are documented and followed without terminal archaeology.
-4. SQLite, runtime paths, logs, cache, bundled ffmpeg, and startup locking are stable on macOS.
-
-Then validate the same abstractions on Windows:
+For Windows validation:
 
 1. Build with `npm run dist:win` or `npm run dist:dev:win`.
 2. Install from the generated `.exe`.
 3. Confirm startup paths, runtime lock behavior, bundled ffmpeg, and SQLite location.
 4. Test intake, encode, pause, resume, stop, review, export, and logs on Windows 11.
+5. Confirm stopped encodes save partial outputs under `Outbox/cancelled` with a `.part` filename.
