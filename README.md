@@ -2,6 +2,10 @@
 
 Standalone video intake, encoding, review, and export app with a browser UI, background worker, persistent settings, and operator-focused logging.
 
+## Status
+
+As of July 23, 2026, both packaged macOS and packaged Windows app workflows are working in the current project state.
+
 ## What It Does
 
 The app is built around a simple operator workflow:
