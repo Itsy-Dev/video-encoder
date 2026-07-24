@@ -76,7 +76,7 @@ function getEncoderPaths(options = {}) {
         cacheRoot,
         inbox,
         outbox,
-        working: path.join(internalRoot, "working"),
+        working: path.join(outbox, ".working"),
         uploads: path.join(cacheRoot, "uploads"),
         logs: logsRoot
     };

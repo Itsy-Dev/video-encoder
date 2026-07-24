@@ -2,6 +2,7 @@ const fs = require("fs");
 const fsp = fs.promises;
 const path = require("path");
 const crypto = require("crypto");
+const { spawnSync } = require("child_process");
 
 const profiles = require("./encoding-profiles");
 const EncodingRepository = require("./encoding.repository");
@@ -1299,7 +1300,6 @@ module.exports = class EncodingService {
             paths.inbox,
             paths.outbox,
             paths.internalRoot,
-            paths.working,
             paths.uploads,
             paths.logs
         ];
@@ -1307,6 +1307,8 @@ module.exports = class EncodingService {
         for (const dirAbs of required) {
             await fsp.mkdir(dirAbs, { recursive: true });
         }
+
+        await ensureHiddenDirectory(paths.working);
     }
 
     async _cleanupEmptyWorkingDirectories(paths = this._getEncoderPaths()) {
@@ -1625,6 +1627,32 @@ async function pathExists(targetAbsPath) {
     }
     catch (_error) {
         return false;
+    }
+}
+
+async function ensureHiddenDirectory(targetAbsPath) {
+    if (!targetAbsPath) {
+        return;
+    }
+
+    try {
+        await fsp.mkdir(targetAbsPath, { recursive: true });
+    }
+    catch (_error) {
+        return;
+    }
+
+    if (process.platform !== "win32") {
+        return;
+    }
+
+    try {
+        spawnSync("attrib.exe", ["+H", targetAbsPath], {
+            stdio: "ignore"
+        });
+    }
+    catch (_error) {
+        return;
     }
 }
 
