@@ -16,7 +16,7 @@ module.exports = function renderHistory(items) {
     }
 
     return `<section class="ui inverted segment">
-      <table class="ui striped celled inverted compact small table">
+      <table class="ui striped celled inverted compact small table encoder-fixed-table">
         <thead>
           <tr>
             <th class="one wide">Status</th>
@@ -41,7 +41,7 @@ function renderRow(item) {
 
     return `<tr>
       <td>${pill(status || "unknown")}</td>
-      <td title="${escapeHtml(item.outputAbsPath || item.inputAbsPath || "")}">
+      <td class="encoder-wrapping-cell" title="${escapeHtml(item.outputAbsPath || item.inputAbsPath || "")}">
         <div>${escapeHtml(item.originalFilename || "—")}</div>
         <span class="ui grey text">${escapeHtml(detail)}</span>
       </td>
