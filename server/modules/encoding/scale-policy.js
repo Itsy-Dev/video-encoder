@@ -17,6 +17,11 @@ function getChromaDimensionRequirements(pixelFormatId) {
 }
 
 function detectAspectFamily(sourceMetadata = {}) {
+    const rawStandardFamily = detectRawStandardFamily(sourceMetadata);
+    if (rawStandardFamily) {
+        return rawStandardFamily;
+    }
+
     const ratio = getDisplayAspectRatioValue(sourceMetadata);
     const families = EncodingOptions.getAspectFamilies().filter(family => family.id !== EncodingOptions.AspectFamily.CUSTOM.id);
 
@@ -32,6 +37,28 @@ function detectAspectFamily(sourceMetadata = {}) {
     }
 
     return EncodingOptions.AspectFamily.CUSTOM;
+}
+
+function detectRawStandardFamily(sourceMetadata = {}) {
+    const width = toPositiveInt(sourceMetadata.width);
+    const height = toPositiveInt(sourceMetadata.height);
+    if (!width || !height) {
+        return null;
+    }
+
+    for (const family of EncodingOptions.getAspectFamilies()) {
+        if (family.id === EncodingOptions.AspectFamily.CUSTOM.id) {
+            continue;
+        }
+
+        const standard = EncodingOptions.getStandardsForFamily(family.id)
+            .find(entry => entry.width === width && entry.height === height);
+        if (standard) {
+            return family;
+        }
+    }
+
+    return null;
 }
 
 function resolveScalePlan(profile, sourceMetadata = {}) {
