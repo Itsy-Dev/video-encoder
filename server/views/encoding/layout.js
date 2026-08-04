@@ -112,7 +112,17 @@ module.exports = function renderPage({ title, heading, description, state, body,
       box-shadow: inset 0 0 0 1px rgba(242, 113, 28, 0.45);
     }
 
+    .encoder-file-cell,
+    .encoder-file-cell * {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
 
+    .encoder-help-popup {
+      margin-right: 0.25rem !important;
+      cursor: help;
+    }
 
    .video-box {
       overflow: hidden;
@@ -194,6 +204,11 @@ module.exports = function renderPage({ title, heading, description, state, body,
         window.location.reload();
       }, AUTO_REFRESH_MS);
     }
+
+    $(".encoder-help-popup").popup({
+      position: "top center",
+      variation: "inverted tiny"
+    });
 
     window.reloadSetupProfile = async function (form) {
       if (!(form instanceof HTMLFormElement)) return;

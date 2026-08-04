@@ -1,5 +1,5 @@
 const { buildOriginUrl } = require("../../modules/encoding/navigation");
-const { escapeHtml, formatBytes, formatDuration, pill } = require("./helpers");
+const { escapeHtml, formatBitrate, formatBytes, formatDuration, pill } = require("./helpers");
 
 const QUEUE_ROW_STATES = new Set(["encoding", "paused", "queued", "failed", "cancelled"]);
 
@@ -39,6 +39,11 @@ function renderActiveQueuePanel(state, activeItem, showForceWakeButton) {
         ? escapeHtml(activeItem.inputAbsPath)
         : "Idle";
     const pausedTimeMs = calculatePausedTimeMs(activeItem, worker);
+    const currentSizeBytes = Number(progress.totalSizeBytes || 0);
+    const currentBitrateBps = calculateCurrentBitrateBps(progress);
+    const estimatedSizeBytes = calculateEstimatedSizeBytes(progressPercent, currentSizeBytes);
+    const sourceSizeBytes = Number(activeItem && activeItem.sourceMetadata && activeItem.sourceMetadata.fileSizeBytes || 0);
+    const sourceBitrateBps = Number(activeItem && activeItem.sourceMetadata && activeItem.sourceMetadata.bitRate || 0);
 
     return `<div class="ui inverted charcoal segment">
       <div class="ui stackable grid">
@@ -70,9 +75,9 @@ function renderActiveQueuePanel(state, activeItem, showForceWakeButton) {
         ${renderMetric("Paused Time", formatRemaining(pausedTimeMs))}
         ${renderMetric("Speed", progress.speed || "—")}
         ${renderMetric("FPS", progress.fps == null ? "—" : progress.fps)}
-        ${renderMetric("Frame", progress.frame == null ? "—" : progress.frame)}
-        ${renderMetric("Output Size", progress.totalSizeBytes == null ? "—" : formatBytes(progress.totalSizeBytes))}
-        ${renderMetric("Estimated Size", formatEstimatedSize(progressPercent, progress.totalSizeBytes))}
+        ${renderMetric("Current Bitrate", formatBitrate(currentBitrateBps), "grey", buildBitratePopup(sourceBitrateBps, currentBitrateBps))}
+        ${renderMetric("Current Size", currentSizeBytes ? formatBytes(currentSizeBytes) : "—")}
+        ${renderMetric("Estimated Size", estimatedSizeBytes ? formatBytes(estimatedSizeBytes) : "—", "grey", buildSizePopup(sourceSizeBytes, estimatedSizeBytes))}
       </div>
     </div>`;
 }
@@ -146,7 +151,7 @@ function renderQueuedRow(item, items) {
     return `<tr>
       <td class="center aligned" style="padding:0px;">${renderQueuePosition(item, items)}</td>
       <td>${pill(item.status)}</td>
-      <td title="${escapeHtml(item.inputAbsPath || "")}">
+      <td class="encoder-file-cell" title="${escapeHtml(item.inputAbsPath || "")}">
         <div>${escapeHtml(item.originalFilename)}</div>
         <span class="ui grey text">${escapeHtml(item.id)}</span>
       </td>
@@ -196,7 +201,11 @@ function renderQueueRowActions(item) {
     const status = String(item && item.status || "").toLowerCase();
 
     if (status === "encoding" || status === "paused") {
-        return "—";
+        return `<div class="ui compact basic icon buttons">
+          <a class="ui button" href="${escapeHtml(buildOriginUrl("/encoding/watch", { id: item.id, source: "queue" }))}" title="View source video" aria-label="View source video">
+            <i class="fitted blue eye icon"></i>
+          </a>
+        </div>`;
     }
 
     if (status === "queued") {
@@ -327,10 +336,14 @@ function progressColor(state) {
     }[String(state || "").toLowerCase()] || "grey";
 }
 
-function renderMetric(label, value, color="grey") {
+function renderMetric(label, value, color="grey", popupText=null) {
+    const popupIcon = popupText
+        ? `<i class="small question circle outline icon encoder-help-popup" data-content="${escapeHtml(popupText)}" aria-label="${escapeHtml(popupText)}"></i>`
+        : "";
+
     return `<div class="middle aligned two wide column">
       <div>
-        <div><span class="ui grey text">${escapeHtml(label)}</span></div>
+        <div><span class="ui grey text">${escapeHtml(label)} ${popupIcon}</span></div>
         <div><span class="ui inverted ${color} text">${escapeHtml(String(value))}</span></div>
       </div>
     </div>`;
@@ -415,15 +428,75 @@ function calculateEtaConfidence(activeItem, worker, progress) {
     };
 }
 
-function formatEstimatedSize(progressPercent, totalSizeBytes) {
+function calculateEstimatedSizeBytes(progressPercent, totalSizeBytes) {
     const percent = Number(progressPercent || 0);
     const size = Number(totalSizeBytes || 0);
 
     if (!percent || !size) {
+        return 0;
+    }
+
+    return size / (percent / 100);
+}
+
+function calculateCurrentBitrateBps(progress) {
+    const sizeBytes = Number(progress && progress.totalSizeBytes || 0);
+    const outTimeMs = Number(progress && progress.outTimeMs || 0);
+
+    if (!sizeBytes || !outTimeMs) {
+        return 0;
+    }
+
+    return (sizeBytes * 8) / (outTimeMs / 1000);
+}
+
+function buildSizePopup(sourceSizeBytes, comparisonSizeBytes) {
+    if (!sourceSizeBytes) {
+        return "Source size unavailable";
+    }
+
+    if (!comparisonSizeBytes) {
+        return `${formatBytes(sourceSizeBytes)} Source size`;
+    }
+
+    return `${formatBytes(sourceSizeBytes)} ( ${formatBytesDiff(comparisonSizeBytes - sourceSizeBytes)}, ${formatPercentDiff(comparisonSizeBytes, sourceSizeBytes)} )`;
+}
+
+function buildBitratePopup(sourceBitrateBps, comparisonBitrateBps) {
+    if (!sourceBitrateBps) {
+        return "Source bitrate unavailable";
+    }
+
+    if (!comparisonBitrateBps) {
+        return `${formatBitrate(sourceBitrateBps)} Source bitrate`;
+    }
+
+    return `${formatBitrate(sourceBitrateBps)} ( ${formatBitrateDiff(comparisonBitrateBps - sourceBitrateBps)}, ${formatPercentDiff(comparisonBitrateBps, sourceBitrateBps)} )`;
+}
+
+function formatBytesDiff(bytes) {
+    const value = Number(bytes || 0);
+    const prefix = value > 0 ? "+" : value < 0 ? "-" : "";
+    return `${prefix}${formatBytes(Math.abs(value))}`;
+}
+
+function formatBitrateDiff(bps) {
+    const value = Number(bps || 0);
+    const prefix = value > 0 ? "+" : value < 0 ? "-" : "";
+    return `${prefix}${formatBitrate(Math.abs(value))}`;
+}
+
+function formatPercentDiff(comparisonValue, sourceValue) {
+    const comparison = Number(comparisonValue || 0);
+    const source = Number(sourceValue || 0);
+
+    if (!source) {
         return "—";
     }
 
-    return formatBytes(size / (percent / 100));
+    const diff = ((comparison - source) / source) * 100;
+    const rounded = Math.round(diff);
+    return `${rounded > 0 ? "+" : ""}${rounded}%`;
 }
 
 function calculatePausedTimeMs(activeItem, worker) {

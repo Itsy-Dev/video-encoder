@@ -425,6 +425,24 @@ module.exports = function encodingApi(app, database, fileIntake) {
         }));
     }));
 
+    app.get("/encoding/watch", asyncRoute(async function (req, res) {
+        const state = await encodingService.getDashboardState();
+        const selectedId = String(req.query.id || "");
+        const activeId = state.worker && state.worker.activeItemId ? state.worker.activeItemId : "";
+        const selected = state.items.find(item => item.id === (selectedId || activeId)) || null;
+        const { renderPage, renderWatch } = loadEncodingViews();
+
+        res.send(renderPage({
+            title: "Watch",
+            heading: "Watch Video",
+            description: "View the source video for the selected encoding item without changing queue or profile settings.",
+            state,
+            body: renderWatch(selected, {
+                sourcePreviewUrl: buildPendingSourceUrl(selected)
+            })
+        }));
+    }));
+
     app.get("/encoding/review", asyncRoute(async function (_req, res) {
         const state = await encodingService.getDashboardState();
         const { renderPage, renderReview } = loadEncodingViews();
@@ -541,6 +559,7 @@ function loadEncodingViews() {
         renderPending: require("../views/encoding/pending"),
         renderSetup: require("../views/encoding/setup"),
         renderQueue: require("../views/encoding/queue"),
+        renderWatch: require("../views/encoding/watch"),
         renderReview: require("../views/encoding/review"),
         renderReviewItem: require("../views/encoding/review-item"),
         renderHistory: require("../views/encoding/history"),

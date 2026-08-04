@@ -41,7 +41,7 @@ function renderRow(item) {
 
     return `<tr>
       <td>${pill(status || "unknown")}</td>
-      <td title="${escapeHtml(item.outputAbsPath || item.inputAbsPath || "")}">
+      <td class="encoder-file-cell" title="${escapeHtml(item.outputAbsPath || item.inputAbsPath || "")}">
         <div>${escapeHtml(item.originalFilename || "—")}</div>
         <span class="ui grey text">${escapeHtml(detail)}</span>
       </td>
