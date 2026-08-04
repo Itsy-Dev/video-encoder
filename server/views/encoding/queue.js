@@ -201,7 +201,11 @@ function renderQueueRowActions(item) {
     const status = String(item && item.status || "").toLowerCase();
 
     if (status === "encoding" || status === "paused") {
-        return "—";
+        return `<div class="ui compact basic icon buttons">
+          <a class="ui button" href="${escapeHtml(buildOriginUrl("/encoding/watch", { id: item.id, source: "queue" }))}" title="View source video" aria-label="View source video">
+            <i class="fitted blue eye icon"></i>
+          </a>
+        </div>`;
     }
 
     if (status === "queued") {
