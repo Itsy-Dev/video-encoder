@@ -85,7 +85,7 @@ module.exports = function renderPending(items, options = {}) {
           </div>
         `, { width: "one", align: "center" }],
         ["Source", item => escapeHtml(item.inboxRelativeDir || "--"), { width: "one" }],
-        ["File", item => escapeHtml(item.originalFilename)],
+        ["File", item => escapeHtml(item.originalFilename), { className: "encoder-file-cell" }],
         ["Size", item => escapeHtml(formatBytes(item && item.sourceMetadata ? item.sourceMetadata.fileSizeBytes : null)), { width: "one", align: "right" }],
       ], "No pending items yet. Scan the inbox or add videos here to start the flow.")}
 

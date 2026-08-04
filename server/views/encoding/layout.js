@@ -112,13 +112,8 @@ module.exports = function renderPage({ title, heading, description, state, body,
       box-shadow: inset 0 0 0 1px rgba(242, 113, 28, 0.45);
     }
 
-    .encoder-fixed-table {
-      table-layout: fixed;
-      width: 100%;
-    }
-
-    .encoder-wrapping-cell,
-    .encoder-wrapping-cell * {
+    .encoder-file-cell,
+    .encoder-file-cell * {
       min-width: 0;
       overflow-wrap: anywhere;
       word-break: break-word;
@@ -128,8 +123,6 @@ module.exports = function renderPage({ title, heading, description, state, body,
       margin-right: 0.25rem !important;
       cursor: help;
     }
-
-
 
    .video-box {
       overflow: hidden;

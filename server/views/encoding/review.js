@@ -47,7 +47,7 @@ function renderRow(item) {
         </a>
       </td>
       <td>${renderSourceLabel(item)}</td>
-      <td title="${escapeHtml(item.outputAbsPath || item.inputAbsPath || "")}">
+      <td class="encoder-file-cell" title="${escapeHtml(item.outputAbsPath || item.inputAbsPath || "")}">
         <div>${escapeHtml(displayFilename)}</div>
       </td>
       <td>${escapeHtml(item.profileId || "—")}</td>

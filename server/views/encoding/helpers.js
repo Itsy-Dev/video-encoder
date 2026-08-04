@@ -277,6 +277,10 @@ function buildColumnClassName(options = {}) {
         classes.push(options.align, "aligned");
     }
 
+    if (options.className) {
+        classes.push(options.className);
+    }
+
     return classes.join(" ").trim();
 }
 

@@ -151,7 +151,7 @@ function renderQueuedRow(item, items) {
     return `<tr>
       <td class="center aligned" style="padding:0px;">${renderQueuePosition(item, items)}</td>
       <td>${pill(item.status)}</td>
-      <td title="${escapeHtml(item.inputAbsPath || "")}">
+      <td class="encoder-file-cell" title="${escapeHtml(item.inputAbsPath || "")}">
         <div>${escapeHtml(item.originalFilename)}</div>
         <span class="ui grey text">${escapeHtml(item.id)}</span>
       </td>
